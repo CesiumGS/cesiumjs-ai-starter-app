@@ -1,0 +1,84 @@
+name: Sample App CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: sample-app-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: .
+
+jobs:
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Check formatting
+        run: npm run format:check
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      # Build the reusable workspace packages first (@cesium-ai/tools-cesium,
+      # @cesium-ai/server), then type-check and build the frontend and backend.
+      - name: Build packages
+        run: npm run build:packages
+
+      - name: Build frontend
+        run: npm run build -w frontend
+
+      - name: Build backend
+        run: npm run build -w backend
+
+  unit:
+    name: Unit & API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      # The backend integration test imports the workspace packages
+      # (@cesium-ai/server, tools-cesium, sample-config) by name, which resolve
+      # to their built `dist`, so build them before Vitest runs.
+      - name: Build packages
+        run: npm run build:packages
+
+      - name: Type-check test files
+        run: npm run typecheck:test
+
+      - name: Run unit and integration tests
+        run: npm test
+
+  # End-to-end (Playwright) tests are intentionally not run in this CI workflow.
+  # Run them via the release pipeline or locally with `npm run test:e2e`.

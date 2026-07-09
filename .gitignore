@@ -1,5 +1,7 @@
 # GitHub
 .github/
+!.github/workflows
+!.github/ISSUE_TEMPLATE
 
 # Claude
 .claude/
