@@ -4,39 +4,81 @@ A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/c
 
 ---
 
-## Prerequisites
+## Get Started
 
-- **Node.js** ≥ 20
-- **npm** ≥ 9
-- A free [Cesium Ion](https://ion.cesium.com) access token
+To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI. 
 
----
+Optionally, add a free [Cesium Ion](https://ion.cesium.com) access token for high-quality terrain and imagery (without it, the globe displays basic imagery).
 
-## Quick Start
+This sample lives in its own standalone repo, [`CesiumGS/cesiumjs-ai-starter-app`](https://github.com/CesiumGS/cesiumjs-ai-starter-app). Grab it with [`degit`](https://github.com/Rich-Harris/degit) (no git history, just the files; requires Node.js for `npx`):
 
 ```bash
-# 1. Install dependencies
-npm install
+npx degit CesiumGS/cesiumjs-ai-starter-app cesiumjs-ai-starter-app
+cd cesiumjs-ai-starter-app
+```
 
-# 2. Configure environment
+Every command below runs from this folder. First, create your `.env` file:
+
+```bash
 cp .env.example .env
-# Edit .env and set VITE_CESIUM_ION_ACCESS_TOKEN.
-# For chat, also set an LLM key (e.g. OPENAI_API_KEY) — optional; without it the
-# viewer still runs and /api/chat returns a NOT_CONFIGURED response.
+```
 
-# 3. Run the dev servers (frontend + backend, concurrently)
+Then open `.env` and set `AI_PROVIDER` with its matching API key (e.g. `OPENAI_API_KEY` for OpenAI). Optionally, also set `VITE_CESIUM_ION_ACCESS_TOKEN` for better terrain and imagery.
+
+Now pick one of the two ways to run it below.
+
+### Option A — Docker (no Node.js needed) ⭐ recommended
+
+The only prerequisite is [Docker Desktop](https://docs.docker.com/get-docker/) (includes Compose v2). Node.js, npm, and all dependencies live inside the containers — nothing is installed on your machine.
+
+```bash
+docker compose up --build --wait
+```
+
+`--wait` returns only once both containers report **healthy**, so you know exactly when to open the app:
+
+**→ http://localhost:8080**
+
+Stop it with `Ctrl+C` (or `docker compose down`). To rebuild after changing `.env`, re-run the same command.
+
+### Option B — Local dev (hot reload)
+
+For active development with hot module reload. Requires **Node.js ≥ 20** and **npm ≥ 9**.
+
+```bash
+npm install
 npm run dev
 ```
 
-The globe opens at `http://localhost:5173`; the chat API runs at `http://localhost:3001`.
+- Globe (with HMR): **http://localhost:5173**
+- Chat API: `http://localhost:3001`
 
 ---
 
 ## Try It Out
 
-Once `npm run dev` is running and you've opened `http://localhost:5173`, type a place name into the chat panel — e.g. **`fly to Paris`** — and send it. The assistant resolves the location, the globe camera flies there, and the assistant confirms once it arrives. Any city, country, landmark, or address the model knows will work — try **London**, **Mount Everest**, or **1600 Pennsylvania Avenue**.
+Open the app, type a place into the chat panel — e.g. **`fly to Paris`** — and send it. The camera flies there and the assistant confirms on arrival. Any city, country, landmark, or address the model knows works: try **London**, **Mount Everest**, or **1600 Pennsylvania Avenue**.
 
-If no provider API key is configured, the chat panel shows a banner — _"AI is not configured. Add a supported provider API key to your .env file."_ — and the globe still runs as a plain viewer.
+Without a provider API key, the chat panel is omitted entirely and the globe still works as a plain viewer.
+
+---
+
+## How Docker Serves It
+
+nginx serves the app at `http://localhost:8080` and proxies `/api/*` to the backend over an internal Docker network. **The backend port is never published to the host** — it's only reachable from the frontend container.
+
+Both `frontend/Dockerfile` and `backend/Dockerfile` are self-contained, multi-stage builds: each compiles its own source (Vite SPA / TypeScript API) and packages the result in a single `docker build` — no local `npm run build` needed first. The frontend serves static assets via nginx (gzip, cache headers, SPA fallback, `/api/*` proxy); the backend runs on a slim `node:lts-alpine` runner as a non-root user. Both build from the **repo root** as context (Compose handles this) because the app is an npm workspace monorepo that shares `@cesium-ai/*` packages across the frontend and backend.
+
+**Viewer-only mode:** leave all provider API keys blank in `.env` to run just the globe with no LLM backend. See the comment block at the top of [`compose.yaml`](compose.yaml) for how to drop the backend container entirely.
+
+**Smoke test:**
+
+```bash
+curl -f http://localhost:8080/                   # frontend serves the SPA shell
+curl -f http://localhost:8080/api/chat -X POST \
+  -H "Content-Type: application/json" -d '{}'     # proxied to the backend (expect a 4xx, not a connection error)
+docker compose ps                                 # both services should show "healthy"
+```
 
 ---
 
@@ -61,6 +103,8 @@ Browser                          Server
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
 - **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
+
+See [.architecture/ACD(draft).md](<.architecture/ACD(draft).md>) for full architecture decisions.
 
 ---
 
@@ -129,8 +173,8 @@ npm test -- flyTo.schema-sync
 | `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                                                                                                                     |
 | `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                                                                                                           |
 | `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                                                                   |
-| `CHAT_ENABLED`                 | No                | `true` (default) \| `false` — when `false`, `/api/chat` returns `NOT_CONFIGURED` and the app runs as a plain static viewer.                                             |
 | `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                  |
+| `VITE_API_BASE_URL`            | No                | Dev default `http://localhost:3001`. In `compose.yaml` this is built as `""` so the frontend calls relative `/api/chat`, which nginx proxies to the backend.            |
 
 See [`.env.example`](.env.example) for the complete list, including `AI_BASE_URL` and telemetry settings.
 
@@ -168,7 +212,9 @@ cesiumjs-ai-tools-sample/
 │   │   ├── cesium-loader.ts    # Viewer initialization (terrain, defaults)
 │   │   ├── config.ts           # Reads VITE_* env vars
 │   │   └── main.tsx            # React entry point
-│   └── vite.config.ts          # Vite config (copies CesiumJS static assets)
+│   ├── vite.config.ts          # Vite config (copies CesiumJS static assets)
+│   ├── Dockerfile              # Self-contained: Vite build -> nginx static serve
+│   └── nginx.conf              # gzip, cache headers, SPA fallback, /api/* proxy
 ├── backend/                    # Thin Node.js host app (Express)
 │   ├── src/
 │   │   ├── index.ts            # Wires @cesium-ai/server + tools, CORS, listen
@@ -179,7 +225,8 @@ cesiumjs-ai-tools-sample/
 │   │       ├── env.ts          # Zod-validated, typed environment config
 │   │       ├── providers.ts    # LLM provider factory (createModel)
 │   │       └── rate-limit.ts   # In-process per-IP sliding-window limiter
-│   └── tsconfig.json
+│   ├── tsconfig.json
+│   └── Dockerfile              # Self-contained: tsc build -> slim non-root runner
 ├── packages/                   # Reusable workspace packages
 │   ├── server/                 # @cesium-ai/server — Express chat key-layer
 │   │   └── src/
@@ -198,6 +245,8 @@ cesiumjs-ai-tools-sample/
 ├── .prettierrc.json            # Prettier config (code formatting rules)
 ├── .editorconfig               # Editor defaults (indent, charset, EOL)
 ├── .env.example                # Environment variable template
+├── compose.yaml                # Docker Compose — frontend + backend, internal network
+├── .dockerignore               # Keeps node_modules/dist/etc. out of the build context
 └── package.json                # npm workspace root
 ```
 
@@ -224,7 +273,7 @@ Run `npm run format` before committing — CI runs `npm run format:check` and fa
 
 ## CI
 
-GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/ci.yml`](.github/workflows/sample-app-ci.yml)):
+GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/sample-app-ci.yml`](../../.github/workflows/sample-app-ci.yml)):
 
 - **Format check** — `npm run format:check` (Prettier).
 - **Build** — installs dependencies, then builds the workspace packages, the frontend bundle, and the backend (each as a separate, type-checked step).
@@ -237,4 +286,3 @@ Interested in contributing? Please read [CONTRIBUTING.md](CONTRIBUTING.md). We a
 ## 📗 License
 
 Apache 2.0. See [LICENSE](LICENSE).
-
