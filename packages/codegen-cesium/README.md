@@ -46,7 +46,7 @@ graph TD
 
     BOUNDARY -->|verified code| G["6️⃣ Backend Tool Execution<br/>createExecuteCesiumCodeTool<br/>backend/tools/execute-cesium-code-tool.ts"]
 
-    G -->|stream to browser| H["7️⃣ Frontend Sandbox<br/>runCesiumCodeInSandbox<br/>@cesium-ai/sandbox-cesium<br/>QuickJS-wasm interpreter"]
+    G -->|stream to browser| H["7️⃣ Frontend Sandbox<br/>Sandboxed Code Execution<br/>Runtime isolation with resource limits"]
 
     H -->|isolated execution| I["🔒 GATE 2: Runtime Isolation<br/>Memory/deadline limited<br/>Proxied Viewer access only<br/>Timeout protection"]
 
@@ -67,11 +67,11 @@ graph TD
 **Key security boundaries:**
 
 - **GATE 1 (Green)**: Static AST verification in this package — parse-only, never executes code
-- **GATE 2 (Pink)**: Runtime QuickJS-wasm sandbox in frontend — memory/deadline limited, proxied Viewer access only
-- **Package boundary (Gold)**: Nothing above this line executes code; isolated runtime isolation is the frontend's responsibility
+- **GATE 2 (Pink)**: Runtime sandbox in frontend — memory/deadline limited, proxied Viewer access only
+- **Package boundary (Gold)**: Nothing above this line executes code; runtime isolation is the frontend's responsibility
 
 Two independent gates sit between "the model said this" and "this touches a live `Viewer`": this
-package's static AST verifier (steps 4–5) and the frontend's runtime QuickJS-wasm sandbox (step 7).
+package's static AST verifier (steps 4–5) and the frontend's runtime sandbox (step 7).
 Either one alone is not sufficient — see Security below.
 
 ## Entry points
@@ -142,11 +142,10 @@ Summary (see the Architecture diagram above for where each gate sits in the pipe
   rejects it — without ever running it — for banned constructs (`eval`, `Function`, dynamic
   `import()`, banned browser globals, computed member access), free identifiers outside the
   allowlist, oversized snippets, or unbounded loops.
-- **The consuming app's frontend (step 7): runtime isolation via a QuickJS-wasm sandbox.**
-  `@cesium-ai/sandbox-cesium`'s `runCesiumCodeInSandbox` actually executes the
-  verified code, inside a fresh, memory- and deadline-limited QuickJS-wasm interpreter with only a
-  manifest of bound real CesiumJS symbols in scope — never a live `fetch`, `document`, or storage
-  access — and a timeout that interrupts the interpreter if the script hangs.
+- **The consuming app's frontend (step 7): runtime isolation via a sandboxed execution environment.**
+  A sandboxed runtime actually executes the verified code, inside a fresh, memory- and deadline-limited
+  execution context with only a manifest of bound real CesiumJS symbols in scope — never a live `fetch`, `document`, or storage
+  access — and a timeout that interrupts execution if the script hangs.
 - **Neither gate substitutes for the other.** Static verification can't observe runtime behavior;
   the sandbox can't be skipped just because the backend already verified the code, since verified
   output is still attacker-influenceable model output.
@@ -162,10 +161,9 @@ This parse-only stance is a deliberate trade-off, not a shortcut: if this packag
 generated code server-side (even in a `try`/`catch`), a shared backend process would need its own
 isolated runtime (no network, no host OS, no shared storage, controlled API access) to be safe at
 all — a materially bigger lift than an AST walk. This package sidesteps that problem entirely by
-never executing anything; the consuming app's frontend sandbox (a QuickJS-wasm interpreter or
-equivalent) is the actual runtime isolation boundary, and it must independently re-validate/sandbox
-the code — it can never treat "the backend already verified it" as a substitute for its own
-isolation. **This repo's sample app does not yet have that frontend sandbox wired up** — see
+never executing anything; the consuming app's frontend sandbox is the actual runtime isolation boundary, and it must
+independently validate and execute the code with appropriate isolation — it can never treat "the backend already verified it"
+as a substitute for its own runtime isolation. **This repo's sample app does not yet have a frontend sandbox wired up** — see
 [`frontend/README.md`](../../frontend/README.md) — so verified code is currently not executed
 anywhere; a browser-side execution boundary is planned for a follow-up PR.
 
@@ -174,7 +172,7 @@ anywhere; a browser-side execution boundary is planned for a follow-up PR.
 `verifyCesiumCode(code, options)` is a **parse-only** static verifier. It never `eval`s, never
 constructs `new Function(...)`, never dynamically `import()`s, and never otherwise executes the
 generated code — it only parses it with `acorn` and walks the AST with `acorn-walk`. Runtime
-sandboxing of generated code is the frontend QuickJS-wasm sandbox's job (a separate module); this
+sandboxing of generated code is the frontend's job (runtime isolation layer); this
 package stays entirely on the static-analysis side of that boundary.
 
 ### Verification Flow
@@ -273,7 +271,7 @@ generation retry loop below — can see the full picture in one pass.
 - **Model-agnostic** — Never selects provider or touches API keys (caller's responsibility)
 - **Dependencies only:** `ai`, `zod`, `acorn`, `acorn-walk` (never `backend` or provider SDKs)
 - **Verification rules:** Unconditional bans only (`eval`, `Function`, dynamic `import()`, banned globals, computed member access, size limits, unbounded loops). No capability-name allowlist enforced.
-- **Async support:** Parses with `allowAwaitOutsideFunction: true` so generated code can use top-level `await` calls (frontend sandbox wraps in async IIFE)
+- **Async support:** Parses with `allowAwaitOutsideFunction: true` so generated code can use top-level `await` calls (frontend execution wraps in async context as needed)
 - **Never executes** — Never runs generated code at any point, on any code path
 - **Symbol allowlist utilities** — `getAllowedSymbols` / `intersectWithCapabilities` exported but not on critical path
 
