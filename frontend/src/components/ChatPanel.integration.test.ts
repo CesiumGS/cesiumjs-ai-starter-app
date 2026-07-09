@@ -5,10 +5,9 @@ import { executeCesiumCodeResultShape } from "../tools/execute-cesium-code";
  * Frontend-side integration test for `ChatPanel.tsx`'s `handleServerToolResult`
  * validation of a streamed `executeCesiumCode` server tool result.
  *
- * This app does not yet execute a verified `executeCesiumCode` snippet
- * anywhere (a browser-side execution sandbox is planned for a follow-up PR),
- * so this only covers the defensive parsing `handleServerToolResult` does on
- * otherwise-untrusted, server-influenced output — not any downstream execution.
+ * This covers the defensive parsing `handleServerToolResult` does on
+ * otherwise-untrusted, server-influenced output — the execution itself runs
+ * against the live Viewer instance with security relying on server-side AST verification.
  */
 describe("ChatPanel's executeCesiumCode result handling", () => {
   test("a verified server result parses with its generated code intact", () => {

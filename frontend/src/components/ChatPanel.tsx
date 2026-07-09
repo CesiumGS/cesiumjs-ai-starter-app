@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
+import * as Cesium from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-cesium/names";
@@ -87,15 +88,29 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
 
   /**
    * `executeCesiumCode` is approved and its snippet is generated and
-   * statically verified server-side, but this app doesn't yet run the
-   * verified code anywhere — the browser-side execution sandbox is planned
-   * for a follow-up PR. Report that plainly instead of executing anything.
+   * statically verified server-side. Execute the verified code against the
+   * live Viewer without a sandbox (security relies on server-side AST verification).
    */
-  const runApprovedCode = useCallback((_code: string) => {
-    chatClientRef.current?.reportError(
-      "Code execution is not yet supported in this build; executeCesiumCode results are verified but not run.",
-    );
-  }, []);
+  const runApprovedCode = useCallback(
+    (code: string) => {
+      const viewer = viewerRef.current;
+      if (!viewer) {
+        chatClientRef.current?.reportError("CesiumJS Viewer is not initialised");
+        return;
+      }
+
+      try {
+        // Create a function that receives both viewer and Cesium namespace as parameters
+        // This allows the generated code to access both the viewer instance and Cesium APIs
+        const executeCode = new Function("viewer", "Cesium", code);
+        executeCode(viewer, Cesium);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        chatClientRef.current?.reportError(`Code execution failed: ${errorMessage}`);
+      }
+    },
+    [viewerRef],
+  );
 
   /**
    * Server-resolved tool result listener. `executeCesiumCode` is the one

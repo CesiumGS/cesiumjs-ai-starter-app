@@ -6,7 +6,7 @@ This document outlines potential security vulnerabilities in the AI-driven Cesiu
 
 This is intentionally a **forward-looking threat model, not just a description of the current code**. It documents the full range of realistic attacks and the mitigations needed to defend against them — **including mitigations that are not yet implemented**. Treat unimplemented items as a security backlog / hardening roadmap, not as optional.
 
-**Current status:** this repo's initial PR ships Gate 1 (server-side static verification, `@cesium-ai/codegen-cesium`) only. Gate 2 (browser-side sandbox isolation, referenced throughout this document as `@cesium-ai/sandbox-cesium`) does not exist in this app yet — verified code is not executed anywhere. Everything below describing Gate 2 is the target design for a follow-up PR, not current behavior.
+**Current status:** this repo executes verified code directly in the browser (Gate 1 server-side static verification only). Gate 2 (browser-side sandbox isolation via `@cesium-ai/sandbox-cesium`, referenced throughout this document as the target design) is not implemented — code runs directly against the live Viewer with security relying solely on server-side AST verification. Runtime isolation via a sandboxed interpreter is recommended as a follow-up hardening step.
 
 ### Architecture View (components, trust boundaries & security gates)
 
