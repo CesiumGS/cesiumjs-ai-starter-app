@@ -1,0 +1,361 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ChatClient, NOT_CONFIGURED_MESSAGE, type ChatClientOptions } from "./index.js";
+
+/**
+ * Unit tests for the streaming chat client. We stub the global `fetch` with
+ * canned `Response`s whose bodies are `ReadableStream`s of the AI SDK UI message
+ * stream (SSE `data:` lines), so the full parse → render → tool-call → re-request
+ * loop runs without a browser or a backend.
+ */
+
+/** Build a streaming SSE Response from a list of UI message stream chunks. */
+function sseResponse(chunks: Array<Record<string, unknown>>): Response {
+  const encoder = new TextEncoder();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(chunk)}\n`));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n"));
+      controller.close();
+    },
+  });
+  return new Response(body, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  });
+}
+
+/** Create a ChatClient with spy callbacks; override `onToolCall` as needed. */
+function makeClient(overrides: Partial<ChatClientOptions> = {}) {
+  const onUpdate = vi.fn();
+  const onError = vi.fn();
+  const onToolCall = vi.fn().mockResolvedValue({ success: true });
+  const client = new ChatClient({
+    api: "http://backend.test/api/chat",
+    onUpdate,
+    onError,
+    onToolCall,
+    ...overrides,
+  });
+  return { client, onUpdate, onError, onToolCall };
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("ChatClient — text streaming", () => {
+  it("appends streamed text deltas into an assistant message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          sseResponse([
+            { type: "text-start", id: "0" },
+            { type: "text-delta", id: "0", delta: "Bon" },
+            { type: "text-delta", id: "0", delta: "jour" },
+            { type: "finish" },
+          ]),
+        ),
+    );
+
+    const { client } = makeClient();
+    client.input = "salut";
+    await client.submit();
+
+    expect(client.isLoading).toBe(false);
+    expect(client.messages).toHaveLength(2);
+    expect(client.messages[0]).toMatchObject({ role: "user", content: "salut" });
+    expect(client.messages[1]).toMatchObject({ role: "assistant", content: "Bonjour" });
+  });
+});
+
+describe("ChatClient — client-side tool calls", () => {
+  it("runs the tool call, then re-requests so the model can continue", async () => {
+    const fetchMock = vi
+      .fn()
+      // First turn: the model asks the client to run flyTo.
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            type: "tool-input-available",
+            toolCallId: "call-1",
+            toolName: "flyTo",
+            input: { latitude: 48.8566, longitude: 2.3522 },
+          },
+          { type: "finish" },
+        ]),
+      )
+      // Second turn (after the tool result is posted back): a text confirmation.
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "text-start", id: "1" },
+          { type: "text-delta", id: "1", delta: "Done." },
+          { type: "finish" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client, onToolCall } = makeClient();
+    client.input = "fly to Paris";
+    await client.submit();
+
+    // The client executed the tool with the streamed args...
+    expect(onToolCall).toHaveBeenCalledTimes(1);
+    expect(onToolCall).toHaveBeenCalledWith({
+      toolCallId: "call-1",
+      toolName: "flyTo",
+      args: { latitude: 48.8566, longitude: 2.3522 },
+    });
+
+    // ...and made a second request to continue the agent loop.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const invocation = client.messages
+      .flatMap((m) => m.toolInvocations ?? [])
+      .find((t) => t.toolCallId === "call-1");
+    expect(invocation).toMatchObject({ state: "result", result: { success: true } });
+
+    // The continuation request carried the tool result back to the server.
+    const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    const partTypes = secondBody.messages.flatMap((m: { parts: Array<{ type: string }> }) =>
+      m.parts.map((p) => p.type),
+    );
+    expect(partTypes).toContain("tool-flyTo");
+    expect(client.isLoading).toBe(false);
+  });
+});
+
+describe("ChatClient — tool call errors", () => {
+  it("resolves a tool-input-error without ever calling onToolCall", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            type: "tool-input-error",
+            toolCallId: "call-1",
+            toolName: "flyTo",
+            input: { latitude: 999 },
+            errorText: "latitude out of range",
+          },
+          { type: "finish" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "text-start", id: "1" },
+          { type: "text-delta", id: "1", delta: "Sorry about that." },
+          { type: "finish" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client, onToolCall } = makeClient();
+    client.input = "fly to nowhere";
+    await client.submit();
+
+    // Invalid args never reached the client executor...
+    expect(onToolCall).not.toHaveBeenCalled();
+
+    // ...but the invocation is still recorded, resolved with the server's error...
+    const invocation = client.messages
+      .flatMap((m) => m.toolInvocations ?? [])
+      .find((t) => t.toolCallId === "call-1");
+    expect(invocation).toMatchObject({
+      state: "result",
+      result: { error: "latitude out of range" },
+    });
+
+    // ...and the loop continued so the model could respond to the failure.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(client.isLoading).toBe(false);
+  });
+
+  it("resolves a tool-output-error for an already-available tool call", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            type: "tool-input-available",
+            toolCallId: "call-1",
+            toolName: "someServerTool",
+            input: { foo: "bar" },
+          },
+          { type: "tool-output-error", toolCallId: "call-1", errorText: "boom" },
+          { type: "finish" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "text-start", id: "1" },
+          { type: "text-delta", id: "1", delta: "That failed." },
+          { type: "finish" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client, onToolCall } = makeClient();
+    client.input = "run the server tool";
+    await client.submit();
+
+    // Already resolved server-side — the client never runs it as a client-side tool.
+    expect(onToolCall).not.toHaveBeenCalled();
+
+    const invocation = client.messages
+      .flatMap((m) => m.toolInvocations ?? [])
+      .find((t) => t.toolCallId === "call-1");
+    expect(invocation).toMatchObject({ state: "result", result: { error: "boom" } });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("ChatClient — stop()", () => {
+  it("does not resolve pending tool calls or continue the loop after stop()", async () => {
+    const onToolCall = vi.fn().mockResolvedValue({ success: true });
+    let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined;
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controllerRef = controller;
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({
+              type: "tool-input-available",
+              toolCallId: "call-1",
+              toolName: "flyTo",
+              input: { latitude: 48.8566, longitude: 2.3522 },
+            })}\n`,
+          ),
+        );
+        // Deliberately never closes — the read is interrupted by abort() below.
+      },
+    });
+    const response = new Response(body, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    });
+
+    // Real fetch wires the AbortSignal into the body read; the mock has to do
+    // that by hand — abort the signal and the in-flight reader.read() (which
+    // never otherwise resolves, since the stream never closes) rejects.
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      init?.signal?.addEventListener("abort", () => {
+        const err = new Error("aborted");
+        err.name = "AbortError";
+        controllerRef?.error(err);
+      });
+      return Promise.resolve(response);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client } = makeClient({ onToolCall });
+    client.input = "fly to Paris";
+    const submitPromise = client.submit();
+
+    // Let the tool-input-available chunk get parsed into a pending tool call.
+    await vi.waitFor(() => expect(client.messages.at(-1)?.toolInvocations).toHaveLength(1));
+
+    client.stop();
+    await submitPromise;
+
+    expect(onToolCall).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(client.isLoading).toBe(false);
+  });
+});
+
+describe("ChatClient — sequential tool resolution", () => {
+  it("resolves multiple pending tool calls one at a time, not concurrently", async () => {
+    const order: string[] = [];
+    let inFlight = 0;
+    let maxConcurrent = 0;
+    const onToolCall = vi.fn(async ({ toolCallId }: { toolCallId: string }) => {
+      inFlight++;
+      maxConcurrent = Math.max(maxConcurrent, inFlight);
+      order.push(`start:${toolCallId}`);
+      await new Promise((r) => setTimeout(r, 5));
+      order.push(`end:${toolCallId}`);
+      inFlight--;
+      return { success: true };
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          {
+            type: "tool-input-available",
+            toolCallId: "call-1",
+            toolName: "flyTo",
+            input: { latitude: 1, longitude: 1 },
+          },
+          {
+            type: "tool-input-available",
+            toolCallId: "call-2",
+            toolName: "flyTo",
+            input: { latitude: 2, longitude: 2 },
+          },
+          { type: "finish" },
+        ]),
+      )
+      .mockResolvedValueOnce(sseResponse([{ type: "finish" }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { client } = makeClient({ onToolCall });
+    client.input = "fly to two places";
+    await client.submit();
+
+    expect(maxConcurrent).toBe(1);
+    expect(order).toEqual(["start:call-1", "end:call-1", "start:call-2", "end:call-2"]);
+  });
+});
+
+describe("ChatClient — error handling", () => {
+  it("surfaces a NOT_CONFIGURED response as the friendly setup message", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: "NOT_CONFIGURED", message: "no key" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+
+    const { client, onError } = makeClient();
+    client.input = "hello";
+    await client.submit();
+
+    expect(client.isLoading).toBe(false);
+    const last = client.messages.at(-1);
+    expect(last).toMatchObject({ role: "assistant", error: true, content: NOT_CONFIGURED_MESSAGE });
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("treats a 200 HTML response (wrong origin) as an error rather than an empty stream", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("<!doctype html><title>SPA</title>", {
+          status: 200,
+          headers: { "content-type": "text/html" },
+        }),
+      ),
+    );
+
+    const { client, onError } = makeClient();
+    client.input = "hello";
+    await client.submit();
+
+    expect(client.isLoading).toBe(false);
+    const last = client.messages.at(-1);
+    expect(last?.error).toBe(true);
+    expect(last?.content).toMatch(/HTML page instead of a chat stream/i);
+    expect(onError).toHaveBeenCalledOnce();
+  });
+});

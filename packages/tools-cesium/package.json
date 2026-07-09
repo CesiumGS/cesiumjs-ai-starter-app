@@ -1,0 +1,45 @@
+{
+  "name": "@cesium-ai/tools-cesium",
+  "version": "0.0.1",
+  "description": "Zod-schemed CesiumJS viewer tool definitions (flyTo, ...) for the AI SDK. Schemas only — no execute; tool calls run client-side against the live Viewer.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./names": {
+      "types": "./dist/tool-names.d.ts",
+      "import": "./dist/tool-names.js",
+      "default": "./dist/tool-names.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js",
+      "default": "./dist/schemas.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

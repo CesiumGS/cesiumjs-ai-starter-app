@@ -1,0 +1,240 @@
+# CesiumJS AI Tools Sample
+
+A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/) 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the browser** — all inference runs behind a Node.js API server.
+
+---
+
+## Prerequisites
+
+- **Node.js** ≥ 20
+- **npm** ≥ 9
+- A free [Cesium Ion](https://ion.cesium.com) access token
+
+---
+
+## Quick Start
+
+```bash
+# 1. Install dependencies
+npm install
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env and set VITE_CESIUM_ION_ACCESS_TOKEN.
+# For chat, also set an LLM key (e.g. OPENAI_API_KEY) — optional; without it the
+# viewer still runs and /api/chat returns a NOT_CONFIGURED response.
+
+# 3. Run the dev servers (frontend + backend, concurrently)
+npm run dev
+```
+
+The globe opens at `http://localhost:5173`; the chat API runs at `http://localhost:3001`.
+
+---
+
+## Try It Out
+
+Once `npm run dev` is running and you've opened `http://localhost:5173`, type a place name into the chat panel — e.g. **`fly to Paris`** — and send it. The assistant resolves the location, the globe camera flies there, and the assistant confirms once it arrives. Any city, country, landmark, or address the model knows will work — try **London**, **Mount Everest**, or **1600 Pennsylvania Avenue**.
+
+If no provider API key is configured, the chat panel shows a banner — _"AI is not configured. Add a supported provider API key to your .env file."_ — and the globe still runs as a plain viewer.
+
+---
+
+## Architecture
+
+```
+Browser                          Server
+┌─────────────────────────┐      ┌────────────────────────────┐
+│  Vite SPA               │      │  Node.js API               │
+│  ├─ CesiumJS Viewer     │◄────►│  ├─ /api/chat              │
+│  └─ Chat Panel          │ SSE  │  ├─ Agent loop (streamText) │
+│     └─ onToolCall ──────┼─────►│  └─ Tool registry          │
+└─────────────────────────┘      └────────────────────────────┘
+         ▲                                   │
+         │ Viewer tool results               │ MCP / LLM API key (server only)
+         └───────────────────────────────────┘
+```
+
+**Split-execution model:** Viewer tools (camera navigation, entity manipulation) are streamed to the browser and executed against the live `Viewer` instance. MCP tools run entirely server-side and are never streamed as client tool calls.
+
+**Workspace packages:** The reusable, model-agnostic pieces live in `packages/` and are consumed by the `backend/` host app:
+
+- **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
+- **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
+
+---
+
+## Working with Cesium Tools
+
+Two common changes — turning a tool on or off, and editing a tool's schema — each have a single, well-defined place to edit. Both sides (backend registry, frontend executors) follow from there.
+
+### Enable or disable a tool
+
+The app's tool surface is curated in **one** array: `ENABLED_CESIUM_TOOLS` in [`shared/src/enabled-tools.ts`](shared/src/enabled-tools.ts) (the `@cesium-ai/sample-config` package). It is the single source of truth that both tiers read:
+
+- the **backend** builds its registry from it — `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS })` in [`backend/src/index.ts`](backend/src/index.ts) — so the model is only ever offered these tools;
+- the **frontend** keys its executor handling off it — `ChatPanel.tsx` gates every incoming tool call on this set as defense-in-depth, so a disabled (or stale/spoofed) tool call never drives the live `Viewer`.
+
+To **disable** a tool, remove its name from the array. To **enable** one, add its name:
+
+```ts
+// shared/src/enabled-tools.ts
+export const ENABLED_CESIUM_TOOLS = [
+  CESIUM_TOOL_NAMES.flyTo,
+  // CESIUM_TOOL_NAMES.someOtherTool,   // ← add to enable
+] as const satisfies readonly CesiumToolName[];
+```
+
+Two compile-time guards keep this honest:
+
+- Each entry is checked against `CesiumToolName` (`satisfies`), so a typo or a name that isn't a real Cesium tool fails to build.
+- The frontend's `TOOL_EXECUTORS` map in [`frontend/src/components/ChatPanel.tsx`](frontend/src/components/ChatPanel.tsx) is typed `Record<EnabledCesiumTool, ToolExecutor>`. Enabling a tool **without** adding a client-side executor for it fails to compile — so the app can never offer the model a tool the browser can't run.
+
+After editing, rebuild the shared package so both tiers pick up the change: `npm run build:packages` (or just leave `npm run dev` running — it watches). Then guard the contract with the allowlist test:
+
+```bash
+npm test -- enabled-tools
+```
+
+> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-cesium/src/tool-names.ts`](packages/tools-cesium/src/tool-names.ts)); (2) add its schema/definition module under `packages/tools-cesium/src/` and wire it into `createCesiumTools` ([`index.ts`](packages/tools-cesium/src/index.ts)); (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+
+### Update a tool's schema
+
+A tool's schema lives in **two layers**, split so the LLM-facing hints never ship to the browser. Pick the layer that matches what you're changing:
+
+| You want to change…                                                                                               | Edit                                                                                                                                                                                               | Who sees it                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **The args contract** — structural rules (lat/lon ranges, which fields exist, optional vs. required)              | `flyToInputShape` in [`packages/tools-cesium/src/schemas.ts`](packages/tools-cesium/src/schemas.ts)                                                                                                | Both tiers — backend derives from it, frontend validates against it |
+| **The model-facing hints** — the human-readable tool `description` and per-field `.describe()` text the LLM reads | `DEFAULT_FLY_TO_DESCRIPTION` / `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS` / `buildFlyToInputSchema` in [`packages/tools-cesium/src/tools/flyTo/flyTo.ts`](packages/tools-cesium/src/tools/flyTo/flyTo.ts) | Backend (model) only — never bundled into the client                |
+
+The structural shape (`schemas.ts`) is the **single source of truth for the args contract**. The frontend imports it directly (via the `/schemas` subpath) to validate untrusted args; the backend's model-facing schema is _derived_ from it in `buildFlyToInputSchema` (`flyToInputShape.shape.*.describe(...)`), layering the LLM hints on without redefining the rules. So a contract change — e.g. tightening the lat/lon ranges — is a **single edit** to `flyToInputShape` that both tiers pick up automatically.
+
+After editing, rebuild the package (`npm run build:packages`, or rely on `npm run dev`'s watch) and run the drift guard, which asserts the backend's model-facing schema and the frontend's validation shape reach the same accept/reject verdict across a battery of boundary inputs:
+
+```bash
+npm test -- flyTo.schema-sync
+```
+
+> Per-host tweaks without forking the tool: `createFlyTo` accepts a `FlyToConfig` (`description`, `fieldDescriptions`, or a full `inputSchema`). Note the `inputSchema` override replaces only the **model-facing** schema — use it for model-facing tweaks, not to change the validated contract. To change the contract, edit `flyToInputShape`.
+
+---
+
+## Environment Variables
+
+| Variable                       | Required          | Description                                                                                                                                                             |
+| ------------------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_CESIUM_ION_ACCESS_TOKEN` | Yes               | Cesium Ion token — baked into the client bundle at build time. Intentionally client-visible; scope it in the Ion console to restrict allowed assets and HTTP referrers. |
+| `OPENAI_API_KEY`               | When chat enabled | LLM API key — server-side only, never `VITE_` prefixed. Required when `AI_PROVIDER=openai`.                                                                             |
+| `ANTHROPIC_API_KEY`            | When chat enabled | Required when `AI_PROVIDER=anthropic`.                                                                                                                                  |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                                                                                                                     |
+| `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                                                                                                           |
+| `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                                                                   |
+| `CHAT_ENABLED`                 | No                | `true` (default) \| `false` — when `false`, `/api/chat` returns `NOT_CONFIGURED` and the app runs as a plain static viewer.                                             |
+| `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                  |
+
+See [`.env.example`](.env.example) for the complete list, including `AI_BASE_URL` and telemetry settings.
+
+Copy `.env.example` to `.env` and fill in your values. The `.env` file is git-ignored.
+
+---
+
+## Scripts
+
+| Command                  | Description                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------- |
+| `npm run dev`            | Build the workspace packages, then start the packages (watch), backend, and frontend concurrently |
+| `npm run dev:frontend`   | Start only the Vite dev server with HMR                                                           |
+| `npm run dev:backend`    | Build the packages, then run the backend API and packages in watch mode (no frontend)             |
+| `npm run build:packages` | Type-check and build the reusable workspace packages (`@cesium-ai/*`)                             |
+| `npm run build`          | Build the packages, then type-check and build the frontend bundle and the backend                 |
+| `npm run preview`        | Serve the production frontend bundle locally                                                      |
+| `npm run format`         | Format the whole workspace with Prettier (writes in place)                                        |
+| `npm run format:check`   | Verify formatting without writing — the check CI runs                                             |
+
+---
+
+## Project Structure
+
+```
+cesiumjs-ai-tools-sample/
+├── frontend/                   # Vite + React SPA
+│   ├── src/
+│   │   ├── App.tsx             # Root component — mounts Viewer + chat panel
+│   │   ├── CesiumGlobe.tsx     # CesiumJS Viewer lifecycle wrapper
+│   │   ├── components/
+│   │   │   └── ChatPanel.tsx   # Host-side tool-call listener — TOOL_EXECUTORS map
+│   │   ├── tools/
+│   │   │   └── camera.ts       # flyToLocation — client-side flyTo executor
+│   │   ├── cesium-loader.ts    # Viewer initialization (terrain, defaults)
+│   │   ├── config.ts           # Reads VITE_* env vars
+│   │   └── main.tsx            # React entry point
+│   └── vite.config.ts          # Vite config (copies CesiumJS static assets)
+├── backend/                    # Thin Node.js host app (Express)
+│   ├── src/
+│   │   ├── index.ts            # Wires @cesium-ai/server + tools, CORS, listen
+│   │   ├── app.ts              # Express app (CORS, rate limiter, /health, chat router)
+│   │   ├── tools/
+│   │   │   └── flyto-tool.ts   # Backend-only flyTo input schema extensions
+│   │   └── utils/
+│   │       ├── env.ts          # Zod-validated, typed environment config
+│   │       ├── providers.ts    # LLM provider factory (createModel)
+│   │       └── rate-limit.ts   # In-process per-IP sliding-window limiter
+│   └── tsconfig.json
+├── packages/                   # Reusable workspace packages
+│   ├── server/                 # @cesium-ai/server — Express chat key-layer
+│   │   └── src/
+│   │       ├── chat-router.ts  # createChatRouter — POST /api/chat (SSE)
+│   │       └── agent.ts        # Agent loop — streamText with tool registry
+│   └── tools-cesium/           # @cesium-ai/tools-cesium — viewer tool schemas
+│       └── src/
+│           ├── tool-names.ts   # CESIUM_TOOL_NAMES — canonical tool identifiers
+│           ├── schemas.ts      # flyToInputShape — shared args contract (structural)
+│           ├── tools/flyTo/flyTo.ts # flyTo tool (model-facing schema + hints, no execute)
+│           └── index.ts        # createCesiumTools registry (enabled allowlist)
+├── shared/                     # @cesium-ai/sample-config — app's tool selection
+│   └── src/
+│       └── enabled-tools.ts    # ENABLED_CESIUM_TOOLS — enable/disable a tool here
+├── .architecture/              # Architecture decision document
+├── .prettierrc.json            # Prettier config (code formatting rules)
+├── .editorconfig               # Editor defaults (indent, charset, EOL)
+├── .env.example                # Environment variable template
+└── package.json                # npm workspace root
+```
+
+---
+
+## Cesium Ion Token
+
+The Ion token is required to load Cesium World Terrain and Cesium World Imagery. Get one free at [ion.cesium.com](https://ion.cesium.com). Scope the token in the Ion console (allowed assets + HTTP referrers) before deploying to production.
+
+---
+
+## Code Style
+
+Formatting is enforced with [Prettier](https://prettier.io). Rules live in [`.prettierrc.json`](.prettierrc.json) (the only override is `printWidth: 100`; everything else is Prettier defaults — 2-space indent, double quotes, trailing commas), with [`.editorconfig`](.editorconfig) covering indentation, charset, and line endings for editors. [`.prettierignore`](.prettierignore) excludes build output and the vendored CesiumJS assets.
+
+```bash
+npm run format        # format the whole workspace in place
+npm run format:check  # verify formatting (fails if anything is unformatted)
+```
+
+Run `npm run format` before committing — CI runs `npm run format:check` and fails on unformatted files.
+
+---
+
+## CI
+
+GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/ci.yml`](.github/workflows/sample-app-ci.yml)):
+
+- **Format check** — `npm run format:check` (Prettier).
+- **Build** — installs dependencies, then builds the workspace packages, the frontend bundle, and the backend (each as a separate, type-checked step).
+
+
+## 🤝 Contributing
+
+Interested in contributing? Please read [CONTRIBUTING.md](CONTRIBUTING.md). We also ask that you follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## 📗 License
+
+Apache 2.0. See [LICENSE](LICENSE).
+

@@ -1,0 +1,36 @@
+{
+  "name": "cesiumjs-ai-tools-sample",
+  "private": true,
+  "version": "0.0.1",
+  "workspaces": [
+    "packages/*",
+    "shared",
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run build:packages && concurrently -n tools,config,server,frontend,backend -c magenta,yellow,cyan,blue,green \"npm run dev -w @cesium-ai/tools-cesium\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run build:packages && concurrently -n tools,config,server,backend -c magenta,yellow,cyan,green \"npm run dev -w @cesium-ai/tools-cesium\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w backend\"",
+    "build:packages": "npm run build -w @cesium-ai/tools-cesium && npm run build -w @cesium-ai/sample-config && npm run build -w @cesium-ai/server",
+    "build": "npm run build:packages && npm run build -w frontend && npm run build -w backend",
+    "preview": "npm run preview -w frontend",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck:test": "npm run typecheck:test -w @cesium-ai/tools-cesium -w @cesium-ai/sample-config -w @cesium-ai/server -w @cesium-ai/chat-element -w backend -w frontend",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "concurrently": "^9.1.0",
+    "prettier": "^3.4.2",
+    "vitest": "^4.1.9"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  }
+}

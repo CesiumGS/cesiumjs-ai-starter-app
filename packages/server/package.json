@@ -1,0 +1,40 @@
+{
+  "name": "@cesium-ai/server",
+  "version": "0.0.1",
+  "description": "Express plugin that mounts the AI SDK chat key-layer (/api/chat). Accepts a tool registry and a resolved language model; runs the streamText agent loop server-side so the LLM API key never reaches the browser. Model-agnostic — the host app owns provider selection.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "peerDependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "express": "^5.1.0",
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

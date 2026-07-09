@@ -1,0 +1,33 @@
+{
+  "name": "cesiumjs-ai-tools-sample-backend",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.0",
+    "@cesium-ai/sample-config": "*",
+    "@cesium-ai/server": "*",
+    "@cesium-ai/tools-cesium": "*",
+    "ai": "^7.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@ai-sdk/anthropic": "^4.0.0",
+    "@ai-sdk/google": "^4.0.0",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.3"
+  }
+}

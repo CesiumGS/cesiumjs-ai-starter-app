@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+**/dist/
+
+# Vendored CesiumJS static assets (copied into the bundle, not authored here)
+frontend/public/cesium/
+frontend/dist/
+
+# Lockfiles & generated
+package-lock.json
+*.tsbuildinfo

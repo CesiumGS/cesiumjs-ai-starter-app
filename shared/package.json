@@ -1,0 +1,33 @@
+{
+  "name": "@cesium-ai/sample-config",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Sample-app tool selection shared by this app's backend and frontend — the single source of truth for which CesiumJS tools are enabled.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@cesium-ai/tools-cesium": "*",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  }
+}
