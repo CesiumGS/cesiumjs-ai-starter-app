@@ -104,8 +104,6 @@ Browser                          Server
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
 - **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
 
-See [.architecture/ACD(draft).md](<.architecture/ACD(draft).md>) for full architecture decisions.
-
 ---
 
 ## Working with Cesium Tools
@@ -241,7 +239,6 @@ cesiumjs-ai-tools-sample/
 ├── shared/                     # @cesium-ai/sample-config — app's tool selection
 │   └── src/
 │       └── enabled-tools.ts    # ENABLED_CESIUM_TOOLS — enable/disable a tool here
-├── .architecture/              # Architecture decision document
 ├── .prettierrc.json            # Prettier config (code formatting rules)
 ├── .editorconfig               # Editor defaults (indent, charset, EOL)
 ├── .env.example                # Environment variable template
@@ -273,7 +270,7 @@ Run `npm run format` before committing — CI runs `npm run format:check` and fa
 
 ## CI
 
-GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/sample-app-ci.yml`](../../.github/workflows/sample-app-ci.yml)):
+GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/ci.yml`](.github/workflows/sample-app-ci.yml)):
 
 - **Format check** — `npm run format:check` (Prettier).
 - **Build** — installs dependencies, then builds the workspace packages, the frontend bundle, and the backend (each as a separate, type-checked step).
