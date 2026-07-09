@@ -229,7 +229,6 @@ GitHub Actions runs on every push or pull request that touches files under this 
 - **Format check** — `npm run format:check` (Prettier).
 - **Build** — installs dependencies, then builds the workspace packages, the frontend bundle, and the backend (each as a separate, type-checked step).
 
-
 ## 🤝 Contributing
 
 Interested in contributing? Please read [CONTRIBUTING.md](CONTRIBUTING.md). We also ask that you follow the [Code of Conduct](CODE_OF_CONDUCT.md).
@@ -237,4 +236,3 @@ Interested in contributing? Please read [CONTRIBUTING.md](CONTRIBUTING.md). We a
 ## 📗 License
 
 Apache 2.0. See [LICENSE](LICENSE).
-
