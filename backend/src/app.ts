@@ -1,10 +1,12 @@
 import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
 import { createChatRouter } from "@cesium-ai/server";
 import { createCesiumTools } from "@cesium-ai/tools-cesium";
-import type { LanguageModel } from "ai";
+import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
+import type { LanguageModel, ToolSet } from "ai";
 import cors from "cors";
 import express, { type Express } from "express";
 import type { Env } from "./utils/env.js";
+import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
 
@@ -55,15 +57,35 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
   // this app's extended `flyToInputSchema` (adds `duration`/`easingFunction` on
   // top of the stock tool), built from the same shared shape the frontend
   // validates against — see `./flyto-tool.ts`.
-  app.use(
-    createChatRouter({
-      model,
-      tools: createCesiumTools({
-        enabled: ENABLED_CESIUM_TOOLS,
-        flyTo: { inputSchema: flyToInputSchema },
-      }),
+  //
+  // `executeCesiumCode` isn't a viewer tool, so `createCesiumTools`
+  // (`@cesium-ai/tools-cesium`, scoped to tools that run directly against a
+  // live `Viewer`) never builds it — unlike `flyTo`, it needs a real
+  // server-side `execute` (intent -> verified code) backed by
+  // `@cesium-ai/codegen-cesium`'s generation pipeline. This app builds its own
+  // executable version — see `./tools/execute-cesium-code-tool.ts` — and
+  // merges it in only when a model is actually configured (no model, no
+  // codegen calls to make) and the app has it enabled.
+  const tools: ToolSet = {
+    ...createCesiumTools({
+      enabled: ENABLED_CESIUM_TOOLS,
+      flyTo: { inputSchema: flyToInputSchema },
     }),
-  );
+    ...(model && ENABLED_CESIUM_TOOLS.includes(CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode)
+      ? {
+          // The frontend doesn't yet execute the generated code anywhere — see
+          // `frontend/README.md` — so static verification is unrestricted for now
+          // (aside from the verifier's unconditional bans on `eval`/`Function`/dynamic
+          // `import`/banned globals), matching real CesiumJS primitives
+          // (`viewer.camera.flyTo`, `viewer.entities.add`, `Cesium.Cartesian3.fromDegrees`, ...).
+          [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
+            model,
+          }),
+        }
+      : {}),
+  };
+
+  app.use(createChatRouter({ model, tools }));
 
   return app;
 }

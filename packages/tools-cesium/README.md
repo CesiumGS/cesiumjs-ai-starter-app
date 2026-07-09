@@ -1,6 +1,8 @@
 # @cesium-ai/tools-cesium
 
-Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …) for the AI SDK. These are **schemas only** — no tool defines `execute`. The AI SDK streams a tool call to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
+Zod-schemed CesiumJS **viewer** tool definitions (`flyTo`, …) for the AI SDK — tools that run directly against a live `Viewer`. Every tool here is **schema only** — no `execute` — streamed to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
+
+> Looking for `executeCesiumCode`? It lives in `@cesium-ai/codegen-cesium`, not here — see that package's README. Unlike `flyTo`, it needs an intent-to-verified-code generation pipeline (AST parsing, a model call, a vendored grounding corpus) rather than a direct `Viewer` call, so it's scoped to its own package instead of this one.
 
 ## Usage
 
@@ -30,6 +32,10 @@ A `flyTo` tool call is **attacker-influenceable input**: the model produces the 
 - **Keep descriptions server-side.** The root entry point carries the `.describe()` text and natural-language tool `description` the LLM reads. That text can hint at capabilities or internal behavior beyond what the structural schema exposes, so it must never ship in the client bundle — import only `/schemas` or `/names` from frontend code, never the package root.
 
 The `flyTo.schema-sync.test.ts` suite (and its per-app extensions, e.g. `backend/src/flyto-tool.test.ts`) exists specifically to guarantee these two schemas can't silently diverge — if the server ever accepts an input the client's copy rejects (or vice versa), that's either a tool call the browser wrongly executes or one it wrongly refuses.
+
+## Why `executeCesiumCode` isn't here
+
+This package is scoped to tools whose arguments are bounded, typed data that a client can validate and hand straight to a live `Viewer` method — `flyTo`'s arguments either satisfy `flyToInputShape` or they don't. `executeCesiumCode` is a fundamentally different kind of tool: its `intent` is a prompt for _generating arbitrary code_ — a "Code Mode" tool, in the terms of the `iTwin/platform-mcp` Security Architecture wiki's §10 — and validating the shape of `{ intent: string }` says nothing about the safety of the CesiumJS snippet eventually produced from it. That snippet needs its own generation, verification, and sandboxing pipeline (`generateVerifiedCesiumCode`, an AST parser, a model call, a vendored grounding corpus) before it can touch a live `Viewer`, all of which live in `@cesium-ai/codegen-cesium` — see that package's README for the full pipeline, including the frontend iframe sandbox that's the real isolation boundary.
 
 ## Configuring or overriding defaults
 
@@ -117,14 +123,16 @@ The structural shape — which fields exist, their types, and range checks (lat 
 
 ## File layout
 
-Each tool gets its own folder under `src/tools/<toolName>/`, containing the structural shape (`<toolName>.schema.ts`, no description text) and the tool definition (`<toolName>.ts`, description + `create<ToolName>` factory). Two shared building blocks live in `src/lib/` so adding a tool doesn't mean re-deriving them:
+Each tool gets its own folder under `src/tools/<toolName>/`, containing the structural shape (`<toolName>.schema.ts`, no description text) and the tool definition (`<toolName>.ts`, description + `create<ToolName>` factory). Three shared building blocks live in `src/lib/` so adding a tool doesn't mean re-deriving them:
 
 - `mergeDescriptions` (`src/lib/merge-descriptions.ts`) — merges a per-field `.describe()` override object over a tool's defaults.
 - `buildDescribedSchema` / `describeShape` (`src/lib/describe-shape.ts`) — merges the descriptions then applies them to a zod object shape, producing the model-facing schema. Every `buildXInputSchema` is just this call with its own shape and defaults plugged in.
 - `createClientTool` / `ClientToolConfig` (`src/lib/client-tool.ts`) — the no-`execute` `tool({ description, inputSchema })` wrapper and the `{ description?, fieldDescriptions?, inputSchema? }` config shape every client-side tool accepts.
 - `createToolFactory` (`src/lib/client-tool.ts`) — builds a tool's `createX(config)` function from its default description and `buildXInputSchema`. Every `createX` in this package (e.g. `createFlyTo`) is just `createToolFactory(DEFAULT_X_DESCRIPTION, buildXInputSchema)` — no per-tool `??` boilerplate to rewrite.
 
-`src/tool-names.ts` (the name registry) and `src/schemas.ts` (the `/schemas` subpath aggregator) stay flat at the package root — each just grows one line per new tool.
+`@cesium-ai/codegen-cesium` duplicates these same three `src/lib/` helpers rather than depending on this package for them — they're small, generic, viewer-independent schema-building utilities, and duplicating them keeps the two packages decoupled (this package stays reserved for viewer-specific tools).
+
+`src/tool-names.ts` (the name registry) and `src/schemas.ts` (the `/schemas` subpath aggregator) stay flat at the package root — each just grows one line per new **viewer** tool.
 
 ## Exports
 
@@ -139,5 +147,5 @@ Each tool gets its own folder under `src/tools/<toolName>/`, containing the stru
 | `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS`   | `./index.js`             | Default per-field `.describe()` hints (`latitude`, `longitude`, `altitude`).          |
 | `buildFlyToInputSchema`               | `./index.js`             | Builds the model-facing schema from `flyToInputShape` + field hints.                  |
 | `defaultFlyToInputSchema`             | `./index.js`             | `buildFlyToInputSchema()` with every default hint applied.                            |
-| `CESIUM_TOOL_NAMES`, `CesiumToolName` | `./index.js`, `/names`   | Canonical tool name constants / union type.                                           |
+| `CESIUM_TOOL_NAMES`, `CesiumToolName` | `./index.js`, `/names`   | Canonical **viewer** tool name constants / union type (`flyTo` only).                 |
 | `flyToInputShape`, `FlyToInput`       | `./index.js`, `/schemas` | The structural args contract (no descriptions) and its inferred type.                 |

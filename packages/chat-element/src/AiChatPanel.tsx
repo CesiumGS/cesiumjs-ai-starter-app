@@ -16,26 +16,75 @@ export interface AiChatPanelProps {
   apiEndpoint?: string;
   onToolCall?: (toolName: string, args: unknown) => Promise<unknown>;
   /**
+   * Fired whenever a server-resolved tool result (`tool-output-available`)
+   * arrives — see {@link ChatClientOptions.onServerToolResult}. Threaded
+   * straight through to the underlying {@link ChatClient}, following the same
+   * pattern as `onToolCall` above.
+   */
+  onServerToolResult?: (toolCall: {
+    toolCallId: string;
+    toolName: string;
+    output: unknown;
+  }) => void | Promise<void>;
+  /**
+   * Overrides the panel's built-in Approve/Reject UI for a `needsApproval`-gated
+   * tool call. When omitted (the common case), `AiChatPanel` shows its own
+   * inline Approve/Reject buttons on the pending tool call in the transcript
+   * and resolves this decision itself — the host doesn't need to render any
+   * approval UI. Pass this only to implement a host-side policy that decides
+   * without prompting the user (e.g. auto-approving certain tools) — the
+   * built-in UI is then skipped entirely for calls this handles.
+   */
+  onApprovalRequired?: (toolCall: {
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+  }) => Promise<{ approved: boolean; reason?: string }>;
+  /**
    * Hard cap on consecutive server round trips driven by client-resolved tool
    * calls. Fixed at mount — passed straight to the {@link ChatClient} that is
    * created once for the panel's lifetime. See
    * {@link ChatClientOptions.maxToolCallRounds} for the default.
    */
   maxToolCallRounds?: number;
+  /**
+   * Optional callback fired when the internal chat client is ready.
+   * Allows the host to access the client for operations like reporting errors.
+   */
+  onClientReady?: (client: ChatClient) => void;
+}
+
+/**
+ * A tool call the panel's built-in Approve/Reject UI is currently showing —
+ * `resolve` is the promise executor captured from `handleApprovalRequired`
+ * below, called exactly once when the user picks a decision.
+ */
+interface PendingApproval {
+  toolCallId: string;
+  resolve: (decision: { approved: boolean; reason?: string }) => void;
 }
 
 function useChatClient(
   apiEndpoint: string,
   onToolCall: AiChatPanelProps["onToolCall"],
+  onServerToolResult: AiChatPanelProps["onServerToolResult"],
+  onApprovalRequired: AiChatPanelProps["onApprovalRequired"],
   maxToolCallRounds: AiChatPanelProps["maxToolCallRounds"],
+  setPendingApproval: (pending: PendingApproval | null) => void,
 ) {
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   // Refs keep callbacks stable so the ChatClient doesn't need to be recreated
   const forceUpdateRef = useRef(forceUpdate);
   const onToolCallRef = useRef(onToolCall);
+  const onServerToolResultRef = useRef(onServerToolResult);
+  const onApprovalRequiredRef = useRef(onApprovalRequired);
+  const setPendingApprovalRef = useRef(setPendingApproval);
   forceUpdateRef.current = forceUpdate;
   onToolCallRef.current = onToolCall;
+  onServerToolResultRef.current = onServerToolResult;
+  onApprovalRequiredRef.current = onApprovalRequired;
+  setPendingApprovalRef.current = setPendingApproval;
 
   const clientRef = useRef<ChatClient | null>(null);
   if (!clientRef.current) {
@@ -47,6 +96,20 @@ function useChatClient(
         onToolCallRef.current
           ? onToolCallRef.current(toolName, args)
           : Promise.reject(new Error(`Unknown tool: ${toolName}`)),
+      onServerToolResult: (toolCall) => onServerToolResultRef.current?.(toolCall),
+      onApprovalRequired: (toolCall) => {
+        // A host-supplied override skips the built-in UI entirely — it
+        // decides (and resolves) without ever touching `pendingApproval`.
+        if (onApprovalRequiredRef.current) return onApprovalRequiredRef.current(toolCall);
+
+        // Otherwise, this IS the panel's approval UI: park the decision as
+        // pending state, which `MessageItem`/`ToolCard` render Approve/Reject
+        // buttons for, and resolve this promise from `handleApprove`/
+        // `handleReject` below once the user picks one.
+        return new Promise((resolve) => {
+          setPendingApprovalRef.current({ toolCallId: toolCall.toolCallId, resolve });
+        });
+      },
       maxToolCallRounds,
     });
   }
@@ -65,12 +128,44 @@ function useChatClient(
 export function AiChatPanel({
   apiEndpoint = "/api/chat",
   onToolCall,
+  onServerToolResult,
+  onApprovalRequired,
   maxToolCallRounds,
+  onClientReady,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
-  const { client, forceUpdate } = useChatClient(apiEndpoint, onToolCall, maxToolCallRounds);
+  const { client, forceUpdate } = useChatClient(
+    apiEndpoint,
+    onToolCall,
+    onServerToolResult,
+    onApprovalRequired,
+    maxToolCallRounds,
+    setPendingApproval,
+  );
+
+  // Call onClientReady when client is ready
+  useEffect(() => {
+    if (client) {
+      onClientReady?.(client);
+    }
+  }, [client, onClientReady]);
+
+  const handleApprove = useCallback(() => {
+    setPendingApproval((current) => {
+      current?.resolve({ approved: true });
+      return null;
+    });
+  }, []);
+
+  const handleReject = useCallback(() => {
+    setPendingApproval((current) => {
+      current?.resolve({ approved: false, reason: "Declined by the user." });
+      return null;
+    });
+  }, []);
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -161,7 +256,17 @@ export function AiChatPanel({
             Ask me to navigate the globe — e.g. &quot;fly to Tokyo&quot;
           </Typography>
         ) : (
-          client.messages.map((msg) => <MessageItem key={msg.id} message={msg} />)
+          client.messages.map((msg) => (
+            <MessageItem
+              key={msg.id}
+              message={msg}
+              approval={{
+                pendingApprovalToolCallId: pendingApproval?.toolCallId ?? null,
+                onApprove: handleApprove,
+                onReject: handleReject,
+              }}
+            />
+          ))
         )}
       </div>
 

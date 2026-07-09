@@ -36,6 +36,8 @@ The globe opens at `http://localhost:5173`; the chat API runs at `http://localho
 
 Once `npm run dev` is running and you've opened `http://localhost:5173`, type a place name into the chat panel — e.g. **`fly to Paris`** — and send it. The assistant resolves the location, the globe camera flies there, and the assistant confirms once it arrives. Any city, country, landmark, or address the model knows will work — try **London**, **Mount Everest**, or **1600 Pennsylvania Avenue**.
 
+For requests that don't fit a single fly-to, try something like **`drop a pin at the Eiffel Tower`** — this routes through `executeCesiumCode` instead, which is gated behind AI SDK's native tool-approval mechanism (`needsApproval: true` — see `backend/src/tools/execute-cesium-code-tool.ts`): the chat panel shows you the assistant's raw intent for the call and waits for you to **approve or reject it** (a human-in-the-loop checkpoint — see `frontend/src/components/ChatPanel.tsx`'s `onApprovalRequired` handler) _before_ any code is generated. Only after approval does the backend generate and statically verify a CesiumJS snippet for your intent. This initial build stops there — the verified snippet is not yet executed against the live `Viewer`; browser-side execution is planned for a follow-up PR.
+
 If no provider API key is configured, the chat panel shows a banner — _"AI is not configured. Add a supported provider API key to your .env file."_ — and the globe still runs as a plain viewer.
 
 ---
@@ -60,7 +62,12 @@ Browser                          Server
 **Workspace packages:** The reusable, model-agnostic pieces live in `packages/` and are consumed by the `backend/` host app:
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
-- **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
+- **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`). Schemas only, no `execute`, and scoped strictly to tools that run directly against a live `Viewer`.
+- **`@cesium-ai/codegen-cesium`** — backend-only pipeline that turns `executeCesiumCode`'s natural-language `intent` into statically-verified CesiumJS code (skills-grounded generation + an AST verifier), and also owns `executeCesiumCode`'s tool definition itself (schema-only, no `execute`) — that tool can't run directly against a `Viewer` like `flyTo` does, so it lives here rather than in `tools-cesium`. Parse-only — it never executes generated code itself.
+
+This app builds its own executable `executeCesiumCode` tool on top of the library's schema (`backend/src/tools/execute-cesium-code-tool.ts`, wrapping `@cesium-ai/codegen-cesium`), the same "app extends the shared schema" pattern `flyTo` uses via `backend/src/tools/flyto-tool.ts`. Because `executeCesiumCode` is a "Code Mode" tool — the model's output is arbitrary generated code, not bounded typed args like `flyTo`'s lat/lon/altitude — it needs a materially different security posture than `flyTo`. The backend's AST verification (see [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md)) is defense-in-depth only, not a substitute for runtime isolation; this app does not yet execute the verified snippet anywhere — that requires a real runtime isolation boundary (e.g. a sandboxed interpreter bound to a narrow, explicit, allowlisted capability proxy, never a generic bridge to `fetch`-like primitives), which is planned for a follow-up PR. See [`packages/tools-cesium/README.md`](packages/tools-cesium/README.md) and [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md) for the full generation/verification pipeline.
+
+See [.architecture/ACD(draft).md](<.architecture/ACD(draft).md>) for full architecture decisions.
 
 ---
 
@@ -81,13 +88,14 @@ To **disable** a tool, remove its name from the array. To **enable** one, add it
 // shared/src/enabled-tools.ts
 export const ENABLED_CESIUM_TOOLS = [
   CESIUM_TOOL_NAMES.flyTo,
-  // CESIUM_TOOL_NAMES.someOtherTool,   // ← add to enable
-] as const satisfies readonly CesiumToolName[];
+  CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
+  // CESIUM_TOOL_NAMES.someOtherViewerTool,   // ← add to enable
+] as const satisfies readonly (CesiumToolName | CodegenCesiumToolName)[];
 ```
 
 Two compile-time guards keep this honest:
 
-- Each entry is checked against `CesiumToolName` (`satisfies`), so a typo or a name that isn't a real Cesium tool fails to build.
+- Each entry is checked against `CesiumToolName | CodegenCesiumToolName` (`satisfies`), so a typo or a name that isn't a real Cesium tool fails to build.
 - The frontend's `TOOL_EXECUTORS` map in [`frontend/src/components/ChatPanel.tsx`](frontend/src/components/ChatPanel.tsx) is typed `Record<EnabledCesiumTool, ToolExecutor>`. Enabling a tool **without** adding a client-side executor for it fails to compile — so the app can never offer the model a tool the browser can't run.
 
 After editing, rebuild the shared package so both tiers pick up the change: `npm run build:packages` (or just leave `npm run dev` running — it watches). Then guard the contract with the allowlist test:
@@ -96,7 +104,7 @@ After editing, rebuild the shared package so both tiers pick up the change: `npm
 npm test -- enabled-tools
 ```
 
-> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-cesium/src/tool-names.ts`](packages/tools-cesium/src/tool-names.ts)); (2) add its schema/definition module under `packages/tools-cesium/src/` and wire it into `createCesiumTools` ([`index.ts`](packages/tools-cesium/src/index.ts)); (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-cesium/src/tool-names.ts`](packages/tools-cesium/src/tool-names.ts)) if it runs directly against the live `Viewer`, or add it to `@cesium-ai/codegen-cesium` instead if — like `executeCesiumCode` — it needs the codegen/verification pipeline first; (2) add its schema/definition module under that package's `src/` and wire it into `createCesiumTools` ([`packages/tools-cesium/src/index.ts`](packages/tools-cesium/src/index.ts)) if it's a viewer tool; (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
 
 ### Update a tool's schema
 
@@ -164,7 +172,8 @@ cesiumjs-ai-tools-sample/
 │   │   ├── components/
 │   │   │   └── ChatPanel.tsx   # Host-side tool-call listener — TOOL_EXECUTORS map
 │   │   ├── tools/
-│   │   │   └── camera.ts       # flyToLocation — client-side flyTo executor
+│   │   │   ├── camera.ts          # flyToLocation — client-side flyTo executor
+│   │   │   └── execute-cesium-code.ts # Result-shape validation for executeCesiumCode
 │   │   ├── cesium-loader.ts    # Viewer initialization (terrain, defaults)
 │   │   ├── config.ts           # Reads VITE_* env vars
 │   │   └── main.tsx            # React entry point
@@ -174,7 +183,8 @@ cesiumjs-ai-tools-sample/
 │   │   ├── index.ts            # Wires @cesium-ai/server + tools, CORS, listen
 │   │   ├── app.ts              # Express app (CORS, rate limiter, /health, chat router)
 │   │   ├── tools/
-│   │   │   └── flyto-tool.ts   # Backend-only flyTo input schema extensions
+│   │   │   ├── flyto-tool.ts   # Backend-only flyTo input schema extensions
+│   │   │   └── execute-cesium-code-tool.ts # Server-executed executeCesiumCode tool
 │   │   └── utils/
 │   │       ├── env.ts          # Zod-validated, typed environment config
 │   │       ├── providers.ts    # LLM provider factory (createModel)
@@ -185,12 +195,20 @@ cesiumjs-ai-tools-sample/
 │   │   └── src/
 │   │       ├── chat-router.ts  # createChatRouter — POST /api/chat (SSE)
 │   │       └── agent.ts        # Agent loop — streamText with tool registry
-│   └── tools-cesium/           # @cesium-ai/tools-cesium — viewer tool schemas
+│   ├── tools-cesium/           # @cesium-ai/tools-cesium — viewer tool schemas (flyTo only)
+│   │   └── src/
+│   │       ├── tool-names.ts   # CESIUM_TOOL_NAMES — canonical viewer tool identifiers
+│   │       ├── schemas.ts      # flyToInputShape — shared args contract (structural)
+│   │       ├── tools/flyTo/flyTo.ts # flyTo tool (model-facing schema + hints, no execute)
+│   │       └── index.ts        # createCesiumTools registry (enabled allowlist)
+│   └── codegen-cesium/         # @cesium-ai/codegen-cesium — intent -> verified CesiumJS code pipeline + the executeCesiumCode tool
 │       └── src/
-│           ├── tool-names.ts   # CESIUM_TOOL_NAMES — canonical tool identifiers
-│           ├── schemas.ts      # flyToInputShape — shared args contract (structural)
-│           ├── tools/flyTo/flyTo.ts # flyTo tool (model-facing schema + hints, no execute)
-│           └── index.ts        # createCesiumTools registry (enabled allowlist)
+│           ├── tool-names.ts   # CODEGEN_CESIUM_TOOL_NAMES — canonical codegen tool identifiers
+│           ├── schemas.ts      # executeCesiumCodeInputShape — shared args contract (structural)
+│           ├── tools/executeCesiumCode/executeCesiumCode.ts # executeCesiumCode tool (schema-only by design)
+│           ├── generate-verified-cesium-code.ts # generateVerifiedCesiumCode orchestration entry point
+│           ├── ast-verifier.ts  # Parse-only static verifier (acorn/acorn-walk)
+│           └── skills-loader.ts # Loads SKILL.md/DOMAINS.md from the @cesium/cesiumjs-skills package dependency
 ├── shared/                     # @cesium-ai/sample-config — app's tool selection
 │   └── src/
 │       └── enabled-tools.ts    # ENABLED_CESIUM_TOOLS — enable/disable a tool here
@@ -224,17 +242,7 @@ Run `npm run format` before committing — CI runs `npm run format:check` and fa
 
 ## CI
 
-GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/ci.yml`](.github/workflows/sample-app-ci.yml)):
+GitHub Actions runs on every push or pull request that touches files under this directory ([`.github/workflows/sample-app-ci.yml`](../../.github/workflows/sample-app-ci.yml)):
 
 - **Format check** — `npm run format:check` (Prettier).
 - **Build** — installs dependencies, then builds the workspace packages, the frontend bundle, and the backend (each as a separate, type-checked step).
-
-
-## 🤝 Contributing
-
-Interested in contributing? Please read [CONTRIBUTING.md](CONTRIBUTING.md). We also ask that you follow the [Code of Conduct](CODE_OF_CONDUCT.md).
-
-## 📗 License
-
-Apache 2.0. See [LICENSE](LICENSE).
-

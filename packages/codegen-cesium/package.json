@@ -1,0 +1,48 @@
+{
+  "name": "@cesium-ai/codegen-cesium",
+  "version": "0.0.1",
+  "description": "Intent-to-verified-CesiumJS-code generation pipeline (CesiumJS Agent Skills grounding via the @cesium/cesiumjs-skills package dependency, domain matching, model-agnostic generation, AST-based static verification — parse-only, never executes generated code) plus the schema-only `executeCesiumCode` tool definition that fronts it.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./names": {
+      "types": "./dist/tool-names.d.ts",
+      "import": "./dist/tool-names.js",
+      "default": "./dist/tool-names.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js",
+      "default": "./dist/schemas.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@cesium/cesiumjs-skills": "github:CesiumGS/cesiumjs-skills#feat/npm-skills-support",
+    "acorn": "^8.0.0",
+    "acorn-walk": "^8.0.0",
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

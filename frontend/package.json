@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@cesium-ai/chat-element": "*",
+    "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/tools-cesium": "*",
     "@stratakit/mui": "^0.5.0",

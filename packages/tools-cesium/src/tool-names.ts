@@ -1,6 +1,7 @@
 /**
- * Canonical CesiumJS tool identifiers — the **single source of truth** for tool
- * names, shared by the server tool registry and the client-side executors.
+ * Canonical CesiumJS **viewer** tool identifiers — the **single source of
+ * truth** for tool names, shared by the server tool registry and the
+ * client-side executors.
  *
  * This module imports nothing (no `ai`, no `zod`, no schemas) on purpose: the
  * frontend imports it to build its executor map, so it must stay free of tool

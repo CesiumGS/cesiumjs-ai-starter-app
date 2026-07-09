@@ -27,16 +27,22 @@ export interface CesiumToolsConfig {
    * wants as the Cesium tool catalogue grows. Omit to include every tool by
    * default. A tool named here is still dropped if its per-tool config is
    * `false`, so the allowlist and per-tool overrides compose.
+   *
+   * Typed as `readonly string[]` rather than `readonly CesiumToolName[]`
+   * because a host application's combined tool allowlist (e.g. this sample
+   * app's `ENABLED_CESIUM_TOOLS`) typically spans this package's viewer tools
+   * *and* `@cesium-ai/codegen-cesium`'s `executeCesiumCode` — passing that
+   * wider list straight through here should not require the caller to filter
+   * it down to just this package's names first.
    */
-  enabled?: readonly CesiumToolName[];
+  enabled?: readonly string[];
   /** Override `flyTo`'s description / input schema, or `false` to exclude it. */
   flyTo?: FlyToConfig | false;
 }
-
 /**
- * Builds the set of CesiumJS viewer tools (client-side execution). Returning a
- * factory keeps the registry composable — future tool groups (MCP-backed,
- * server-side, etc.) can be spread alongside it:
+ * Builds the set of CesiumJS **viewer** tools (client-side execution — tools
+ * that run directly against a live `Viewer`). Returning a factory keeps the
+ * registry composable — future viewer tool groups can be spread alongside it:
  *
  *   const tools = { ...createCesiumTools(), ...createMcpTools() };
  *

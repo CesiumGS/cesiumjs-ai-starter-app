@@ -23,6 +23,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/tools-cesium": "*",
     "zod": "^4.0.0"
   },

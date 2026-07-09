@@ -1,10 +1,16 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-cesium/names";
+import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
 import { flyToLocation } from "../tools/camera";
+import {
+  executeCesiumCodeResultShape,
+  isExecuteCesiumCodeTool,
+} from "../tools/execute-cesium-code";
 import { config } from "../utils/config";
+import type { ChatClient } from "@cesium-ai/chat-element";
 
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
@@ -23,13 +29,26 @@ type ToolExecutor = (viewer: Viewer, args: unknown) => Promise<unknown>;
  * ships exactly the executors for the app's current tool surface, in lockstep
  * with the backend.
  *
- * We import only the schema-free `/names` subpath, so no tool definitions
- * (descriptions, Zod schemas) reach the client bundle.
+ * We import only the schema-free `/names` subpaths (from both
+ * `@cesium-ai/tools-cesium`, for `flyTo`, and `@cesium-ai/codegen-cesium`, for
+ * `executeCesiumCode`), so no tool definitions (descriptions, Zod schemas)
+ * reach the client bundle.
  */
 const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
   // flyToLocation validates the untrusted args against its own schema, so the
   // raw payload is passed straight through — no cast.
   [CESIUM_TOOL_NAMES.flyTo]: (viewer, args) => flyToLocation(viewer, args),
+  // executeCesiumCode is server-executed (see `backend/src/tools/execute-cesium-code-tool.ts`):
+  // its `tool-output-available` chunk always resolves the invocation before
+  // `resolveClientToolCalls` runs, so this executor should never actually be
+  // invoked. It's still required to satisfy `Record<EnabledCesiumTool, …>` —
+  // kept as a defensive stub that reports the (unexpected) call rather than
+  // silently doing nothing.
+  [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: () =>
+    Promise.resolve({
+      success: false,
+      error: "executeCesiumCode is resolved server-side; no client-side executor runs for it.",
+    }),
 };
 
 /**
@@ -49,6 +68,9 @@ const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
  * rather than throwing, so the model can surface a graceful message.
  */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
+  // Reference to the chat client for reporting tool-execution errors
+  const chatClientRef = useRef<ChatClient | null>(null);
+
   const handleToolCall = useCallback(
     (toolName: string, args: unknown): Promise<unknown> => {
       const viewer = viewerRef.current;
@@ -63,5 +85,57 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
     [viewerRef],
   );
 
-  return <AiChatPanel apiEndpoint={config.chatApiEndpoint} onToolCall={handleToolCall} />;
+  /**
+   * `executeCesiumCode` is approved and its snippet is generated and
+   * statically verified server-side, but this app doesn't yet run the
+   * verified code anywhere — the browser-side execution sandbox is planned
+   * for a follow-up PR. Report that plainly instead of executing anything.
+   */
+  const runApprovedCode = useCallback((_code: string) => {
+    chatClientRef.current?.reportError(
+      "Code execution is not yet supported in this build; executeCesiumCode results are verified but not run.",
+    );
+  }, []);
+
+  /**
+   * Server-resolved tool result listener. `executeCesiumCode` is the one
+   * enabled tool whose server-resolved output still needs a client-side
+   * action: once the backend has generated and statically verified a CesiumJS
+   * snippet — which, since the tool is `needsApproval`-gated, only happens
+   * after `@cesium-ai/chat-element`'s built-in Approve/Reject UI already got
+   * an explicit human "go ahead" for the intent — this host runs it. `output`
+   * is validated defensively before anything runs: it is server-influenced
+   * but still not implicitly trusted here.
+   */
+  const handleServerToolResult = useCallback(
+    (toolCall: { toolCallId: string; toolName: string; output: unknown }) => {
+      if (!isExecuteCesiumCodeTool(toolCall.toolName)) return;
+
+      const parsed = executeCesiumCodeResultShape.safeParse(toolCall.output);
+      if (!parsed.success) {
+        chatClientRef.current?.reportError("Malformed executeCesiumCode result.");
+        return;
+      }
+      if ("error" in parsed.data) {
+        // Verification failed server-side — nothing to run, and the
+        // existing result-display path (the chat transcript) already shows
+        // the error via the tool invocation's result.
+        return;
+      }
+
+      runApprovedCode(parsed.data.code);
+    },
+    [runApprovedCode],
+  );
+
+  return (
+    <AiChatPanel
+      apiEndpoint={config.chatApiEndpoint}
+      onToolCall={handleToolCall}
+      onServerToolResult={handleServerToolResult}
+      onClientReady={(client) => {
+        chatClientRef.current = client;
+      }}
+    />
+  );
 }
