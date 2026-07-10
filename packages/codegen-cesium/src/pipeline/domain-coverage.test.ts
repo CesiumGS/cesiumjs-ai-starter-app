@@ -82,7 +82,10 @@ describe("domain coverage — real vendored skills package", () => {
 
   it("builds a grounded prompt for a non-camera domain (terrain) using real skill content", () => {
     const skills = loadCesiumSkills();
-    const matches = matchSkillsForIntent(REPRESENTATIVE_INTENTS["cesiumjs-terrain-environment"], skills);
+    const matches = matchSkillsForIntent(
+      REPRESENTATIVE_INTENTS["cesiumjs-terrain-environment"],
+      skills,
+    );
     expect(matches[0].skill.name).toBe("cesiumjs-terrain-environment");
 
     const prompt = buildCodegenPrompt({

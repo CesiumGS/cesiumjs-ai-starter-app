@@ -238,9 +238,12 @@ describe("verifyCesiumCode — destructuring", () => {
   });
 
   it("still rejects actually calling a banned global name that was aliased in via destructuring", () => {
-    const result = verifyCesiumCode(`const { fetch } = globalThis; fetch("https://evil.example");`, {
-      allowedSymbols: [...ALLOWED, "globalThis"],
-    });
+    const result = verifyCesiumCode(
+      `const { fetch } = globalThis; fetch("https://evil.example");`,
+      {
+        allowedSymbols: [...ALLOWED, "globalThis"],
+      },
+    );
     expect(result.verified).toBe(false);
     expect(result.violations?.some((v) => /fetch/.test(v))).toBe(true);
   });

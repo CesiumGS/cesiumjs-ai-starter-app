@@ -6,7 +6,7 @@ A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/c
 
 ## Get Started
 
-To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI. 
+To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI.
 
 Optionally, add a free [Cesium Ion](https://ion.cesium.com) access token for high-quality terrain and imagery (without it, the globe displays basic imagery).
 

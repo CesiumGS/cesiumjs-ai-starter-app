@@ -89,9 +89,7 @@ function trackPageErrors(page: Page): Error[] {
 
 test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skills domain", () => {
   for (const [domain, intent] of Object.entries(DOMAIN_INTENTS)) {
-    test(`${domain}: a real intent is verified and executes cleanly`, async ({
-      page,
-    }) => {
+    test(`${domain}: a real intent is verified and executes cleanly`, async ({ page }) => {
       test.setTimeout(120_000);
 
       const pageErrors = trackPageErrors(page);

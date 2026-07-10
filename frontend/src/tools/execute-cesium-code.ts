@@ -32,7 +32,10 @@ export function isExecuteCesiumCodeTool(toolName: string): boolean {
  *
  * Returns an error message string on failure, or `null` on success.
  */
-export async function executeApprovedCesiumCode(viewer: Viewer, code: string): Promise<string | null> {
+export async function executeApprovedCesiumCode(
+  viewer: Viewer,
+  code: string,
+): Promise<string | null> {
   try {
     const executeCode = new Function("viewer", "Cesium", `return (async () => {\n${code}\n})();`);
     await executeCode(viewer, Cesium);
