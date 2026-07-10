@@ -28,7 +28,6 @@ describe("env parsing", () => {
     const { env } = await loadEnv({
       PUBLIC_URL: undefined,
       AI_PROVIDER: undefined,
-      CHAT_ENABLED: undefined,
       ALLOWED_ORIGIN: undefined,
       RATE_LIMIT_RPM: undefined,
       TELEMETRY_ENABLED: undefined,
@@ -36,7 +35,6 @@ describe("env parsing", () => {
 
     expect(env.PUBLIC_URL).toBe("http://localhost:3001");
     expect(env.AI_PROVIDER).toBe("openai");
-    expect(env.CHAT_ENABLED).toBe(true);
     expect(env.ALLOWED_ORIGIN).toEqual(["http://localhost:5173"]);
     expect(env.RATE_LIMIT_RPM).toBe(20);
     expect(env.TELEMETRY_ENABLED).toBe(false);
@@ -83,15 +81,12 @@ describe("env parsing", () => {
       ["no", false],
       ["off", false],
       ["garbage", false],
-    ])("parses CHAT_ENABLED=%s as %s", async (value, expected) => {
-      const { env } = await loadEnv({ CHAT_ENABLED: value });
-      expect(env.CHAT_ENABLED).toBe(expected);
+    ])("parses TELEMETRY_ENABLED=%s as %s", async (value, expected) => {
+      const { env } = await loadEnv({ TELEMETRY_ENABLED: value });
+      expect(env.TELEMETRY_ENABLED).toBe(expected);
     });
 
     it("falls back to the default when blank", async () => {
-      const { env } = await loadEnv({ CHAT_ENABLED: "" });
-      expect(env.CHAT_ENABLED).toBe(true);
-
       const { env: telemetryEnv } = await loadEnv({ TELEMETRY_ENABLED: "" });
       expect(telemetryEnv.TELEMETRY_ENABLED).toBe(false);
     });

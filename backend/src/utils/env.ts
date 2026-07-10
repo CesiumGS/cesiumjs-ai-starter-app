@@ -38,8 +38,6 @@ const EnvSchema = z.object({
   AI_MODEL: z.preprocess(blankToUndefined, z.string().optional()),
   AI_BASE_URL: z.preprocess(blankToUndefined, z.url().optional()),
 
-  CHAT_ENABLED: boolEnv(true),
-
   ALLOWED_ORIGIN: z
     .string()
     .optional()

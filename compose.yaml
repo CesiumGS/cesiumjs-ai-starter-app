@@ -1,0 +1,98 @@
+# Docker Compose for the CesiumJS AI Tools sample app.
+#
+# Usage:
+#   cp .env.example .env   # fill in VITE_CESIUM_ION_ACCESS_TOKEN and, for chat, a provider key
+#   docker compose up --build --wait   # `--wait` blocks until both services are healthy
+#
+# The frontend is published at http://localhost:8080. The backend is
+# reachable only from the frontend, over the internal `app-network` — its
+# port is intentionally not published on the host.
+#
+# Readiness: both services declare healthchecks, so `docker compose ps` shows
+# each as `healthy` once it's actually serving. `docker compose up --wait`
+# returns only after that, so you know exactly when to open the URL.
+#
+# Both images are self-contained: each Dockerfile compiles its own source from
+# the repo root (npm workspace) in one `docker build`, so no separate
+# `npm run build` step is needed before `docker compose up --build`.
+#
+# The frontend bakes VITE_CESIUM_ION_ACCESS_TOKEN and VITE_API_BASE_URL into
+# the client bundle at build time via build args (see frontend/Dockerfile), so
+# changing either requires a rebuild (`docker compose up --build`).
+#
+# ── Viewer-only deployment (no chat backend) ────────────────────────────────
+# Easiest: keep the backend service but leave all provider API keys blank in
+# .env — the chat panel is omitted entirely and the globe otherwise works
+# normally, with no provider API key needed.
+#
+# To drop the backend container entirely, delete the `backend` service below
+# along with the frontend's `depends_on: backend` — nginx's `/api/` proxy
+# (frontend/nginx.conf) will then 502 on chat requests, which is expected
+# since nothing serves them.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # The backend derives its listen PORT from this URL (see backend/src/index.ts:
+      # `new URL(PUBLIC_URL).port`). It MUST keep `:3001` — EXPOSE, the healthcheck,
+      # and the frontend's nginx proxy (frontend/nginx.conf -> backend:3001) are all
+      # pinned to 3001. Changing the port here silently breaks all three; only the
+      # host/scheme are safe to change.
+      PUBLIC_URL: http://backend:3001
+    networks:
+      - app-network
+    # No `ports:` — only reachable from other containers on app-network.
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # Baked into the client bundle at build time (see frontend/Dockerfile).
+        # Reuses the same .env value as `npm run dev`'s VITE_CESIUM_ION_ACCESS_TOKEN.
+        VITE_CESIUM_ION_ACCESS_TOKEN: ${VITE_CESIUM_ION_ACCESS_TOKEN}
+        # Left blank so the built app calls relative `/api/chat`, which nginx
+        # proxies to the backend service (see frontend/nginx.conf). Set this to
+        # point the image at a different backend (requires a rebuild).
+        VITE_API_BASE_URL: ""
+    ports:
+      # host:container — nginx listens on 80 inside the container; published on
+      # 8080 on the host to avoid needing elevated privileges and to sidestep
+      # collisions with other local web servers on port 80.
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - app-network
+    # Mirrors the HEALTHCHECK baked into frontend/Dockerfile so readiness is
+    # visible in `docker compose ps` and gates `docker compose up --wait`.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge

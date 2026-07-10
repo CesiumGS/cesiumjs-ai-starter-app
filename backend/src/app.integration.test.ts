@@ -39,7 +39,6 @@ function fakeEnv(overrides: Partial<Env> = {}): Env {
   return {
     AI_PROVIDER: "anthropic",
     ALLOWED_ORIGIN: ["http://localhost:5173"],
-    CHAT_ENABLED: true,
     RATE_LIMIT_RPM: 20,
     ...overrides,
   } as Env;
@@ -96,7 +95,7 @@ afterEach(async () => {
 });
 
 describe("backend app — /health", () => {
-  it("reports status, chat flag, and provider", async () => {
+  it("reports status and provider", async () => {
     const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel() }));
 
     const res = await fetch(`${url}/health`);
@@ -104,7 +103,6 @@ describe("backend app — /health", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       status: "ok",
-      chatEnabled: true,
       provider: "anthropic",
       providerConfigured: true,
     });
