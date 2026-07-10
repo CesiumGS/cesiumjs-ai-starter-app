@@ -49,14 +49,6 @@ export function createExecuteCesiumCodeTool({
   return tool({
     description: DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
     inputSchema: defaultExecuteCesiumCodeInputSchema,
-    // The single source of truth for "this tool needs a human go-ahead before
-    // it runs" — AI SDK's native human-in-the-loop gate. `streamText` pauses
-    // the agent loop right after the model's `intent` argument is known and
-    // emits a `tool-approval-request` chunk instead of calling `execute`
-    // below; it only resumes (and only then generates/verifies code) once the
-    // client sends back an approval decision. See `@cesium-ai/chat-element`'s
-    // `ChatClient` (`onApprovalRequired`) for the client side of this gate.
-    needsApproval: true,
     execute: async ({ intent }: { intent: string }): Promise<ExecuteCesiumCodeResult> => {
       try {
         const result = await generateVerifiedCesiumCode({ intent, model, maxSkills, maxAttempts });

@@ -25,11 +25,9 @@ src/
 
 The frontend imports only schema-free pieces from these packages: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only. `flyTo`'s name/shape come from `@cesium-ai/tools-cesium`; `executeCesiumCode`'s come from `@cesium-ai/codegen-cesium`, which owns that tool since it can't run directly against a `Viewer` the way `flyTo` does (see [`packages/tools-cesium/README.md`](../packages/tools-cesium/README.md)).
 
-## `executeCesiumCode`: verified, not yet executed
+## `executeCesiumCode`: server-verified, client-executed
 
-`executeCesiumCode` is a "Code Mode" tool (arbitrary model-generated JavaScript, not bounded typed args like `flyTo`), and it is resolved **server-side**: the backend streams its result as a `tool-output-available` chunk once `@cesium-ai/codegen-cesium` has generated and statically verified a CesiumJS snippet (see [`backend/README.md`](../backend/README.md)). `ChatPanel.tsx`'s `handleServerToolResult` is the second dispatch path this creates (alongside the existing `onToolCall`/`tool-input-available` path `flyTo` uses) — it validates the result shape, then hands the verified code to `runApprovedCode`.
-
-This initial build stops there: `runApprovedCode` doesn't execute the snippet anywhere, it just reports that execution isn't supported yet. The backend's static AST verification is defense-in-depth only, not a substitute for a real runtime isolation boundary — running arbitrary model-generated code against the live `Viewer` needs one (e.g. a sandboxed interpreter bound to a narrow, explicit, allowlisted capability proxy), which is planned for a follow-up PR.
+`executeCesiumCode` is a "Code Mode" tool resolved server-side — `@cesium-ai/codegen-cesium` generates and verifies the snippet via AST inspection, then streams it to `ChatPanel.tsx`'s `handleServerToolResult` (see [`backend/README.md`](../backend/README.md)). After user approval, `runApprovedCode` executes it via `new Function("viewer", "Cesium", code)` with try/catch error handling. The AST verification and frontend try/catch are defense-in-depth only; a real runtime isolation boundary (sandboxed interpreter, capability proxy) is planned for a follow-up PR.
 
 ## Environment
 

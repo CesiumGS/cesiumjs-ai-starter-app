@@ -48,16 +48,24 @@ export interface ChatClientOptions {
    * opposed to `onToolCall`'s client-resolved tools). This package stays
    * Cesium-agnostic: it doesn't know or care which tool names matter to the
    * host, it just reports every server-resolved result generically so the
-   * host can react locally (e.g. run verified code in a sandbox) without
-   * triggering another server round trip — the agent turn already completed
-   * server-side by the time this fires. Fire-and-forget: errors thrown here
-   * are reported via {@link onError} but never block stream parsing.
+   * host can react locally (e.g. run verified code in a sandbox).
+   *
+   * The server's `execute` already completed by the time this fires, so this
+   * never blocks stream parsing and doesn't gate the current turn. But the
+   * host's local reaction (e.g. actually *running* server-verified code) can
+   * discover a ground truth the server never saw — a runtime crash the static
+   * verification missed. Returning a {@link ToolExecutionOutcome} lets the
+   * host feed that back into the conversation: the client updates the
+   * invocation's recorded `result` and, when `continueConversation` is set,
+   * sends a follow-up request so the model sees the real outcome and can
+   * react to it. Returning nothing leaves the transcript untouched. Errors
+   * thrown here are reported via {@link onError} but never block parsing.
    */
   onServerToolResult?: (toolCall: {
     toolCallId: string;
     toolName: string;
     output: unknown;
-  }) => void | Promise<void>;
+  }) => ToolExecutionOutcome | void | Promise<ToolExecutionOutcome | void>;
   /**
    * Called when the server pauses the agent loop for a `tool-approval-request`
    * — a tool the backend declared `needsApproval` on. The host decides (e.g.
@@ -82,6 +90,23 @@ export interface ChatClientOptions {
 }
 
 export type EnsureAssistantMessage = () => Message;
+
+/**
+ * The result of a host reacting to a server-resolved tool result — see
+ * {@link ChatClientOptions.onServerToolResult}.
+ */
+export interface ToolExecutionOutcome {
+  /** Replaces the invocation's recorded `result`, so the next request the client sends reflects it. */
+  result: unknown;
+  /**
+   * When true, the client sends a follow-up request right after applying
+   * `result`, so the model sees the updated outcome and can react to it in a
+   * fresh turn. Omit (or set false) when the update is informational only —
+   * e.g. confirming a success the model already assumed — and doesn't need
+   * to interrupt the model with a new turn.
+   */
+  continueConversation?: boolean;
+}
 
 export interface StreamToolCall {
   toolCallId: string;

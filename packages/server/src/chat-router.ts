@@ -2,6 +2,7 @@ import {
   pipeUIMessageStreamToResponse,
   toUIMessageStream,
   type LanguageModel,
+  type ToolApprovalConfiguration,
   type ToolSet,
   type UIMessage,
 } from "ai";
@@ -28,6 +29,8 @@ export interface ChatRouterOptions {
   maxSteps?: number;
   /** Max messages accepted per request. Defaults to 100. */
   maxMessages?: number;
+  /** Per-tool human-in-the-loop approval gating — see {@link RunAgentOptions.toolApproval}. */
+  toolApproval?: ToolApprovalConfiguration<ToolSet, never>;
 }
 
 /**
@@ -41,7 +44,14 @@ export interface ChatRouterOptions {
  *   app.use(createChatRouter({ model, tools: createCesiumTools() }));
  */
 export function createChatRouter(options: ChatRouterOptions): Router {
-  const { model, tools, system, maxSteps, maxMessages = DEFAULT_MAX_MESSAGES } = options;
+  const {
+    model,
+    tools,
+    system,
+    maxSteps,
+    maxMessages = DEFAULT_MAX_MESSAGES,
+    toolApproval,
+  } = options;
 
   const router = Router();
 
@@ -80,6 +90,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         tools,
         system,
         maxSteps,
+        toolApproval,
       });
 
       pipeUIMessageStreamToResponse({

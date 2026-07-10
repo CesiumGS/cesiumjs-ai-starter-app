@@ -50,21 +50,8 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
   });
 
   app.use("/api/chat", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
-  // The app curates its tool surface via the shared ENABLED_CESIUM_TOOLS
-  // allowlist — the same list the frontend keys its executors off — so the model
-  // is only ever offered the tools this app turned on. `flyTo`'s input schema is
-  // this app's extended `flyToInputSchema` (adds `duration`/`easingFunction` on
-  // top of the stock tool), built from the same shared shape the frontend
-  // validates against — see `./flyto-tool.ts`.
-  //
-  // `executeCesiumCode` isn't a viewer tool, so `createCesiumTools`
-  // (`@cesium-ai/tools-cesium`, scoped to tools that run directly against a
-  // live `Viewer`) never builds it — unlike `flyTo`, it needs a real
-  // server-side `execute` (intent -> verified code) backed by
-  // `@cesium-ai/codegen-cesium`'s generation pipeline. This app builds its own
-  // executable version — see `./tools/execute-cesium-code-tool.ts` — and
-  // merges it in only when a model is actually configured (no model, no
-  // codegen calls to make) and the app has it enabled.
+  // Curate tools via ENABLED_CESIUM_TOOLS allowlist; add custom flyTo schema.
+  // Only include executeCesiumCode when a model is configured.
   const tools: ToolSet = {
     ...createCesiumTools({
       enabled: ENABLED_CESIUM_TOOLS,
@@ -72,11 +59,6 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
     }),
     ...(model && ENABLED_CESIUM_TOOLS.includes(CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode)
       ? {
-          // The frontend doesn't yet execute the generated code anywhere — see
-          // `frontend/README.md` — so static verification is unrestricted for now
-          // (aside from the verifier's unconditional bans on `eval`/`Function`/dynamic
-          // `import`/banned globals), matching real CesiumJS primitives
-          // (`viewer.camera.flyTo`, `viewer.entities.add`, `Cesium.Cartesian3.fromDegrees`, ...).
           [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
             model,
             maxSkills: env.CODEGEN_MAX_SKILLS,
@@ -86,7 +68,16 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
       : {}),
   };
 
-  app.use(createChatRouter({ model, tools }));
+  app.use(
+    createChatRouter({
+      model,
+      tools,
+      // Gate executeCesiumCode behind a human approval decision — the current,
+      // non-deprecated replacement for setting `needsApproval` directly on the
+      // tool object (see `./tools/execute-cesium-code-tool.ts`).
+      toolApproval: { [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval" },
+    }),
+  );
 
   return app;
 }

@@ -22,12 +22,6 @@ const { createExecuteCesiumCodeTool } = await import("./execute-cesium-code-tool
 const fakeModel = {} as LanguageModel;
 
 describe("createExecuteCesiumCodeTool", () => {
-  it("sets needsApproval: true — the tool is gated behind a human approval decision", () => {
-    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel });
-
-    expect(cesiumTool.needsApproval).toBe(true);
-  });
-
   it("returns { code } when generation succeeds", async () => {
     generateVerifiedCesiumCode.mockResolvedValueOnce({
       verified: true,

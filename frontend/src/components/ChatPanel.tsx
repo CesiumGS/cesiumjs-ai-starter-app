@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
@@ -10,7 +10,7 @@ import {
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
 import { config } from "../utils/config";
-import type { ChatClient } from "@cesium-ai/chat-element";
+import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
@@ -19,31 +19,10 @@ interface ChatPanelProps {
 /** A client-side executor: runs one tool call against the live Viewer. */
 type ToolExecutor = (viewer: Viewer, args: unknown) => Promise<unknown>;
 
-/**
- * Client-side executors for the tools THIS app enabled. Keying the map by
- * `EnabledCesiumTool` (derived from the shared `ENABLED_CESIUM_TOOLS` allowlist
- * the backend builds its registry off) makes it self-checking in both
- * directions: it fails to compile unless there is an executor for *every*
- * enabled tool — so the app can't offer the model a tool the client can't run —
- * and it rejects an executor for any *non*-enabled tool. The frontend therefore
- * ships exactly the executors for the app's current tool surface, in lockstep
- * with the backend.
- *
- * We import only the schema-free `/names` subpaths (from both
- * `@cesium-ai/tools-cesium`, for `flyTo`, and `@cesium-ai/codegen-cesium`, for
- * `executeCesiumCode`), so no tool definitions (descriptions, Zod schemas)
- * reach the client bundle.
- */
+/** Client-side executors for enabled tools, keyed by type for compile-time safety. */
 const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
-  // flyToLocation validates the untrusted args against its own schema, so the
-  // raw payload is passed straight through — no cast.
   [CESIUM_TOOL_NAMES.flyTo]: (viewer, args) => flyToLocation(viewer, args),
-  // executeCesiumCode is server-executed (see `backend/src/tools/execute-cesium-code-tool.ts`):
-  // its `tool-output-available` chunk always resolves the invocation before
-  // `resolveClientToolCalls` runs, so this executor should never actually be
-  // invoked. It's still required to satisfy `Record<EnabledCesiumTool, …>` —
-  // kept as a defensive stub that reports the (unexpected) call rather than
-  // silently doing nothing.
+  // executeCesiumCode is server-resolved; stub serves as defense-in-depth.
   [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: () =>
     Promise.resolve({
       success: false,
@@ -51,26 +30,11 @@ const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
     }),
 };
 
-/**
- * The enabled tool names as a runtime set, from the same shared allowlist. The
- * backend only offers these tools to the model, so under normal operation no
- * other name reaches us; we still gate on it here as defense-in-depth, so a
- * disabled (or stale/spoofed) tool call — including inherited object keys like
- * `"toString"` — never drives the live Viewer.
- */
+/** Runtime set of enabled tools for defense-in-depth validation. */
 const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
 
-/**
- * Host-side tool-call listener. The chat element streams a server tool call up
- * via `onToolCall(toolName, args)`; we look up its client-side executor and run
- * it against the live `Viewer`, returning the result for the chat client to
- * post back to the agent loop. Unknown tools resolve with an error payload
- * rather than throwing, so the model can surface a graceful message.
- */
+/** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
-  // Reference to the chat client for reporting tool-execution errors
-  const chatClientRef = useRef<ChatClient | null>(null);
-
   const handleToolCall = useCallback(
     (toolName: string, args: unknown): Promise<unknown> => {
       const viewer = viewerRef.current;
@@ -86,23 +50,23 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
   );
 
   /**
-   * Server-resolved tool result listener. `executeCesiumCode` is the one
-   * enabled tool whose server-resolved output still needs a client-side
-   * action: once the backend has generated and statically verified a CesiumJS
-   * snippet — which, since the tool is `needsApproval`-gated, only happens
-   * after `@cesium-ai/chat-element`'s built-in Approve/Reject UI already got
-   * an explicit human "go ahead" for the intent — this host runs it. The
-   * validation and Viewer execution live in `../tools/execute-cesium-code`;
-   * this just reports any resulting error back through the chat client.
+   * Executes server-resolved code and reports runtime errors for model feedback.
    */
   const handleServerToolResult = useCallback(
-    async (toolCall: { toolCallId: string; toolName: string; output: unknown }) => {
-      if (!isExecuteCesiumCodeTool(toolCall.toolName)) return;
+    async (toolCall: {
+      toolCallId: string;
+      toolName: string;
+      output: unknown;
+    }): Promise<ToolExecutionOutcome | undefined> => {
+      if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
 
       const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output);
-      if (errorMessage) {
-        chatClientRef.current?.reportError(errorMessage);
-      }
+      if (!errorMessage) return undefined;
+
+      return {
+        result: { ...(toolCall.output as object), executionError: errorMessage },
+        continueConversation: true,
+      };
     },
     [viewerRef],
   );
@@ -112,9 +76,6 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       apiEndpoint={config.chatApiEndpoint}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
-      onClientReady={(client) => {
-        chatClientRef.current = client;
-      }}
     />
   );
 }

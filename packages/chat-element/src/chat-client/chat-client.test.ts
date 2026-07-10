@@ -258,6 +258,109 @@ describe("ChatClient — server-resolved tool results", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("applies a ToolExecutionOutcome's result and sends a follow-up request when continueConversation is set", async () => {
+    // Simulates a `needsApproval`-gated tool (like `executeCesiumCode`): the
+    // `tool-input-available` chunk that recorded this invocation streamed in
+    // an earlier, already-finished turn, so this turn's stream carries only
+    // `tool-output-available` — `pendingToolCalls`/`pendingApprovals` are both
+    // empty this pass, so only `continueConversation` can drive a follow-up.
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "tool-output-available", toolCallId: "call-1", output: { code: "// noop" } },
+          { type: "finish" },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "text-start", id: "1" },
+          { type: "text-delta", id: "1", delta: "Looks like that crashed, sorry!" },
+          { type: "finish" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    // A host that ran the server-verified code locally and found it threw at
+    // runtime — a ground truth the server's static verification never saw.
+    const onServerToolResult = vi.fn().mockResolvedValue({
+      result: { code: "// noop", executionError: "ReferenceError: foo is not defined" },
+      continueConversation: true,
+    });
+    const { client } = makeClient({ onServerToolResult });
+
+    client.messages.push({
+      id: "msg-0",
+      role: "assistant",
+      content: "",
+      toolInvocations: [
+        {
+          toolCallId: "call-1",
+          toolName: "executeCesiumCode",
+          args: { intent: "fly to Paris" },
+          state: "call",
+        },
+      ],
+    });
+
+    client.input = "run some code";
+    await client.submit();
+
+    const invocation = client.messages
+      .flatMap((m) => m.toolInvocations ?? [])
+      .find((t) => t.toolCallId === "call-1");
+    expect(invocation).toMatchObject({
+      state: "result",
+      result: { code: "// noop", executionError: "ReferenceError: foo is not defined" },
+    });
+
+    // A follow-up request was sent so the model sees the runtime failure and
+    // can react to it, even though there was no pending client tool call or
+    // approval driving the continuation.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(client.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: "Looks like that crashed, sorry!",
+    });
+  });
+
+  it("does not send a follow-up request when a ToolExecutionOutcome omits continueConversation", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        sseResponse([
+          { type: "tool-output-available", toolCallId: "call-1", output: { code: "// noop" } },
+          { type: "finish" },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const onServerToolResult = vi
+      .fn()
+      .mockResolvedValue({ result: { code: "// noop", executed: true } });
+    const { client } = makeClient({ onServerToolResult });
+
+    client.messages.push({
+      id: "msg-0",
+      role: "assistant",
+      content: "",
+      toolInvocations: [
+        {
+          toolCallId: "call-1",
+          toolName: "executeCesiumCode",
+          args: { intent: "fly to Paris" },
+          state: "call",
+        },
+      ],
+    });
+
+    client.input = "run some code";
+    await client.submit();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(client.isLoading).toBe(false);
+  });
+
   it("does not throw when onServerToolResult is omitted", async () => {
     vi.stubGlobal(
       "fetch",

@@ -4,6 +4,7 @@ import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "./chat-client";
+import type { ToolExecutionOutcome } from "./chat-client";
 import { MessageItem } from "./MessageItem";
 import { spanVariantMapping } from "./ui-constants";
 import styles from "./AiChatPanel.module.css";
@@ -25,7 +26,7 @@ export interface AiChatPanelProps {
     toolCallId: string;
     toolName: string;
     output: unknown;
-  }) => void | Promise<void>;
+  }) => ToolExecutionOutcome | void | Promise<ToolExecutionOutcome | void>;
   /**
    * Overrides the panel's built-in Approve/Reject UI for a `needsApproval`-gated
    * tool call. When omitted (the common case), `AiChatPanel` shows its own
@@ -47,11 +48,6 @@ export interface AiChatPanelProps {
    * {@link ChatClientOptions.maxToolCallRounds} for the default.
    */
   maxToolCallRounds?: number;
-  /**
-   * Optional callback fired when the internal chat client is ready.
-   * Allows the host to access the client for operations like reporting errors.
-   */
-  onClientReady?: (client: ChatClient) => void;
 }
 
 /**
@@ -131,7 +127,6 @@ export function AiChatPanel({
   onServerToolResult,
   onApprovalRequired,
   maxToolCallRounds,
-  onClientReady,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
@@ -145,13 +140,6 @@ export function AiChatPanel({
     maxToolCallRounds,
     setPendingApproval,
   );
-
-  // Call onClientReady when client is ready
-  useEffect(() => {
-    if (client) {
-      onClientReady?.(client);
-    }
-  }, [client, onClientReady]);
 
   const handleApprove = useCallback(() => {
     setPendingApproval((current) => {

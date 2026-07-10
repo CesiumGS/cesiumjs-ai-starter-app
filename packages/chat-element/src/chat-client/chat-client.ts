@@ -19,8 +19,15 @@ import type {
   Message,
   StreamToolCall,
   StreamToolResult,
+  ToolExecutionOutcome,
   ToolInvocation,
 } from "./types";
+
+/** A server tool result outcome the host is still computing, tied to the invocation it updates. */
+interface PendingServerResult {
+  invocation: ToolInvocation;
+  promise: Promise<ToolExecutionOutcome | void>;
+}
 
 /**
  * Default hard cap on consecutive server round trips driven by client-resolved
@@ -149,6 +156,7 @@ export class ChatClient {
     let assistantMsg: Message | null = null;
     const pendingToolCalls: ToolInvocation[] = [];
     const pendingApprovals: ToolInvocation[] = [];
+    const pendingServerResults: PendingServerResult[] = [];
 
     const ensureAssistantMsg = () => (assistantMsg ??= this.createAssistantMessage());
 
@@ -162,7 +170,13 @@ export class ChatClient {
         buffer = lines.pop()!; // keep incomplete line in buffer
 
         for (const line of lines) {
-          this.handleStreamLine(line, ensureAssistantMsg, pendingToolCalls, pendingApprovals);
+          this.handleStreamLine(
+            line,
+            ensureAssistantMsg,
+            pendingToolCalls,
+            pendingApprovals,
+            pendingServerResults,
+          );
         }
       }
     } catch (err) {
@@ -177,11 +191,13 @@ export class ChatClient {
 
     await this.resolveClientToolCalls(pendingToolCalls);
     await this.resolveApprovals(pendingApprovals);
+    const continueForServerResults = await this.resolveServerToolOutcomes(pendingServerResults);
 
-    // If there were tool calls or approval decisions to send back, make
-    // another request so the model can continue (resolveClientToolCalls and
-    // resolveApprovals above guarantee every entry here is now resolved).
-    if (pendingToolCalls.length > 0 || pendingApprovals.length > 0) {
+    // If there were tool calls or approval decisions to send back, or a host
+    // reaction to a server-resolved result asked to continue, make another
+    // request so the model can react (the resolve* calls above guarantee
+    // every entry here is now resolved).
+    if (pendingToolCalls.length > 0 || pendingApprovals.length > 0 || continueForServerResults) {
       this.toolCallRound++;
       if (this.toolCallRound > this.maxToolCallRounds) {
         this.emitError(
@@ -225,6 +241,7 @@ export class ChatClient {
     ensureAssistantMsg: EnsureAssistantMessage,
     pendingToolCalls: ToolInvocation[],
     pendingApprovals: ToolInvocation[],
+    pendingServerResults: PendingServerResult[],
   ) {
     const chunk = parseSSELine(line);
     if (!chunk) return;
@@ -249,7 +266,12 @@ export class ChatClient {
         // chunk carries no `toolName` of its own — the tool name was
         // established by the earlier `tool-input-available` chunk for the
         // same `toolCallId`, so we look the invocation back up here.
-        this.fireServerToolResult(chunk.toolCallId!, chunk.output, ensureAssistantMsg);
+        this.fireServerToolResult(
+          chunk.toolCallId!,
+          chunk.output,
+          ensureAssistantMsg,
+          pendingServerResults,
+        );
         break;
       case "tool-input-error":
         // Fires instead of `tool-input-available` when the model's arguments
@@ -402,18 +424,19 @@ export class ChatClient {
   }
 
   /**
-   * Fires {@link ChatClientOptions.onServerToolResult} for a server-resolved
+   * Starts {@link ChatClientOptions.onServerToolResult} for a server-resolved
    * `tool-output-available` chunk, once the invocation it belongs to (whose
    * `toolName` was recorded when its `tool-input-available` chunk arrived) can
-   * be found. Fire-and-forget by design — this doesn't gate stream parsing or
-   * the tool-call round trip loop, it's purely a notification for the host.
-   * Any error the callback throws (sync or async) is reported via `onError`,
-   * the same as `resolveClientToolCalls` does for client-side tool errors.
+   * be found. Doesn't block stream parsing — the callback's promise is queued
+   * into `pendingServerResults` and only awaited by
+   * {@link resolveServerToolOutcomes} once the current stream finishes, mirroring
+   * how `pendingToolCalls`/`pendingApprovals` are resolved after the loop.
    */
   private fireServerToolResult(
     toolCallId: string,
     output: unknown,
     ensureAssistantMsg: EnsureAssistantMessage,
+    pendingServerResults: PendingServerResult[],
   ) {
     if (!this.onServerToolResult) return;
 
@@ -421,11 +444,42 @@ export class ChatClient {
     const invocation = this.findToolInvocation(toolCallId);
     if (!invocation) return;
 
-    void Promise.resolve()
-      .then(() => this.onServerToolResult!({ toolCallId, toolName: invocation.toolName, output }))
-      .catch((err) => {
+    const promise = Promise.resolve().then(() =>
+      this.onServerToolResult!({ toolCallId, toolName: invocation.toolName, output }),
+    );
+    pendingServerResults.push({ invocation, promise });
+  }
+
+  /**
+   * Awaits every queued {@link ChatClientOptions.onServerToolResult} outcome
+   * from the just-finished stream. When a host reaction returns a
+   * {@link ToolExecutionOutcome}, its `result` replaces the invocation's
+   * recorded result (so the next request reflects the real, e.g. runtime,
+   * outcome rather than just the server's verification), and its
+   * `continueConversation` flag is folded into the return value so the caller
+   * knows whether to send a follow-up request. A thrown/rejected callback is
+   * reported via `onError`, the same as `resolveClientToolCalls` does for
+   * client-side tool errors, and doesn't request a follow-up.
+   */
+  private async resolveServerToolOutcomes(pending: PendingServerResult[]): Promise<boolean> {
+    let shouldContinue = false;
+
+    for (const { invocation, promise } of pending) {
+      let outcome: ToolExecutionOutcome | void;
+      try {
+        outcome = await promise;
+      } catch (err) {
         this.onError(err instanceof Error ? err : new Error(String(err)));
-      });
+        continue;
+      }
+
+      if (!outcome) continue;
+      invocation.result = outcome.result;
+      shouldContinue ||= outcome.continueConversation === true;
+      this.onUpdate();
+    }
+
+    return shouldContinue;
   }
 
   private async resolveClientToolCalls(pendingToolCalls: ToolInvocation[]) {

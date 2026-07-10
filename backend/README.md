@@ -22,13 +22,11 @@ src/
 
 ## Tool surface
 
-The backend builds its viewer tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sample-config`, in [`shared/`](../shared)) via `createCesiumTools` (`@cesium-ai/tools-cesium`), so the model is only ever offered viewer tools this app turned on. `flyTo`'s model-facing input schema is this app's extended `flyToInputSchema` (`src/tools/flyto-tool.ts`), which layers `.describe()` hints onto the shared structural shape (`flyToShape` in `@cesium-ai/sample-config`) that the frontend also validates against — see [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README.
+The backend builds its viewer tool registry from `ENABLED_CESIUM_TOOLS` via `createCesiumTools` (`@cesium-ai/tools-cesium`). The `flyTo` tool uses an extended schema (`src/tools/flyto-tool.ts`) with descriptions for the model. See [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README for details.
 
-### `executeCesiumCode`: this app's own server-executed tool
+### `executeCesiumCode`: code generation and verification
 
-`executeCesiumCode` isn't a viewer tool — it lives in `@cesium-ai/codegen-cesium`, not `@cesium-ai/tools-cesium`, and `createCesiumTools` never builds it (the two packages are decoupled; see `@cesium-ai/tools-cesium`'s README for why). `@cesium-ai/codegen-cesium`'s own copy of the tool ships schema-only (no `execute`) by design. This app builds its own executable version instead: `src/tools/execute-cesium-code-tool.ts` (`createExecuteCesiumCodeTool`) wraps `@cesium-ai/codegen-cesium`'s `generateVerifiedCesiumCode` in an AI SDK `tool({ execute })`, using that library's model-facing description/schema so the model-facing contract stays identical to the schema-only version it replaces. It's merged into `app.ts`'s tool registry (alongside the viewer tools from `createCesiumTools`) only when a model is configured and the tool is enabled (`ENABLED_CESIUM_TOOLS.includes(CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode)`).
-
-Because this tool has a real backend `execute`, the AI SDK resolves it server-side and streams its result as a `tool-output-available` chunk (not the `tool-input-available` call `flyTo` streams) — the frontend has a second dispatch path for this (`onServerToolResult` in `ChatPanel.tsx`; see [`frontend/README.md`](../frontend/README.md)), which executes the verified code directly against the live Viewer without runtime isolation. The backend's AST-based verification (parse-only, never executing the generated code — see `@cesium-ai/codegen-cesium`'s README) is the primary security gate; runtime isolation via a sandboxed execution environment is recommended as a follow-up hardening step for production deployments.
+`executeCesiumCode` is built in `src/tools/execute-cesium-code-tool.ts` and wraps the code generation from `@cesium-ai/codegen-cesium`. The backend generates and verifies code (AST-based), then the frontend receives the verified code and executes it directly against the live Viewer. AST-based verification is the primary security gate; runtime isolation is recommended for production deployments.
 
 ## Environment
 
