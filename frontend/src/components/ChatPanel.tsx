@@ -1,13 +1,12 @@
 import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
-import * as Cesium from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-cesium/names";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
 import { flyToLocation } from "../tools/camera";
 import {
-  executeCesiumCodeResultShape,
+  handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
 import { config } from "../utils/config";
@@ -87,60 +86,25 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
   );
 
   /**
-   * `executeCesiumCode` is approved and its snippet is generated and
-   * statically verified server-side. Execute the verified code against the
-   * live Viewer without a sandbox (security relies on server-side AST verification).
-   */
-  const runApprovedCode = useCallback(
-    (code: string) => {
-      const viewer = viewerRef.current;
-      if (!viewer) {
-        chatClientRef.current?.reportError("CesiumJS Viewer is not initialised");
-        return;
-      }
-
-      try {
-        // Create a function that receives both viewer and Cesium namespace as parameters
-        // This allows the generated code to access both the viewer instance and Cesium APIs
-        const executeCode = new Function("viewer", "Cesium", code);
-        executeCode(viewer, Cesium);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        chatClientRef.current?.reportError(`Code execution failed: ${errorMessage}`);
-      }
-    },
-    [viewerRef],
-  );
-
-  /**
    * Server-resolved tool result listener. `executeCesiumCode` is the one
    * enabled tool whose server-resolved output still needs a client-side
    * action: once the backend has generated and statically verified a CesiumJS
    * snippet — which, since the tool is `needsApproval`-gated, only happens
    * after `@cesium-ai/chat-element`'s built-in Approve/Reject UI already got
-   * an explicit human "go ahead" for the intent — this host runs it. `output`
-   * is validated defensively before anything runs: it is server-influenced
-   * but still not implicitly trusted here.
+   * an explicit human "go ahead" for the intent — this host runs it. The
+   * validation and Viewer execution live in `../tools/execute-cesium-code`;
+   * this just reports any resulting error back through the chat client.
    */
   const handleServerToolResult = useCallback(
-    (toolCall: { toolCallId: string; toolName: string; output: unknown }) => {
+    async (toolCall: { toolCallId: string; toolName: string; output: unknown }) => {
       if (!isExecuteCesiumCodeTool(toolCall.toolName)) return;
 
-      const parsed = executeCesiumCodeResultShape.safeParse(toolCall.output);
-      if (!parsed.success) {
-        chatClientRef.current?.reportError("Malformed executeCesiumCode result.");
-        return;
+      const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output);
+      if (errorMessage) {
+        chatClientRef.current?.reportError(errorMessage);
       }
-      if ("error" in parsed.data) {
-        // Verification failed server-side — nothing to run, and the
-        // existing result-display path (the chat transcript) already shows
-        // the error via the tool invocation's result.
-        return;
-      }
-
-      runApprovedCode(parsed.data.code);
     },
-    [runApprovedCode],
+    [viewerRef],
   );
 
   return (

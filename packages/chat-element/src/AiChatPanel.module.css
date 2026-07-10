@@ -188,6 +188,10 @@
   gap: 0.5rem;
 }
 
+.approvalButton {
+  padding: 6px 16px !important;
+}
+
 .inputArea {
   flex-shrink: 0;
   padding: 0.6rem 0.75rem;

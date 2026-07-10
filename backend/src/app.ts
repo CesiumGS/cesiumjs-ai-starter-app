@@ -80,6 +80,8 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
           // (`viewer.camera.flyTo`, `viewer.entities.add`, `Cesium.Cartesian3.fromDegrees`, ...).
           [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
             model,
+            maxSkills: env.CODEGEN_MAX_SKILLS,
+            maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
           }),
         }
       : {}),

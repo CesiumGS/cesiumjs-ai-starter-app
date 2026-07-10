@@ -139,6 +139,8 @@ npm test -- flyTo.schema-sync
 | `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                                                                   |
 | `CHAT_ENABLED`                 | No                | `true` (default) \| `false` — when `false`, `/api/chat` returns `NOT_CONFIGURED` and the app runs as a plain static viewer.                                             |
 | `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                  |
+| `CODEGEN_MAX_SKILLS`           | No                | Max BM25-matched `cesiumjs-skills` domains inlined as grounding context in the `executeCesiumCode` tool's generation prompt (default `1`).                              |
+| `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts if a generated `executeCesiumCode` snippet fails static AST verification (default `3`).                                                       |
 
 See [`.env.example`](.env.example) for the complete list, including `AI_BASE_URL` and telemetry settings.
 
@@ -208,7 +210,7 @@ cesiumjs-ai-tools-sample/
 │           ├── tools/executeCesiumCode/executeCesiumCode.ts # executeCesiumCode tool (schema-only by design)
 │           ├── generate-verified-cesium-code.ts # generateVerifiedCesiumCode orchestration entry point
 │           ├── ast-verifier.ts  # Parse-only static verifier (acorn/acorn-walk)
-│           └── skills-loader.ts # Loads SKILL.md/DOMAINS.md from the @cesium/cesiumjs-skills package dependency
+│           └── skills-loader.ts # Loads SKILL.md from the @cesium/cesiumjs-skills package dependency
 ├── shared/                     # @cesium-ai/sample-config — app's tool selection
 │   └── src/
 │       └── enabled-tools.ts    # ENABLED_CESIUM_TOOLS — enable/disable a tool here

@@ -53,4 +53,20 @@ describe("buildCodegenPrompt", () => {
     expect(prompt.toLowerCase()).toContain("no markdown code fences");
     expect(prompt.toLowerCase()).toContain("only");
   });
+
+  it("instructs the model to access CesiumJS symbols via `Cesium.` rather than as bare names (regression: generated code runs in a scope with only `viewer`/`Cesium` bound, not the bare class names shown in the reference material's `import` examples)", () => {
+    const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
+
+    expect(prompt).toContain("Cesium.Cartesian3.fromDegrees");
+    expect(prompt).toContain("Do NOT write");
+    expect(prompt.toLowerCase()).toContain("import");
+  });
+
+  it("warns that CesiumJS collections (PrimitiveCollection, ImageryLayerCollection, etc.) are not plain iterables (regression: a real model wrote `for...of viewer.scene.primitives`, which throws `TypeError: ... is not iterable` at runtime)", () => {
+    const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
+
+    expect(prompt).toContain("for...of");
+    expect(prompt).toContain("PrimitiveCollection");
+    expect(prompt).toContain(".get(index)");
+  });
 });

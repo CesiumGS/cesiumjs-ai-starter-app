@@ -198,3 +198,70 @@ describe("verifyCesiumCode — malformed input", () => {
     expect(result.violations && result.violations.length).toBeGreaterThan(0);
   });
 });
+
+describe("verifyCesiumCode — computed member access", () => {
+  it("rejects computed member access even with a string literal key (blanket ban, documented over-approximation)", () => {
+    const result = verifyCesiumCode(`const x = viewer["camera"];`, { allowedSymbols: ALLOWED });
+    expect(result.verified).toBe(false);
+    expect(result.violations?.some((v) => /computed member access/i.test(v))).toBe(true);
+  });
+
+  it("rejects computed member access with a variable key", () => {
+    const result = verifyCesiumCode(`const key = "camera"; const x = viewer[key];`, {
+      allowedSymbols: ALLOWED,
+    });
+    expect(result.verified).toBe(false);
+    expect(result.violations?.some((v) => /computed member access/i.test(v))).toBe(true);
+  });
+});
+
+describe("verifyCesiumCode — regex literals are not confused with banned identifiers", () => {
+  it("does not flag a regex literal whose pattern text matches a banned global's name", () => {
+    const code = `const isWindowLike = /window/.test(str);`;
+    const result = verifyCesiumCode(code, { allowedSymbols: [...ALLOWED, "str"] });
+    expect(result).toEqual({ verified: true });
+  });
+
+  it("does not flag a string literal containing a banned global's name", () => {
+    const code = `const label = "fetch this data";`;
+    const result = verifyCesiumCode(code, { allowedSymbols: ALLOWED });
+    expect(result).toEqual({ verified: true });
+  });
+});
+
+describe("verifyCesiumCode — destructuring", () => {
+  it("does not flag merely binding a banned global's name via destructuring, left unused (like any other unused local declaration)", () => {
+    const result = verifyCesiumCode(`const { fetch } = globalThis;`, {
+      allowedSymbols: [...ALLOWED, "globalThis"],
+    });
+    expect(result).toEqual({ verified: true });
+  });
+
+  it("still rejects actually calling a banned global name that was aliased in via destructuring", () => {
+    const result = verifyCesiumCode(`const { fetch } = globalThis; fetch("https://evil.example");`, {
+      allowedSymbols: [...ALLOWED, "globalThis"],
+    });
+    expect(result.verified).toBe(false);
+    expect(result.violations?.some((v) => /fetch/.test(v))).toBe(true);
+  });
+
+  it("does not falsely reject destructuring an otherwise-allowed local name", () => {
+    const code = `const { latitude, longitude } = { latitude: 1, longitude: 2 };`;
+    const result = verifyCesiumCode(code, { allowedSymbols: ALLOWED });
+    expect(result).toEqual({ verified: true });
+  });
+});
+
+describe("verifyCesiumCode — labeled break", () => {
+  it("treats a labeled break as escaping the loop (permissive heuristic)", () => {
+    const code = `outer: while (true) { if (true) { break outer; } }`;
+    const result = verifyCesiumCode(code, { allowedSymbols: ALLOWED });
+    expect(result).toEqual({ verified: true });
+  });
+
+  it("still rejects an always-true loop with a break only inside a nested function (doesn't escape the outer loop)", () => {
+    const code = `while (true) { const f = () => { break; }; }`;
+    const result = verifyCesiumCode(code, { allowedSymbols: ALLOWED });
+    expect(result.verified).toBe(false);
+  });
+});

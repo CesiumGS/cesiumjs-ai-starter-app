@@ -283,9 +283,9 @@ describe("executeCesiumCode full pipeline — verification rejects unsafe genera
     expect(res.status).toBe(200);
     const text = await res.text();
 
-    // Real generation was retried (maxAttempts=2) against the real verifier —
+    // Real generation was retried (maxAttempts defaults to 3) against the real verifier —
     // the eval-based snippet never became code the tool could return.
-    expect(generateTextMock).toHaveBeenCalledTimes(2);
+    expect(generateTextMock).toHaveBeenCalledTimes(3);
     expect(text).toContain('"error"');
     expect(text).toContain("Generated code failed static AST verification");
 

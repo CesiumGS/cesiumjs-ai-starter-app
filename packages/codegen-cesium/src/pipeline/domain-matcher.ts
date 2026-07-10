@@ -128,9 +128,11 @@ function tokenize(text: string): string[] {
  * than generic prefix/stemming matching) so it doesn't also pick up unrelated matches like the
  * English inflection "load" -> "loading".
  */
-const COMPOUND_TERM_ALIASES: Record<string, string[]> = {
+// `Object.create(null)`: avoids inherited `Object.prototype` properties (e.g. "constructor",
+// "toString") shadowing lookups for tokenized words that happen to match those names.
+const COMPOUND_TERM_ALIASES: Record<string, string[]> = Object.assign(Object.create(null), {
   fly: ["flyto"],
-};
+});
 
 /**
  * Counts how many times `term` occurs in `docTokens`, treating an exact match as one occurrence

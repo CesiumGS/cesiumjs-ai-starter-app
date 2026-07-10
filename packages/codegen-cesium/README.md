@@ -103,8 +103,7 @@ packages/codegen-cesium/
 │       ├── ast-verifier.ts            # verifyCesiumCode — parse-only static verifier (acorn/acorn-walk)
 │       ├── domain-matcher.ts          # matchBestSkill — routes an intent to a vendored skill
 │       ├── prompt-builder.ts          # buildCodegenPrompt — grounded generation prompt builder
-│       ├── symbol-allowlist.ts        # getAllowedSymbols / intersectWithCapabilities — DOMAINS.md-derived allowlist (general-purpose utility; see note below on why it's not used to gate enforcement)
-│       └── skills-loader.ts           # Loads/parses SKILL.md + DOMAINS.md from the @cesium/cesiumjs-skills package dependency
+│       └── skills-loader.ts           # Loads/parses SKILL.md from the @cesium/cesiumjs-skills package dependency
 ├── package.json
 ├── tsconfig.json
 └── tsconfig.typecheck.json
@@ -116,8 +115,8 @@ This package no longer vendors CesiumJS Agent Skills content directly — it dep
 [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) (currently pinned to the
 `feat/npm-skills-support` branch via a `github:` dependency until the package is published to npm;
 see that repo's `docs/INSTALLATION.md` for the eventual `npm install @cesium/cesiumjs-skills` path).
-`pipeline/skills-loader.ts` and `pipeline/symbol-allowlist.ts` resolve the installed package's `skills/` and
-`docs/DOMAINS.md` at runtime via `require.resolve("@cesium/cesiumjs-skills/package.json")`, so
+`pipeline/skills-loader.ts` resolves the installed package's `skills/` directory at runtime via
+`require.resolve("@cesium/cesiumjs-skills/package.json")`, so
 updating the dependency version is now the entire re-sync process — no more manual file copying.
 
 Each `skills/<name>/SKILL.md` file is a per-domain CesiumJS reference: YAML frontmatter with a `name`
@@ -126,12 +125,8 @@ this domain), followed by a Markdown body of key symbols, usage notes, and short
 that area of the CesiumJS API. All 14 upstream domains (Viewer/Camera setup, Entities/DataSources,
 3D Tiles, Imagery, Terrain/Environment, Primitives, Materials/Shaders, Custom Shaders, Interaction,
 Models/Particles, spatial math, time/animation properties, and Core Utilities) are available through
-the dependency.
-
-`docs/DOMAINS.md` is the machine-readable side of the same data: a flat `Symbol | Domain | Notes`
-table mapping individual CesiumJS symbols (classes, functions, enums) to the domain file that owns
-them. A follow-up domain-matching task parses this table to route an intent to the right `SKILL.md`
-file(s) before generation.
+the dependency. `domain-matcher.ts`'s BM25 ranking matches an intent against each skill's
+`description` to pick which `SKILL.md` file(s) ground the generation prompt.
 
 ## Security
 
@@ -273,7 +268,6 @@ generation retry loop below — can see the full picture in one pass.
 - **Verification rules:** Unconditional bans only (`eval`, `Function`, dynamic `import()`, banned globals, computed member access, size limits, unbounded loops). No capability-name allowlist enforced.
 - **Async support:** Parses with `allowAwaitOutsideFunction: true` so generated code can use top-level `await` calls (frontend execution wraps in async context as needed)
 - **Never executes** — Never runs generated code at any point, on any code path
-- **Symbol allowlist utilities** — `getAllowedSymbols` / `intersectWithCapabilities` exported but not on critical path
 
 ## The `executeCesiumCode` tool (`src/tools/executeCesiumCode/`)
 

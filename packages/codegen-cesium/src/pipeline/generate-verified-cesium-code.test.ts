@@ -96,4 +96,41 @@ describe("generateVerifiedCesiumCode", () => {
 
     expect(generateTextMock).toHaveBeenCalledTimes(3);
   });
+
+  it("defaults to 3 attempts when maxAttempts is omitted", async () => {
+    generateTextMock.mockResolvedValue({ text: `eval("bad");` });
+
+    const result = await generateVerifiedCesiumCode({
+      intent: "xyzzy plugh qux totally unrelated nonsense request",
+      model: fakeModel,
+    });
+
+    expect(result.verified).toBe(false);
+    expect(generateTextMock).toHaveBeenCalledTimes(3);
+  });
+
+  describe("maxSkills", () => {
+    const intent =
+      "convert between Cartesian3 and Cartographic coordinates using Transforms and Ellipsoid";
+
+    it("defaults to grounding the prompt with only the single top-matched skill when omitted", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.entities.add({});` });
+
+      await generateVerifiedCesiumCode({ intent, model: fakeModel });
+
+      const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+      expect(prompt).toContain("Reference: cesiumjs-spatial-math");
+      expect(prompt).not.toContain("Reference: cesiumjs-camera");
+    });
+
+    it("threads a raised maxSkills through to buildCodegenPrompt, grounding with multiple matched skills", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.entities.add({});` });
+
+      await generateVerifiedCesiumCode({ intent, model: fakeModel, maxSkills: 2 });
+
+      const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+      expect(prompt).toContain("Reference: cesiumjs-spatial-math");
+      expect(prompt).toContain("Reference: cesiumjs-camera");
+    });
+  });
 });

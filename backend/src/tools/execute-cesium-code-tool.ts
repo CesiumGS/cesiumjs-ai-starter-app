@@ -16,6 +16,10 @@ export type ExecuteCesiumCodeResult = { code: string } | { error: string };
 export interface CreateExecuteCesiumCodeToolOptions {
   /** The resolved language model to generate CesiumJS code with. */
   model: LanguageModel;
+  /** Max number of matched skills to inline as grounding context. Passed through to `generateVerifiedCesiumCode`. */
+  maxSkills?: number;
+  /** Max regeneration attempts if a generation fails verification. Passed through to `generateVerifiedCesiumCode`. */
+  maxAttempts?: number;
 }
 
 /**
@@ -37,7 +41,11 @@ export interface CreateExecuteCesiumCodeToolOptions {
  * `{ error }` result, exactly like a normal verification failure, so a single
  * bad call can't crash the agent loop.
  */
-export function createExecuteCesiumCodeTool({ model }: CreateExecuteCesiumCodeToolOptions): Tool {
+export function createExecuteCesiumCodeTool({
+  model,
+  maxSkills,
+  maxAttempts,
+}: CreateExecuteCesiumCodeToolOptions): Tool {
   return tool({
     description: DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
     inputSchema: defaultExecuteCesiumCodeInputSchema,
@@ -51,7 +59,7 @@ export function createExecuteCesiumCodeTool({ model }: CreateExecuteCesiumCodeTo
     needsApproval: true,
     execute: async ({ intent }: { intent: string }): Promise<ExecuteCesiumCodeResult> => {
       try {
-        const result = await generateVerifiedCesiumCode({ intent, model });
+        const result = await generateVerifiedCesiumCode({ intent, model, maxSkills, maxAttempts });
         return result.verified ? { code: result.code } : { error: result.error };
       } catch (err) {
         return {

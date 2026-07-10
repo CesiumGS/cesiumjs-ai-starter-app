@@ -21,14 +21,16 @@ export interface GenerateVerifiedCesiumCodeOptions {
   intent: string;
   /** The resolved language model to generate with (see {@link LanguageModel}). */
   model: LanguageModel;
-  /** Max regeneration attempts if the first generation fails verification. Default 2. */
+  /** Max regeneration attempts if a generation fails verification. Default 3. */
   maxAttempts?: number;
+  /** Max number of matched skills to inline as grounding context in the generation prompt. */
+  maxSkills?: number;
 }
 
 export type GenerateVerifiedCesiumCodeResult =
   { verified: true; code: string } | { verified: false; error: string; violations?: string[] };
 
-const DEFAULT_MAX_ATTEMPTS = 2;
+const DEFAULT_MAX_ATTEMPTS = 3;
 
 /** Strips a leading/trailing ```-fenced code block, if the model wrapped its output in one. */
 function stripCodeFences(raw: string): string {
@@ -46,13 +48,13 @@ function stripCodeFences(raw: string): string {
 export async function generateVerifiedCesiumCode(
   options: GenerateVerifiedCesiumCodeOptions,
 ): Promise<GenerateVerifiedCesiumCodeResult> {
-  const { intent, model } = options;
+  const { intent, model, maxSkills } = options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
-  // Retrieve top 3 most relevant skills to provide comprehensive context for code generation
+  // Retrieve top candidate skills to provide grounding context for code generation.
   const skills = matchBestSkill(intent);
 
-  const basePrompt = buildCodegenPrompt({ intent, skills });
+  const basePrompt = buildCodegenPrompt({ intent, skills, maxSkills });
 
   const correctionPrompt = (basePromptStr: string, violations: string[]) =>
     `${basePromptStr}

@@ -15,14 +15,6 @@ export {
 } from "./pipeline/domain-matcher.js";
 export { buildCodegenPrompt, type BuildPromptOptions } from "./pipeline/prompt-builder.js";
 
-export type { SymbolAllowlistEntry } from "./pipeline/symbol-allowlist.js";
-export {
-  getAllowedSymbols,
-  intersectWithCapabilities,
-  isSymbolAllowed,
-  loadAllowedSymbols,
-} from "./pipeline/symbol-allowlist.js";
-
 export {
   verifyCesiumCode,
   SAFE_GLOBAL_IDENTIFIERS,

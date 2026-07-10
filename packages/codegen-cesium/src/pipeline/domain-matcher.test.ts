@@ -57,6 +57,15 @@ describe("matchSkillsForIntent", () => {
     const matches = matchSkillsForIntent("compute the fibonacci sequence in python", testSkills);
     expect(matches).toEqual([]);
   });
+
+  it("doesn't crash on intent words that collide with Object.prototype property names (regression: 'constructor' resolved COMPOUND_TERM_ALIASES['constructor'] to the inherited Object constructor function instead of undefined, and calling .includes on it threw)", () => {
+    expect(() =>
+      matchSkillsForIntent(
+        "use the Viewer constructor's toString and hasOwnProperty options",
+        testSkills,
+      ),
+    ).not.toThrow();
+  });
 });
 
 describe("matchBestSkill", () => {

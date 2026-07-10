@@ -88,10 +88,21 @@ function ToolCard({
             Waiting for your approval — nothing runs until you decide.
           </Typography>
           <div className={styles.approvalButtons}>
-            <Button size="small" variant="outlined" color="error" onClick={onReject}>
+            <Button
+              size="small"
+              variant="outlined"
+              color="error"
+              className={styles.approvalButton}
+              onClick={onReject}
+            >
               Reject
             </Button>
-            <Button size="small" variant="contained" onClick={onApprove}>
+            <Button
+              size="small"
+              variant="contained"
+              className={styles.approvalButton}
+              onClick={onApprove}
+            >
               Approve
             </Button>
           </div>

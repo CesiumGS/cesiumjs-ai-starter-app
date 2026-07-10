@@ -22,6 +22,12 @@ const { createExecuteCesiumCodeTool } = await import("./execute-cesium-code-tool
 const fakeModel = {} as LanguageModel;
 
 describe("createExecuteCesiumCodeTool", () => {
+  it("sets needsApproval: true — the tool is gated behind a human approval decision", () => {
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel });
+
+    expect(cesiumTool.needsApproval).toBe(true);
+  });
+
   it("returns { code } when generation succeeds", async () => {
     generateVerifiedCesiumCode.mockResolvedValueOnce({
       verified: true,
@@ -42,6 +48,52 @@ describe("createExecuteCesiumCodeTool", () => {
     expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
       intent: "fly to Paris",
       model: fakeModel,
+    });
+  });
+
+  it("threads maxSkills through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel, maxSkills: 3 });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1b",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      maxSkills: 3,
+    });
+  });
+
+  it("threads maxAttempts through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel, maxAttempts: 5 });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1c",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      maxAttempts: 5,
     });
   });
 
