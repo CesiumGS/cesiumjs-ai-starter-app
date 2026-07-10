@@ -1,0 +1,26 @@
+node_modules
+**/node_modules
+# NOT dist/**/dist — the CI Dockerfiles (frontend/Dockerfile,
+# backend/Dockerfile) package prebuilt dist/ output from the build context.
+dist-ssr
+.vite
+*.tsbuildinfo
+
+.git
+.github
+.claude
+.architecture
+
+playwright-report
+test-results
+e2e
+
+.env
+.env.local
+.env.*.local
+
+*.log
+npm-debug.log*
+
+.vscode
+.idea

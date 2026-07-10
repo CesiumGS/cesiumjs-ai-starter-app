@@ -1,6 +1,6 @@
 # @cesium-ai/chat-element
 
-AI chat panel React component backed by the Vercel AI SDK streaming protocol, styled with StrataKit MUI.
+AI chat panel React component backed by the Vercel AI SDK streaming protocol, styled with [StrataKit](https://stratakit.bentley.com/docs/) MUI components.
 
 ## Basic usage
 

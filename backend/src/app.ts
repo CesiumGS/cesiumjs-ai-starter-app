@@ -44,7 +44,6 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
   app.get("/health", (_req, res) => {
     res.json({
       status: "ok",
-      chatEnabled: env.CHAT_ENABLED,
       provider: env.AI_PROVIDER,
       providerConfigured: model !== undefined,
     });
