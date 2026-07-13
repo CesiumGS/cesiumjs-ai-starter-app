@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddPolygon` tool — the single source of truth
@@ -8,7 +9,7 @@ import { z } from "zod";
  */
 export const entityAddPolygonInputShape = z.object({
   id: z.string(),
-  positions: z.array(z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() })).min(3),
+  positions: z.array(cartographicShape).min(3),
   material: z.string().optional(),
   outlineColor: z.string().optional(),
   outlineWidth: z.number().nonnegative().optional(),

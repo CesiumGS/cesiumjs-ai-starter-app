@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  cartographicShape,
+  materialOutlineShape,
+  orientationShape,
+} from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddCylinder` tool — the single source of truth
@@ -8,9 +13,13 @@ import { z } from "zod";
  */
 export const entityAddCylinderInputShape = z.object({
   id: z.string().optional(),
-  position: z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() }),
-  cylinder: z.object({ length: z.number().positive(), topRadius: z.number().nonnegative(), bottomRadius: z.number().nonnegative(), material: z.string().optional(), outline: z.boolean().optional(), outlineColor: z.string().optional() }),
-  orientation: z.object({ heading: z.number().optional(), pitch: z.number().optional(), roll: z.number().optional() }).optional(),
+  position: cartographicShape,
+  cylinder: materialOutlineShape.extend({
+    length: z.number().positive(),
+    topRadius: z.number().nonnegative(),
+    bottomRadius: z.number().nonnegative(),
+  }),
+  orientation: orientationShape.optional(),
   name: z.string().optional(),
   description: z.string().optional(),
 });

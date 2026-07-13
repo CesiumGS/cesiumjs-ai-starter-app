@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape, materialOutlineShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddWall` tool — the single source of truth
@@ -8,7 +9,11 @@ import { z } from "zod";
  */
 export const entityAddWallInputShape = z.object({
   id: z.string().optional(),
-  wall: z.object({ positions: z.array(z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() })).min(2), minimumHeights: z.array(z.number()).optional(), maximumHeights: z.array(z.number()), material: z.string().optional(), outline: z.boolean().optional(), outlineColor: z.string().optional() }),
+  wall: materialOutlineShape.extend({
+    positions: z.array(cartographicShape).min(2),
+    minimumHeights: z.array(z.number()).optional(),
+    maximumHeights: z.array(z.number()),
+  }),
   name: z.string().optional(),
   description: z.string().optional(),
 });

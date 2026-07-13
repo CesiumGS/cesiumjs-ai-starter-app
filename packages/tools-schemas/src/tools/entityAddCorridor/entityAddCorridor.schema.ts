@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape, materialOutlineShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddCorridor` tool — the single source of truth
@@ -8,7 +9,13 @@ import { z } from "zod";
  */
 export const entityAddCorridorInputShape = z.object({
   id: z.string().optional(),
-  corridor: z.object({ positions: z.array(z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() })).min(2), width: z.number().positive(), material: z.string().optional(), outline: z.boolean().optional(), outlineColor: z.string().optional(), cornerType: z.enum(["ROUNDED", "MITERED", "BEVELED"]).optional(), height: z.number().optional(), extrudedHeight: z.number().optional() }),
+  corridor: materialOutlineShape.extend({
+    positions: z.array(cartographicShape).min(2),
+    width: z.number().positive(),
+    cornerType: z.enum(["ROUNDED", "MITERED", "BEVELED"]).optional(),
+    height: z.number().optional(),
+    extrudedHeight: z.number().optional(),
+  }),
   name: z.string().optional(),
   description: z.string().optional(),
 });

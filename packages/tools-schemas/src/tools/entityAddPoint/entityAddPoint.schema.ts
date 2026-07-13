@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddPoint` tool — the single source of truth
@@ -8,7 +9,7 @@ import { z } from "zod";
  */
 export const entityAddPointInputShape = z.object({
   id: z.string(),
-  position: z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() }),
+  position: cartographicShape,
   color: z.string().optional(),
   pixelSize: z.number().positive().optional(),
   description: z.string().optional(),

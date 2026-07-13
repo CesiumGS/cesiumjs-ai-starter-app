@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape, orientationShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `cameraSetView` tool — the single source of truth
@@ -7,8 +8,8 @@ import { z } from "zod";
  * `cameraSetView.ts` and `flyTo.schema.ts` for the convention this follows).
  */
 export const cameraSetViewInputShape = z.object({
-  destination: z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() }),
-  orientation: z.object({ heading: z.number().optional(), pitch: z.number().optional(), roll: z.number().optional() }).optional(),
+  destination: cartographicShape,
+  orientation: orientationShape.optional(),
 });
 
 /** Validated `cameraSetView` input, inferred from {@link cameraSetViewInputShape}. */

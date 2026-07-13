@@ -1,6 +1,6 @@
 # @cesium-ai/tools-schemas
 
-Zod-schemed CesiumJS viewer tool definitions for the AI SDK, covering the same tool surface as the MCP servers in [`cesium-ai-integrations`](https://github.com/CesiumGS/cesium-ai-integrations/tree/main/mcp/cesium-js/servers) (camera, entity, animation, imagery). These are **schemas only** — no tool defines `execute`. The AI SDK streams a tool call to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
+Zod-schemed CesiumJS viewer tool definitions for the AI SDK, covering camera, entity, animation, and imagery control. These are **schemas only** — no tool defines `execute`. The AI SDK streams a tool call to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
 
 ## Tool catalogue
 
@@ -27,8 +27,8 @@ createChatRouter({
 
 ## Entry points
 
-| Subpath                           | Exports                                                                   | Who imports it                                                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Subpath                            | Exports                                                                   | Who imports it                                                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `@cesium-ai/tools-schemas`         | Everything below — full tool definitions, incl. model-facing descriptions | Backend only. **Never** import the root entry point from client code — it pulls in the human-readable descriptions the LLM reads, which should not ship in the client bundle. |
 | `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`                                     | Both. Schema-free — safe for the frontend to key its tool-call executors off of.                                                                                              |
 | `@cesium-ai/tools-schemas/schemas` | `flyToInputShape`, `FlyToInput`                                           | Both. Structural shape only, no `.describe()` hints — safe for the frontend to validate untrusted tool-call args against.                                                     |
@@ -134,6 +134,7 @@ Each tool gets its own folder under `src/tools/<toolName>/`, containing the stru
 - `buildDescribedSchema` / `describeShape` (`src/lib/describe-shape.ts`) — merges the descriptions then applies them to a zod object shape, producing the model-facing schema. Every `buildXInputSchema` is just this call with its own shape and defaults plugged in.
 - `createClientTool` / `ClientToolConfig` (`src/lib/client-tool.ts`) — the no-`execute` `tool({ description, inputSchema })` wrapper and the `{ description?, fieldDescriptions?, inputSchema? }` config shape every client-side tool accepts.
 - `createToolFactory` (`src/lib/client-tool.ts`) — builds a tool's `createX(config)` function from its default description and `buildXInputSchema`. Every `createX` in this package (e.g. `createFlyTo`) is just `createToolFactory(DEFAULT_X_DESCRIPTION, buildXInputSchema)` — no per-tool `??` boilerplate to rewrite.
+- `cartographicShape`, `orientationShape`, `pixelOffsetShape`, `materialOutlineShape` (`src/lib/shared-shapes.ts`) — reusable structural zod fragments (position, heading/pitch/roll, screen-space offset, material/outline styling) shared across multiple tools' `.schema.ts` shapes via `.extend()`, so a change to a shared field only needs to happen once.
 
 `src/tool-names.ts` (the name registry) and `src/schemas.ts` (the `/schemas` subpath aggregator) stay flat at the package root — each just grows one line per new tool.
 

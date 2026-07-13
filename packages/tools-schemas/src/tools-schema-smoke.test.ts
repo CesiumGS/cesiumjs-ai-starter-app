@@ -3,11 +3,11 @@ import * as tools from "./index.js";
 import { CESIUM_TOOL_NAMES } from "./tool-names.js";
 
 /**
- * Smoke test for every non-`flyTo` tool added alongside the MCP camera / entity
- * / animation / imagery servers (see `cesium-ai-integrations`). `flyTo` already
- * has its own dedicated schema + schema-sync suites; this file exists so every
- * *new* tool gets at least one valid-input/invalid-input check without
- * duplicating a full test file per tool.
+ * Smoke test for every non-`flyTo` tool added alongside the camera / entity /
+ * animation / imagery tool surface. `flyTo` already has its own dedicated
+ * schema + schema-sync suites; this file exists so every *new* tool gets at
+ * least one valid-input/invalid-input check without duplicating a full test
+ * file per tool.
  */
 const VALID: Record<string, unknown> = {
   cameraSetView: { destination: { longitude: 0, latitude: 0, height: 1000 } },
@@ -17,9 +17,17 @@ const VALID: Record<string, unknown> = {
   cameraGetPosition: {},
   cameraSetControllerOptions: { enableZoom: false, maximumZoomDistance: 20000 },
   entityAddPoint: { id: "p1", position: { longitude: 0, latitude: 0 }, color: "red" },
-  entityAddBillboard: { id: "b1", position: { longitude: 0, latitude: 0 }, image: "https://example.com/a.png" },
+  entityAddBillboard: {
+    id: "b1",
+    position: { longitude: 0, latitude: 0 },
+    image: "https://example.com/a.png",
+  },
   entityAddLabel: { id: "l1", position: { longitude: 0, latitude: 0 }, text: "hi" },
-  entityAddModel: { id: "m1", position: { longitude: 0, latitude: 0 }, uri: "https://example.com/a.glb" },
+  entityAddModel: {
+    id: "m1",
+    position: { longitude: 0, latitude: 0 },
+    uri: "https://example.com/a.glb",
+  },
   entityAddPolygon: {
     id: "poly1",
     positions: [
@@ -106,7 +114,9 @@ const INVALID: Record<string, unknown> = {
   entityAddRectangle: { rectangle: { coordinates: { north: 100, south: 0, east: 1, west: 0 } } }, // north out of range
   entityAddWall: { wall: { positions: [{ longitude: 0, latitude: 0 }] } }, // missing maximumHeights
   entityRemove: {}, // missing id
-  animationCreate: { positionSamples: [{ time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 }] }, // < 2 samples
+  animationCreate: {
+    positionSamples: [{ time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 }],
+  }, // < 2 samples
   animationControl: { animationId: "a1", action: "stop" }, // invalid enum
   animationRemove: {}, // missing animationId
   animationUpdatePath: { animationId: "a1", color: { red: 2, green: 0, blue: 0 } }, // red out of range
@@ -129,7 +139,9 @@ describe("new Cesium tool schemas", () => {
 
       const schema = buildFn!();
       const result = schema.safeParse(VALID[name]);
-      expect(result.success, `expected ${name} to accept ${JSON.stringify(VALID[name])}`).toBe(true);
+      expect(result.success, `expected ${name} to accept ${JSON.stringify(VALID[name])}`).toBe(
+        true,
+      );
     });
 
     if (INVALID[name] !== undefined) {

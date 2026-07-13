@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cartographicShape, materialOutlineShape } from "../../lib/shared-shapes.js";
 
 /**
  * Structural input shape for the `entityAddEllipse` tool — the single source of truth
@@ -8,8 +9,14 @@ import { z } from "zod";
  */
 export const entityAddEllipseInputShape = z.object({
   id: z.string().optional(),
-  position: z.object({ longitude: z.number().min(-180).max(180), latitude: z.number().min(-90).max(90), height: z.number().optional() }),
-  ellipse: z.object({ semiMajorAxis: z.number().positive(), semiMinorAxis: z.number().positive(), material: z.string().optional(), outline: z.boolean().optional(), outlineColor: z.string().optional(), rotation: z.number().optional(), height: z.number().optional(), extrudedHeight: z.number().optional() }),
+  position: cartographicShape,
+  ellipse: materialOutlineShape.extend({
+    semiMajorAxis: z.number().positive(),
+    semiMinorAxis: z.number().positive(),
+    rotation: z.number().optional(),
+    height: z.number().optional(),
+    extrudedHeight: z.number().optional(),
+  }),
   name: z.string().optional(),
   description: z.string().optional(),
 });
