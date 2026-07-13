@@ -1,12 +1,14 @@
-# CesiumJS AI Tools Sample
+# CesiumJS AI Sample App
 
 A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/) 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the browser** — all inference runs behind a Node.js API server.
+
+📚 **Docs:** [Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Packages](docs/packages/index.md) · [Viewer Tools Tutorial](docs/tutorials/cesium-viewer-tools-tutorial.md)
 
 ---
 
 ## Get Started
 
-To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI. 
+To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI.
 
 Optionally, add a free [Cesium Ion](https://ion.cesium.com) access token for high-quality terrain and imagery (without it, the globe displays basic imagery).
 
@@ -109,6 +111,8 @@ Browser                          Server
 ## Working with Cesium Tools
 
 Two common changes — turning a tool on or off, and editing a tool's schema — each have a single, well-defined place to edit. Both sides (backend registry, frontend executors) follow from there.
+
+> **Full step-by-step tutorial:** see [`docs/tutorials/cesium-viewer-tools-tutorial.md`](docs/tutorials/cesium-viewer-tools-tutorial.md) for a guided walkthrough of how the tool system works end to end, and the exact steps to add or remove a viewer tool.
 
 ### Enable or disable a tool
 
