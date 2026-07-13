@@ -1,5 +1,5 @@
 {
-  "name": "@cesium-ai/tools-cesium",
+  "name": "@cesium-ai/tools-schemas",
   "version": "0.0.1",
   "description": "Zod-schemed CesiumJS viewer tool definitions (flyTo, ...) for the AI SDK. Schemas only — no execute; tool calls run client-side against the live Viewer.",
   "type": "module",

@@ -1,11 +1,22 @@
-# @cesium-ai/tools-cesium
+# @cesium-ai/tools-schemas
 
-Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …) for the AI SDK. These are **schemas only** — no tool defines `execute`. The AI SDK streams a tool call to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
+Zod-schemed CesiumJS viewer tool definitions for the AI SDK, covering the same tool surface as the MCP servers in [`cesium-ai-integrations`](https://github.com/CesiumGS/cesium-ai-integrations/tree/main/mcp/cesium-js/servers) (camera, entity, animation, imagery). These are **schemas only** — no tool defines `execute`. The AI SDK streams a tool call to the browser, which runs it against the live `Viewer` instance and posts the result back to the agent loop (see `@cesium-ai/server`).
+
+## Tool catalogue
+
+| Domain    | Tools                                                                                                                                                                                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Camera    | `flyTo`, `cameraSetView`, `cameraLookAtTransform`, `cameraStartOrbit`, `cameraStopOrbit`, `cameraGetPosition`, `cameraSetControllerOptions`                                                                                                                            |
+| Entity    | `entityAddPoint`, `entityAddBillboard`, `entityAddLabel`, `entityAddModel`, `entityAddPolygon`, `entityAddPolyline`, `entityAddBox`, `entityAddCorridor`, `entityAddCylinder`, `entityAddEllipse`, `entityAddRectangle`, `entityAddWall`, `entityList`, `entityRemove` |
+| Animation | `animationCreate`, `animationControl`, `animationRemove`, `animationListActive`, `animationUpdatePath`, `animationCameraTracking`, `clockControl`, `globeSetLighting`                                                                                                  |
+| Imagery   | `imageryAdd`, `imageryRemove`, `imageryList`                                                                                                                                                                                                                           |
+
+Every tool follows the exact same shape as `flyTo` (see below): a `<toolName>.schema.ts` with no description text, a `<toolName>.ts` with the default description/field hints and a `create<ToolName>` factory, an entry in `CESIUM_TOOL_NAMES`, and a corresponding key on `CesiumToolsConfig`.
 
 ## Usage
 
 ```ts
-import { createCesiumTools } from "@cesium-ai/tools-cesium";
+import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { createChatRouter } from "@cesium-ai/server";
 
 createChatRouter({
@@ -18,9 +29,9 @@ createChatRouter({
 
 | Subpath                           | Exports                                                                   | Who imports it                                                                                                                                                                |
 | --------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cesium-ai/tools-cesium`         | Everything below — full tool definitions, incl. model-facing descriptions | Backend only. **Never** import the root entry point from client code — it pulls in the human-readable descriptions the LLM reads, which should not ship in the client bundle. |
-| `@cesium-ai/tools-cesium/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`                                     | Both. Schema-free — safe for the frontend to key its tool-call executors off of.                                                                                              |
-| `@cesium-ai/tools-cesium/schemas` | `flyToInputShape`, `FlyToInput`                                           | Both. Structural shape only, no `.describe()` hints — safe for the frontend to validate untrusted tool-call args against.                                                     |
+| `@cesium-ai/tools-schemas`         | Everything below — full tool definitions, incl. model-facing descriptions | Backend only. **Never** import the root entry point from client code — it pulls in the human-readable descriptions the LLM reads, which should not ship in the client bundle. |
+| `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`                                     | Both. Schema-free — safe for the frontend to key its tool-call executors off of.                                                                                              |
+| `@cesium-ai/tools-schemas/schemas` | `flyToInputShape`, `FlyToInput`                                           | Both. Structural shape only, no `.describe()` hints — safe for the frontend to validate untrusted tool-call args against.                                                     |
 
 ## Security
 
@@ -73,7 +84,7 @@ To add fields on top of the stock contract (e.g. this repo's sample app adds `du
 ```ts
 // shared module, imported by both server and client code
 import { z } from "zod";
-import { flyToInputShape } from "@cesium-ai/tools-cesium/schemas";
+import { flyToInputShape } from "@cesium-ai/tools-schemas/schemas";
 
 export const flyToShape = z.object({
   ...flyToInputShape.shape,
@@ -99,7 +110,7 @@ The defaults are exported so a host can extend rather than fully rewrite them:
 import {
   DEFAULT_FLY_TO_DESCRIPTION,
   DEFAULT_FLY_TO_FIELD_DESCRIPTIONS,
-} from "@cesium-ai/tools-cesium";
+} from "@cesium-ai/tools-schemas";
 
 createCesiumTools({
   flyTo: {

@@ -1,4 +1,4 @@
-import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-cesium/names";
+import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-schemas/names";
 
 /**
  * The CesiumJS tools **this sample app** turns on — the single source of truth

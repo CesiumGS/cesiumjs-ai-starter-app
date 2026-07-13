@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 // The app's tool selection lives in ONE shared place; this test pins the
 // contract that the backend registry is built from exactly that selection.
-import { createCesiumTools, CESIUM_TOOL_NAMES } from "@cesium-ai/tools-cesium";
+import { createCesiumTools, CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas";
 import { ENABLED_CESIUM_TOOLS } from "./enabled-tools.js";
 
 /**

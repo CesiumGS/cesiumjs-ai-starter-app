@@ -7,7 +7,7 @@ An Express router that mounts the AI SDK chat key-layer (`POST /api/chat`). It r
 ```ts
 import express from "express";
 import { createChatRouter } from "@cesium-ai/server";
-import { createCesiumTools } from "@cesium-ai/tools-cesium";
+import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { createModel } from "./providers.js"; // host-owned provider factory
 
 const app = express();

@@ -4,7 +4,7 @@
 # — this is what compose.yaml uses.
 #
 # CesiumJS assets and the workspace packages this app consumes
-# (@cesium-ai/chat-element, @cesium-ai/tools-cesium, @cesium-ai/sample-config)
+# (@cesium-ai/chat-element, @cesium-ai/tools-schemas, @cesium-ai/sample-config)
 # are resolved via npm workspaces from the repo root, so the frontend image
 # can't be built from the frontend/ folder alone. Only manifests for
 # workspaces the frontend actually depends on are copied — npm ci is fine
@@ -23,12 +23,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY frontend/package.json frontend/package.json
 COPY shared/package.json shared/package.json
-COPY packages/tools-cesium/package.json packages/tools-cesium/package.json
+COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY packages/chat-element/package.json packages/chat-element/package.json
 RUN npm ci
 
 COPY shared shared
-COPY packages/tools-cesium packages/tools-cesium
+COPY packages/tools-schemas packages/tools-schemas
 COPY packages/chat-element packages/chat-element
 COPY frontend frontend
 
@@ -41,7 +41,7 @@ ENV VITE_CESIUM_ION_ACCESS_TOKEN=$VITE_CESIUM_ION_ACCESS_TOKEN
 
 # Not `npm run build:packages` — that script also builds @cesium-ai/server,
 # which isn't checked out here (backend-only dependency).
-RUN npm run build -w @cesium-ai/tools-cesium && npm run build -w @cesium-ai/sample-config && npm run build -w frontend
+RUN npm run build -w @cesium-ai/tools-schemas && npm run build -w @cesium-ai/sample-config && npm run build -w frontend
 
 # ---- Stage 2: serve ----------------------------------------------------------
 FROM nginx:1.27-alpine AS runner

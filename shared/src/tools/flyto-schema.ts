@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { flyToInputShape } from "@cesium-ai/tools-cesium/schemas";
+import { flyToInputShape } from "@cesium-ai/tools-schemas/schemas";
 
 /**
  * Names of the CesiumJS `EasingFunction` presets this app exposes on `flyTo`,

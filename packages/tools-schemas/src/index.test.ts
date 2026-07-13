@@ -6,7 +6,7 @@ describe("createCesiumTools", () => {
   test("registers every tool by default", () => {
     const tools = createCesiumTools();
 
-    expect(Object.keys(tools)).toEqual([CESIUM_TOOL_NAMES.flyTo]);
+    expect(Object.keys(tools)).toEqual(Object.values(CESIUM_TOOL_NAMES));
   });
 
   test("excludes a tool via its per-tool `false` override", () => {
