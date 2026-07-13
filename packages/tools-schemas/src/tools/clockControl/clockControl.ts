@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { clockControlInputShape } from "./clockControl.schema.js";
 
 /** Default natural-language description handed to the model for `clockControl`. */
-export const DEFAULT_CLOCK_CONTROL_DESCRIPTION = "Configure the global animation clock shared by all animations: full setup, jumping to a time, or changing playback speed.";
+export const DEFAULT_CLOCK_CONTROL_DESCRIPTION =
+  "Configure the global animation clock shared by all animations: full setup, jumping to a time, or changing playback speed.";
 
 /** Per-field model-facing `.describe()` hints for the `clockControl` input schema. */
 export interface ClockControlFieldDescriptions {
@@ -45,7 +46,10 @@ export type ClockControlConfig = ClientToolConfig<ClockControlFieldDescriptions>
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createClockControl = createToolFactory(DEFAULT_CLOCK_CONTROL_DESCRIPTION, buildClockControlInputSchema);
+export const createClockControl = createToolFactory(
+  DEFAULT_CLOCK_CONTROL_DESCRIPTION,
+  buildClockControlInputSchema,
+);
 
 /** Ready-to-use `clockControl` tool with default description and schema. */
 export const clockControl = createClockControl();

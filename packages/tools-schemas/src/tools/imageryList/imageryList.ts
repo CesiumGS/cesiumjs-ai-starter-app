@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { imageryListInputShape } from "./imageryList.schema.js";
 
 /** Default natural-language description handed to the model for `imageryList`. */
-export const DEFAULT_IMAGERY_LIST_DESCRIPTION = "List all imagery layers on the globe, including their visibility, opacity, and provider type.";
+export const DEFAULT_IMAGERY_LIST_DESCRIPTION =
+  "List all imagery layers on the globe, including their visibility, opacity, and provider type.";
 
 /** Per-field model-facing `.describe()` hints for the `imageryList` input schema. */
 export interface ImageryListFieldDescriptions {
@@ -39,7 +40,10 @@ export type ImageryListConfig = ClientToolConfig<ImageryListFieldDescriptions>;
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createImageryList = createToolFactory(DEFAULT_IMAGERY_LIST_DESCRIPTION, buildImageryListInputSchema);
+export const createImageryList = createToolFactory(
+  DEFAULT_IMAGERY_LIST_DESCRIPTION,
+  buildImageryListInputSchema,
+);
 
 /** Ready-to-use `imageryList` tool with default description and schema. */
 export const imageryList = createImageryList();

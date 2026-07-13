@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { imageryRemoveInputShape } from "./imageryRemove.schema.js";
 
 /** Default natural-language description handed to the model for `imageryRemove`. */
-export const DEFAULT_IMAGERY_REMOVE_DESCRIPTION = "Remove an imagery layer from the globe by index or name, or remove all non-base layers at once.";
+export const DEFAULT_IMAGERY_REMOVE_DESCRIPTION =
+  "Remove an imagery layer from the globe by index or name, or remove all non-base layers at once.";
 
 /** Per-field model-facing `.describe()` hints for the `imageryRemove` input schema. */
 export interface ImageryRemoveFieldDescriptions {
@@ -43,7 +44,10 @@ export type ImageryRemoveConfig = ClientToolConfig<ImageryRemoveFieldDescription
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createImageryRemove = createToolFactory(DEFAULT_IMAGERY_REMOVE_DESCRIPTION, buildImageryRemoveInputSchema);
+export const createImageryRemove = createToolFactory(
+  DEFAULT_IMAGERY_REMOVE_DESCRIPTION,
+  buildImageryRemoveInputSchema,
+);
 
 /** Ready-to-use `imageryRemove` tool with default description and schema. */
 export const imageryRemove = createImageryRemove();

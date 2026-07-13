@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { entityListInputShape } from "./entityList.schema.js";
 
 /** Default natural-language description handed to the model for `entityList`. */
-export const DEFAULT_ENTITY_LIST_DESCRIPTION = "List all entities currently in the Cesium viewer, with their type and position.";
+export const DEFAULT_ENTITY_LIST_DESCRIPTION =
+  "List all entities currently in the Cesium viewer, with their type and position.";
 
 /** Per-field model-facing `.describe()` hints for the `entityList` input schema. */
 export interface EntityListFieldDescriptions {
@@ -39,7 +40,10 @@ export type EntityListConfig = ClientToolConfig<EntityListFieldDescriptions>;
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createEntityList = createToolFactory(DEFAULT_ENTITY_LIST_DESCRIPTION, buildEntityListInputSchema);
+export const createEntityList = createToolFactory(
+  DEFAULT_ENTITY_LIST_DESCRIPTION,
+  buildEntityListInputSchema,
+);
 
 /** Ready-to-use `entityList` tool with default description and schema. */
 export const entityList = createEntityList();

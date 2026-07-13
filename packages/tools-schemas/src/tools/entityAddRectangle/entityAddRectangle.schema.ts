@@ -10,7 +10,12 @@ import { materialOutlineShape } from "../../lib/shared-shapes.js";
 export const entityAddRectangleInputShape = z.object({
   id: z.string().optional(),
   rectangle: materialOutlineShape.extend({
-    coordinates: z.object({ north: z.number().min(-90).max(90), south: z.number().min(-90).max(90), east: z.number().min(-180).max(180), west: z.number().min(-180).max(180) }),
+    coordinates: z.object({
+      north: z.number().min(-90).max(90),
+      south: z.number().min(-90).max(90),
+      east: z.number().min(-180).max(180),
+      west: z.number().min(-180).max(180),
+    }),
     height: z.number().optional(),
     extrudedHeight: z.number().optional(),
   }),

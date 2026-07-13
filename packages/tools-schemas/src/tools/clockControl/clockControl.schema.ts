@@ -8,7 +8,16 @@ import { z } from "zod";
  */
 export const clockControlInputShape = z.object({
   action: z.enum(["configure", "setTime", "setMultiplier"]),
-  clock: z.object({ startTime: z.string().optional(), stopTime: z.string().optional(), currentTime: z.string().optional(), clockRange: z.enum(["UNBOUNDED", "CLAMPED", "LOOP_STOP"]).optional(), multiplier: z.number().optional(), shouldAnimate: z.boolean().optional() }).optional(),
+  clock: z
+    .object({
+      startTime: z.string().optional(),
+      stopTime: z.string().optional(),
+      currentTime: z.string().optional(),
+      clockRange: z.enum(["UNBOUNDED", "CLAMPED", "LOOP_STOP"]).optional(),
+      multiplier: z.number().optional(),
+      shouldAnimate: z.boolean().optional(),
+    })
+    .optional(),
   currentTime: z.string().optional(),
   multiplier: z.number().optional(),
 });

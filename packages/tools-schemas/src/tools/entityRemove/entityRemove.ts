@@ -39,7 +39,10 @@ export type EntityRemoveConfig = ClientToolConfig<EntityRemoveFieldDescriptions>
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createEntityRemove = createToolFactory(DEFAULT_ENTITY_REMOVE_DESCRIPTION, buildEntityRemoveInputSchema);
+export const createEntityRemove = createToolFactory(
+  DEFAULT_ENTITY_REMOVE_DESCRIPTION,
+  buildEntityRemoveInputSchema,
+);
 
 /** Ready-to-use `entityRemove` tool with default description and schema. */
 export const entityRemove = createEntityRemove();

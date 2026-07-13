@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { entityAddBoxInputShape } from "./entityAddBox.schema.js";
 
 /** Default natural-language description handed to the model for `entityAddBox`. */
-export const DEFAULT_ENTITY_ADD_BOX_DESCRIPTION = "Add a 3D box entity, useful for buildings, containers, or volumetric data.";
+export const DEFAULT_ENTITY_ADD_BOX_DESCRIPTION =
+  "Add a 3D box entity, useful for buildings, containers, or volumetric data.";
 
 /** Per-field model-facing `.describe()` hints for the `entityAddBox` input schema. */
 export interface EntityAddBoxFieldDescriptions {
@@ -49,7 +50,10 @@ export type EntityAddBoxConfig = ClientToolConfig<EntityAddBoxFieldDescriptions>
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createEntityAddBox = createToolFactory(DEFAULT_ENTITY_ADD_BOX_DESCRIPTION, buildEntityAddBoxInputSchema);
+export const createEntityAddBox = createToolFactory(
+  DEFAULT_ENTITY_ADD_BOX_DESCRIPTION,
+  buildEntityAddBoxInputSchema,
+);
 
 /** Ready-to-use `entityAddBox` tool with default description and schema. */
 export const entityAddBox = createEntityAddBox();

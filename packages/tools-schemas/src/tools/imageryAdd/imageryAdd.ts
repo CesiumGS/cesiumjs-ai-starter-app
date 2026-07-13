@@ -3,7 +3,8 @@ import { buildDescribedSchema } from "../../lib/describe-shape.js";
 import { imageryAddInputShape } from "./imageryAdd.schema.js";
 
 /** Default natural-language description handed to the model for `imageryAdd`. */
-export const DEFAULT_IMAGERY_ADD_DESCRIPTION = "Add a new imagery layer to the globe, overlaying map tiles, satellite imagery, or a custom tile service.";
+export const DEFAULT_IMAGERY_ADD_DESCRIPTION =
+  "Add a new imagery layer to the globe, overlaying map tiles, satellite imagery, or a custom tile service.";
 
 /** Per-field model-facing `.describe()` hints for the `imageryAdd` input schema. */
 export interface ImageryAddFieldDescriptions {
@@ -65,7 +66,10 @@ export type ImageryAddConfig = ClientToolConfig<ImageryAddFieldDescriptions>;
  * function. The AI SDK streams the tool call to the browser, which runs it
  * against the live `Viewer` instance and streams the result back.
  */
-export const createImageryAdd = createToolFactory(DEFAULT_IMAGERY_ADD_DESCRIPTION, buildImageryAddInputSchema);
+export const createImageryAdd = createToolFactory(
+  DEFAULT_IMAGERY_ADD_DESCRIPTION,
+  buildImageryAddInputSchema,
+);
 
 /** Ready-to-use `imageryAdd` tool with default description and schema. */
 export const imageryAdd = createImageryAdd();
