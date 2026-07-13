@@ -116,7 +116,7 @@ docker compose ps                                 # both services should show "h
 
 - Read [`docs/architecture.md`](architecture.md) for how the pieces fit together, request
   flow, and deployment topology.
-- Read [`docs/packages.md`](packages.md) for what each workspace package does and how they
+- Read [`docs/packages/index.md`](packages/index.md) for what each workspace package does and how they
   depend on each other.
 - Read [`docs/tutorials/cesium-viewer-tools-tutorial.md`](tutorials/cesium-viewer-tools-tutorial.md) to learn
   how the CesiumJS viewer tools work, and how to add, configure, or remove one.

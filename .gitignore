@@ -1,5 +1,5 @@
 # GitHub
-.github/
+.github/*
 !.github/workflows
 !.github/ISSUE_TEMPLATE
 
@@ -18,6 +18,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
+site/
 
 # Playwright output
 playwright-report/

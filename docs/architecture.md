@@ -54,7 +54,7 @@ MCP-backed tools would run entirely server-side and never stream as client tool 
   inside a tool's `name` or `description` field to manipulate the model's behaviour
   without the user's knowledge; keeping the tool registry server-only prevents a
   compromised client from injecting or replacing tool definitions. See
-  [`docs/packages.md`](packages.md) for how
+  [`docs/packages/index.md`](packages/index.md) for how
   [`@cesium-ai/tools-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-cesium)
   splits its exports to enforce that boundary at the module level.
 - **CORS restrictions on MCP servers** — most MCP servers do not set permissive

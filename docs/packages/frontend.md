@@ -27,7 +27,7 @@ side by side and wires tool calls from the chat panel to client-side executors.
 
 ## Adding a new tool executor
 
-See the [Cesium Viewer Tools Tutorial](../../tutorials/cesium-viewer-tools-tutorial.md) — enabling a tool requires adding it to
+See the [Cesium Viewer Tools Tutorial](../tutorials/cesium-viewer-tools-tutorial.md) — enabling a tool requires adding it to
 `ENABLED_CESIUM_TOOLS`, writing an executor in `src/tools/`, and registering it in
 `ChatPanel.tsx`.
 
