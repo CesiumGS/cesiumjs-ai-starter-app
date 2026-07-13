@@ -1,6 +1,6 @@
 # CesiumJS AI Starter App
 
-A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/)
+A ready-to-run starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/)
 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through
 structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the
 browser** — all inference runs behind a Node.js API server.

@@ -1,5 +1,5 @@
 site_name: CesiumJS AI Starter App
-site_description: A production-ready starter pairing CesiumJS with an LLM-powered chat interface.
+site_description: A ready-to-run starter pairing CesiumJS with an LLM-powered chat interface.
 site_url: https://cesiumgs.github.io/cesiumjs-ai-starter-app/
 repo_url: https://github.com/CesiumGS/cesiumjs-ai-starter-app
 repo_name: CesiumGS/cesiumjs-ai-starter-app

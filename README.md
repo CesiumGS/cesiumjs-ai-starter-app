@@ -1,8 +1,12 @@
 # CesiumJS AI Sample App
 
-A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/) 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the browser** — all inference runs behind a Node.js API server.
+![Cesium](https://github.com/CesiumGS/cesium/wiki/logos/Cesium_Logo_Color.jpg)
 
-📚 **Docs:** [Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Packages](docs/packages/index.md) · [Viewer Tools Tutorial](docs/tutorials/cesium-viewer-tools-tutorial.md)
+A ready-to-run starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/) 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the browser** — all inference runs behind a Node.js API server.
+
+---
+
+[**Getting Started**](docs/getting-started.md) :earth_asia: [**Architecture**](docs/architecture.md) :earth_americas: [**Packages**](docs/packages/index.md) :earth_africa: [**Viewer Tools Tutorial**](docs/tutorials/cesium-viewer-tools-tutorial.md)
 
 ---
 
