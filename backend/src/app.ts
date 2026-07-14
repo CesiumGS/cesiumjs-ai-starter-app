@@ -1,10 +1,12 @@
 import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
 import { createChatRouter } from "@cesium-ai/server";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
-import type { LanguageModel } from "ai";
+import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
+import type { LanguageModel, ToolSet } from "ai";
 import cors from "cors";
 import express, { type Express } from "express";
 import type { Env } from "./utils/env.js";
+import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
 
@@ -48,19 +50,32 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
   });
 
   app.use("/api/chat", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
-  // The app curates its tool surface via the shared ENABLED_CESIUM_TOOLS
-  // allowlist — the same list the frontend keys its executors off — so the model
-  // is only ever offered the tools this app turned on. `flyTo`'s input schema is
-  // this app's extended `flyToInputSchema` (adds `duration`/`easingFunction` on
-  // top of the stock tool), built from the same shared shape the frontend
-  // validates against — see `./flyto-tool.ts`.
+  // Curate tools via ENABLED_CESIUM_TOOLS allowlist; add custom flyTo schema.
+  // Only include executeCesiumCode when a model is configured.
+  const tools: ToolSet = {
+    ...createCesiumTools({
+      enabled: ENABLED_CESIUM_TOOLS,
+      flyTo: { inputSchema: flyToInputSchema },
+    }),
+    ...(model && ENABLED_CESIUM_TOOLS.includes(CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode)
+      ? {
+          [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
+            model,
+            maxSkills: env.CODEGEN_MAX_SKILLS,
+            maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
+          }),
+        }
+      : {}),
+  };
+
   app.use(
     createChatRouter({
       model,
-      tools: createCesiumTools({
-        enabled: ENABLED_CESIUM_TOOLS,
-        flyTo: { inputSchema: flyToInputSchema },
-      }),
+      tools,
+      // Gate executeCesiumCode behind a human approval decision — the current,
+      // non-deprecated replacement for setting `needsApproval` directly on the
+      // tool object (see `./tools/execute-cesium-code-tool.ts`).
+      toolApproval: { [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval" },
     }),
   );
 

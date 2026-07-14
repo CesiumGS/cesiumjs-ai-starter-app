@@ -168,6 +168,30 @@
   border-top: 1px solid var(--stratakit-color-border-positive-muted);
 }
 
+.approvalActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--stratakit-color-border-info-muted);
+}
+
+.approvalPrompt {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--stratakit-color-text-neutral-tertiary);
+}
+
+.approvalButtons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.approvalButton {
+  padding: 6px 16px !important;
+}
+
 .inputArea {
   flex-shrink: 0;
   padding: 0.6rem 0.75rem;

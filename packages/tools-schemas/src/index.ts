@@ -507,7 +507,7 @@ export interface CesiumToolsConfig {
    * default. A tool named here is still dropped if its per-tool config is
    * `false`, so the allowlist and per-tool overrides compose.
    */
-  enabled?: readonly CesiumToolName[];
+  enabled?: readonly (CesiumToolName | string)[];
   /** Override `flyTo`'s description / input schema, or `false` to exclude it. */
   flyTo?: FlyToConfig | false;
   /** Override `cameraSetView`'s description / input schema, or `false` to exclude it. */

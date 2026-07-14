@@ -3,6 +3,7 @@ import {
   stepCountIs,
   streamText,
   type LanguageModel,
+  type ToolApprovalConfiguration,
   type ToolSet,
   type UIMessage,
 } from "ai";
@@ -31,6 +32,8 @@ export interface RunAgentOptions {
   system?: string;
   /** Max agent steps. Defaults to {@link DEFAULT_MAX_STEPS}. */
   maxSteps?: number;
+  /** Per-tool human-in-the-loop approval gating, passed straight through to `streamText`. */
+  toolApproval?: ToolApprovalConfiguration<ToolSet, never>;
 }
 
 /**
@@ -43,12 +46,14 @@ export async function runAgent({
   tools,
   system = DEFAULT_SYSTEM_PROMPT,
   maxSteps = DEFAULT_MAX_STEPS,
+  toolApproval,
 }: RunAgentOptions): Promise<ReturnType<typeof streamText>> {
   return streamText({
     model,
     system,
     messages: await convertToModelMessages(messages),
     tools,
+    toolApproval,
     // Continue the loop across tool calls, but never beyond maxSteps.
     stopWhen: stepCountIs(maxSteps),
   });

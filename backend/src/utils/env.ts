@@ -49,6 +49,12 @@ const EnvSchema = z.object({
 
   RATE_LIMIT_RPM: z.coerce.number().int().positive().default(20),
 
+  // Max number of matched skills inlined as grounding context in the executeCesiumCode prompt.
+  CODEGEN_MAX_SKILLS: z.coerce.number().int().positive().default(1),
+
+  // Max regeneration attempts if a generated executeCesiumCode snippet fails verification.
+  CODEGEN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
+
   TELEMETRY_ENABLED: boolEnv(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
 });
