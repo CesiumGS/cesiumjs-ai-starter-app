@@ -158,9 +158,10 @@ isolated runtime (no network, no host OS, no shared storage, controlled API acce
 all — a materially bigger lift than an AST walk. This package sidesteps that problem entirely by
 never executing anything; the consuming app's frontend sandbox is the actual runtime isolation boundary, and it must
 independently validate and execute the code with appropriate isolation — it can never treat "the backend already verified it"
-as a substitute for its own runtime isolation. **This repo's sample app does not yet have a frontend sandbox wired up** — see
-[`frontend/README.md`](../../frontend/README.md) — so verified code is currently not executed
-anywhere; a browser-side execution boundary is planned for a follow-up PR.
+as a substitute for its own runtime isolation. This repo's sample app executes verified code in
+the frontend through `@cesium-ai/sandbox-cesium`: a fresh QuickJS-WASM interpreter with
+memory/deadline limits and a guarded bridge to the live Viewer. See
+[`frontend/README.md`](../../frontend/README.md).
 
 ## AST verifier (`src/pipeline/ast-verifier.ts`)
 

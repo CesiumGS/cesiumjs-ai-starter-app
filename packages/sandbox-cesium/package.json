@@ -1,0 +1,35 @@
+{
+  "name": "@cesium-ai/sandbox-cesium",
+  "version": "0.0.1",
+  "description": "Browser-executed QuickJS-wasm sandbox that runs already-verified CesiumJS code directly against a live Viewer's real API surface, plus client-side execution guardrails (entity cap, call rate limiter). The execution half of the Code Mode pipeline that @cesium-ai/codegen-cesium generates and statically verifies; frontend-only (depends on cesium + quickjs-emscripten), never imported server-side.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "cesium": "^1.127.0",
+    "quickjs-emscripten": "^0.32.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

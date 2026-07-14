@@ -667,6 +667,48 @@ Generated Code → iframe with sandbox attribute
 | `allow-forms`            | Allow form submission                       |
 | Empty (most restrictive) | No scripts, forms, popups, plugins          |
 
+#### Real-world example: Cesium Sandcastle Copilot
+
+[Cesium Sandcastle](https://github.com/CesiumGS/cesium/tree/main/packages/sandcastle/src/copilot) uses a cross-origin iframe to run AI-generated CesiumJS code. It is a useful reference because it represents the iframe approach applied to the same domain (CesiumJS + LLM-generated code), so its trade-offs are directly comparable.
+
+**What Sandcastle does:**
+
+The Sandcastle Copilot sends AI-generated JavaScript to a `<Bucket>` component that owns an `<iframe>` pointed at a separate origin (`__INNER_ORIGIN__`). On each run, the iframe is reloaded; once it signals ready via `postMessage`, the parent sends the generated code as a module. Console output (`log`, `warn`, `error`) is relayed back via `postMessage` to the parent's console panel.
+
+```
+User intent → Anthropic/Gemini API (direct browser call)
+                      ↓ apply_diff tool (only tool available)
+               Patches editor JS/HTML in memory
+                      ↓
+              <iframe src="__INNER_ORIGIN__/templates/bucket.html">
+                      ↓ postMessage (code module)
+               iframe executes as ES module
+                      ↓ postMessage (console output)
+              Parent displays console panel
+```
+
+The model's tool surface is intentionally minimal: one tool (`apply_diff`) that can only target `"javascript"` or `"html"` (enum-validated). The model cannot make API calls, read files, or exfiltrate data through the tool API itself. A chain of at most 10 tool calls is allowed per turn. Credentials (Anthropic/Gemini API keys) live in `sessionStorage` of the parent origin — unreachable from the iframe's separate origin.
+
+**What the cross-origin iframe protects (parent ↔ iframe boundary):**
+
+- Generated code cannot read the parent's `sessionStorage` (API keys are safe)
+- Cannot manipulate the Sandcastle UI DOM
+- All communication is constrained to `postMessage`
+
+**What is not protected (inside the iframe):**
+
+- No `sandbox` attribute on the iframe element — generated code runs with full browser capabilities within the iframe's own origin
+- Unrestricted `fetch` to any external URL — code can exfiltrate data or call attacker-controlled servers
+- `window.open`, dynamic `import()`, `eval`, `new Function()` all available
+- No execution timeout or memory cap
+- No static code validation — AI output goes straight to execution without AST parsing or denylist checks
+- Auto-fix loop relays runtime errors from iframe back to the AI prompt verbatim (up to 3 retries) — a crafted runtime error is a prompt-injection vector through the console relay channel
+- Vertex AI service account JSON (including RSA private key) stored in `sessionStorage` of the parent origin — an unusually sensitive credential to hold client-side
+
+**Why this trade-off is acceptable for Sandcastle but not for this app:**
+
+Sandcastle is a developer playground where the whole point is unrestricted CesiumJS access and the user is authoring the code with AI assistance. The threat model is low: the user is assumed trusted, and the iframe boundary is sufficient to prevent the generated code from escaping into the host page. For an app that executes LLM-generated code autonomously against a user's live Viewer — where the user has not inspected the code — the iframe approach leaves the generated code free to make arbitrary network calls, and provides no timeout or memory protection.
+
 ---
 
 ### Option D: Hybrid (Recommended for Production)

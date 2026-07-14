@@ -1,9 +1,10 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
+import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "@cesium-ai/sandbox-cesium";
 import { flyToLocation } from "../tools/camera";
 import {
   handleExecuteCesiumCodeResult,
@@ -35,6 +36,11 @@ const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
+  const sandboxRateLimiterRef = useRef<SandboxCallRateLimiter | null>(null);
+  if (!sandboxRateLimiterRef.current) {
+    sandboxRateLimiterRef.current = new SandboxCallRateLimiter(DEFAULT_RATE_LIMIT);
+  }
+
   const handleToolCall = useCallback(
     (toolName: string, args: unknown): Promise<unknown> => {
       const viewer = viewerRef.current;
@@ -60,7 +66,9 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
     }): Promise<ToolExecutionOutcome | undefined> => {
       if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
 
-      const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output);
+      const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output, () =>
+        sandboxRateLimiterRef.current?.checkAndRecord(),
+      );
       if (!errorMessage) return undefined;
 
       return {

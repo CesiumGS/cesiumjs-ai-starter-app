@@ -27,7 +27,7 @@ The frontend imports only schema-free pieces from these packages: tool **names**
 
 ## `executeCesiumCode`: server-verified, client-executed
 
-`executeCesiumCode` is a "Code Mode" tool resolved server-side — `@cesium-ai/codegen-cesium` generates and verifies the snippet via AST inspection, then streams it to `ChatPanel.tsx`'s `handleServerToolResult` (see [`backend/README.md`](../backend/README.md)). After user approval, `runApprovedCode` executes it via `new Function("viewer", "Cesium", code)` with try/catch error handling. The AST verification and frontend try/catch are defense-in-depth only; a real runtime isolation boundary (sandboxed interpreter, capability proxy) is planned for a follow-up PR.
+`executeCesiumCode` is a "Code Mode" tool resolved server-side — `@cesium-ai/codegen-cesium` generates and verifies the snippet via AST inspection, then streams it to `ChatPanel.tsx`'s `handleServerToolResult` (see [`backend/README.md`](../backend/README.md)). After user approval, the frontend validates the result and executes it in a fresh QuickJS-WASM runtime from `@cesium-ai/sandbox-cesium`. The sandbox has a memory/deadline budget, an opaque-handle bridge to the live Viewer, host-side collection caps, a per-session execution rate limit, and blocks lifecycle, DOM, private, and bulk-removal properties. Static verification and runtime isolation are independent gates.
 
 ## Environment
 

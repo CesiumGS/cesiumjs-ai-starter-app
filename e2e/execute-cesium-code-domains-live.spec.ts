@@ -3,6 +3,166 @@ import { test, expect, type Page } from "@playwright/test";
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 
 /**
+ * A snapshot of observable, generic Cesium `Viewer` state — everything an AI-generated snippet is
+ * plausibly able to change, collected via the dev-only `window.__cesiumViewerForE2E` test seam
+ * (see `frontend/src/components/CesiumGlobe.tsx`). Used to prove the globe actually changed as a
+ * result of running the generated code, not just that no error was surfaced (that alone doesn't
+ * prove the code did anything real to the live Viewer — see the "Sandbox gaps found via live
+ * manual testing" repo note).
+ */
+interface ViewerSnapshot {
+  entities: number;
+  dataSources: number;
+  primitives: number;
+  imageryLayers: number;
+  cameraPosition: { x: number; y: number; z: number };
+  cameraHeading: number;
+  cameraPitch: number;
+  sceneMode: number;
+  enableLighting: boolean;
+  atmosphereHueShift: number;
+}
+
+/** Reads a `ViewerSnapshot` off the live Viewer exposed by the dev-only e2e test seam. */
+async function getViewerSnapshot(page: Page): Promise<ViewerSnapshot> {
+  return page.evaluate(() => {
+    const viewer = (window as unknown as { __cesiumViewerForE2E?: any }).__cesiumViewerForE2E;
+    if (!viewer) {
+      throw new Error(
+        "window.__cesiumViewerForE2E is undefined — is the app running in dev mode " +
+          "(`npm run dev:frontend`), and has CesiumGlobe finished mounting?",
+      );
+    }
+    const camera = viewer.camera;
+    return {
+      entities: viewer.entities.values.length,
+      dataSources: viewer.dataSources.length,
+      primitives: viewer.scene.primitives.length,
+      imageryLayers: viewer.imageryLayers.length,
+      cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+      cameraHeading: camera.heading,
+      cameraPitch: camera.pitch,
+      sceneMode: viewer.scene.mode,
+      enableLighting: viewer.scene.globe.enableLighting,
+      atmosphereHueShift: viewer.scene.skyAtmosphere?.hueShift ?? 0,
+    };
+  });
+}
+
+const CAMERA_MOVE_EPSILON_METERS = 1;
+
+function cameraDistanceMoved(before: ViewerSnapshot, after: ViewerSnapshot): number {
+  const dx = after.cameraPosition.x - before.cameraPosition.x;
+  const dy = after.cameraPosition.y - before.cameraPosition.y;
+  const dz = after.cameraPosition.z - before.cameraPosition.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+function hasChanged(before: ViewerSnapshot, after: ViewerSnapshot): boolean {
+  return (
+    after.entities !== before.entities ||
+    after.dataSources !== before.dataSources ||
+    after.primitives !== before.primitives ||
+    after.imageryLayers !== before.imageryLayers ||
+    after.sceneMode !== before.sceneMode ||
+    after.enableLighting !== before.enableLighting ||
+    after.atmosphereHueShift !== before.atmosphereHueShift ||
+    cameraDistanceMoved(before, after) > CAMERA_MOVE_EPSILON_METERS
+  );
+}
+
+/**
+ * Generic "something observable actually changed" check, applied to every domain as a baseline —
+ * catches the common case (an entity/primitive/imagery layer/data source was added, or the camera
+ * moved) without needing bespoke per-domain assertions. Polls rather than taking a single snapshot
+ * since some effects (e.g. `Scene.morphToColumbusView`'s animated transition) settle a couple of
+ * seconds after the tool result already appeared in the transcript.
+ */
+async function assertSomethingChanged(page: Page, before: ViewerSnapshot, domain: string) {
+  await expect(async () => {
+    const current = await getViewerSnapshot(page);
+    expect(hasChanged(before, current)).toBe(true);
+  }, `[${domain}] expected the generated code to visibly change the Viewer (entities/primitives/imageryLayers/dataSources/camera/sceneMode/lighting)`).toPass({ timeout: 10_000 });
+}
+
+/**
+ * Stronger, domain-specific assertions layered on top of `assertSomethingChanged` for domains
+ * where the expected change is unambiguous and cheap to verify precisely. Each polls the live
+ * Viewer until the expected end-state is reached (or the timeout elapses), to tolerate animated
+ * transitions (e.g. the Columbus View morph) that don't complete instantly.
+ */
+const DOMAIN_ASSERTIONS: Record<string, (page: Page, before: ViewerSnapshot) => Promise<void>> = {
+  "cesiumjs-camera": async (page) => {
+    // Camera.setView with heading 30°, pitch -60°, no animation — assert both landed close to
+    // the requested values (radians), not just "camera moved somewhere".
+    const { cameraHeading, cameraPitch } = await getViewerSnapshot(page);
+    const headingDeg = (cameraHeading * 180) / Math.PI;
+    const pitchDeg = (cameraPitch * 180) / Math.PI;
+    expect(headingDeg, `expected camera heading ~30°, got ${headingDeg}°`).toBeGreaterThan(20);
+    expect(headingDeg, `expected camera heading ~30°, got ${headingDeg}°`).toBeLessThan(40);
+    expect(pitchDeg, `expected camera pitch ~-60°, got ${pitchDeg}°`).toBeGreaterThan(-70);
+    expect(pitchDeg, `expected camera pitch ~-60°, got ${pitchDeg}°`).toBeLessThan(-50);
+  },
+  "cesiumjs-viewer-setup": async (page) => {
+    // Cesium's SceneMode.COLUMBUS_VIEW === 1. `morphToColumbusView` animates over ~2s, so poll.
+    await expect
+      .poll(async () => (await getViewerSnapshot(page)).sceneMode, {
+        message: "expected scene.mode to settle into Columbus View (1)",
+        timeout: 10_000,
+      })
+      .toBe(1);
+  },
+  "cesiumjs-entities": async (page, before) =>
+    assertEntityAdded(page, before, "the GeoJSON polygon entity"),
+  "cesiumjs-core-utilities": async (page, before) =>
+    assertEntityAdded(page, before, "the PinBuilder billboard entity"),
+  "cesiumjs-interaction": async (page, before) =>
+    assertEntityAdded(page, before, "the seeded red point entity over London"),
+  "cesiumjs-spatial-math": async (page, before) =>
+    assertEntityAdded(page, before, "the converted-coordinate label entity"),
+  "cesiumjs-time-properties": async (page, before) =>
+    assertEntityAdded(page, before, "the time-dynamic SampledProperty entity"),
+  "cesiumjs-imagery": async (page, before) => assertImageryLayerAdded(page, before),
+  "cesiumjs-3d-tiles": async (page, before) => assertPrimitiveAdded(page, before, "the Cesium3DTileset"),
+  "cesiumjs-custom-shader": async (page, before) =>
+    assertPrimitiveAdded(page, before, "the Cesium3DTileset with CustomShader attached"),
+  "cesiumjs-materials-shaders": async (page, before) =>
+    assertPrimitiveAdded(page, before, "the Primitive with the custom Fabric material"),
+  "cesiumjs-primitives": async (page, before) =>
+    assertPrimitiveAdded(page, before, "the GeoJsonPrimitive"),
+  "cesiumjs-models-particles": async (page, before) =>
+    assertPrimitiveAdded(page, before, "the glTF Model and/or ParticleSystem"),
+};
+
+async function assertEntityAdded(page: Page, before: ViewerSnapshot, what: string) {
+  await expect
+    .poll(async () => (await getViewerSnapshot(page)).entities, {
+      message: `expected ${what} to be added to viewer.entities`,
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(before.entities);
+}
+
+async function assertPrimitiveAdded(page: Page, before: ViewerSnapshot, what: string) {
+  await expect
+    .poll(async () => (await getViewerSnapshot(page)).primitives, {
+      message: `expected ${what} to be added to scene.primitives`,
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(before.primitives);
+}
+
+async function assertImageryLayerAdded(page: Page, before: ViewerSnapshot) {
+  await expect
+    .poll(async () => (await getViewerSnapshot(page)).imageryLayers, {
+      message: "expected the WMS imagery layer to be added",
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(before.imageryLayers);
+}
+
+
+/**
  * Real end-to-end coverage of the `executeCesiumCode` tool across a representative intent from
  * each `@cesium/cesiumjs-skills` domain — the full intent -> skill-matching -> prompt-building ->
  * model generation -> AST verification -> approval -> execution pipeline, against a real model.
@@ -16,7 +176,13 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
  *
  * Every domain should succeed: the model calls the tool, the generated snippet passes the real
  * AST verifier, and the approved code executes against the live Viewer with no error surfaced
- * and no crash. A `{ error }` result fails the test.
+ * and no crash. A `{ error }` result fails the test. Beyond that, each scenario also captures a
+ * `ViewerSnapshot` of the live Viewer (via the dev-only `window.__cesiumViewerForE2E` test seam)
+ * before submitting the intent and asserts the globe actually visibly changed as a result —
+ * either generically (an entity/primitive/imagery layer was added, or the camera/scene mode
+ * moved) or, for domains with an unambiguous expected outcome, a stronger precise check (e.g. the
+ * camera heading/pitch, or the scene mode after a Columbus View morph). This catches "sandbox
+ * reports success but nothing visibly changed" bugs that a bare no-error assertion can't.
  */
 
 /**
@@ -60,9 +226,11 @@ const DOMAIN_INTENTS: Record<string, string> = {
   "cesiumjs-models-particles":
     "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb, play its animation, and add a ParticleSystem for fire at its base",
   // Supplies concrete inline GeoJSON since this app has no pre-loaded GeoJSON for the model to
-  // reference.
+  // reference. Explicitly forbids clearing/removing existing scene content first — `removeAll()`
+  // is deliberately blocked by the sandbox's security guardrail (against wiping the whole scene),
+  // and the model sometimes reaches for it to "start clean" even though nothing needs clearing.
   "cesiumjs-primitives":
-    "render this GeoJSON polygon as a ground-clamped primitive for performance using GeoJsonPrimitive instead of the Entity API: a rectangle covering roughly Colorado with coordinates [[-109,37],[-102,37],[-102,41],[-109,41],[-109,37]]",
+    "render this GeoJSON polygon as a ground-clamped primitive for performance using GeoJsonPrimitive instead of the Entity API: a rectangle covering roughly Colorado with coordinates [[-109,37],[-102,37],[-102,41],[-109,41],[-109,37]]. Just add the new primitive — do not call removeAll() or clear any existing primitives/entities first.",
   // Ties the conversion to a visible label so the outcome is actionable rather than a pure math
   // exercise with no Viewer effect.
   "cesiumjs-spatial-math":
@@ -93,9 +261,15 @@ test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skill
       test.setTimeout(120_000);
 
       const pageErrors = trackPageErrors(page);
+      page.on("console", (msg) => console.log("PAGE LOG:", msg.type(), msg.text()));
 
       await page.goto("/");
       await page.waitForSelector(INPUT_SELECTOR, { timeout: 30_000 });
+
+      // Baseline Viewer state, captured before the intent is even submitted, so we can later
+      // prove the generated code actually changed something real on the live globe rather than
+      // just running without an error.
+      const before = await getViewerSnapshot(page);
 
       const input = page.locator(INPUT_SELECTOR);
       await input.fill(intent);
@@ -129,10 +303,19 @@ test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skill
 
       // Only expected outcome: generation succeeded and the code ran with no error surfaced.
       expect(result.error, `generation/verification failed: ${result.error}`).toBeUndefined();
+      // `executionError` is a distinct field from `error`: the code passed AST verification and
+      // "succeeded" from the tool's perspective, but threw at runtime against the live Viewer
+      // (see `handleServerToolResult`'s `continueConversation` feedback loop). Silently ignoring
+      // this previously let real runtime failures pass this test undetected.
+      expect(result.executionError, `runtime execution failed: ${result.executionError}`).toBeUndefined();
       expect(typeof result.code).toBe("string");
       await expect(page.locator('[data-testid="error-text"]')).toHaveCount(0);
 
       expect(pageErrors).toHaveLength(0);
+
+      // Prove the globe actually changed as expected — not just "no error was shown".
+      await assertSomethingChanged(page, before, domain);
+      await DOMAIN_ASSERTIONS[domain]?.(page, before);
     });
   }
 });
