@@ -8,7 +8,7 @@ browser** — all inference runs behind a Node.js API server.
 ## Docs
 
 - [Getting Started](getting-started.md) — clone, configure, and run
-- [Architecture](architecture.md) — component layout, request flow, Docker topology
+- [Architecture](architectures/architecture.md) — component layout, request flow, Docker topology
 
 ## Tutorials
 
@@ -17,9 +17,10 @@ browser** — all inference runs behind a Node.js API server.
 ## Packages
 
 - [tools-schemas](packages/tools-schemas/index.md) — CesiumJS viewer tool library
-- [server](packages/server/index.md) — Express chat router and agent loop
-- [chat-element](packages/chat-element/index.md) — React chat panel component
-- [sample-config](packages/sample-config/index.md) — this app's tool selection and config
+- [codegen-cesium](../packages/codegen-cesium/README.md) — intent-to-code generation pipeline
+- [server](../packages/server/README.md) — Express chat router and agent loop
+- [chat-element](../packages/chat-element/README.md) — React chat panel component
+- [sample-config](../shared/README.md) — this app's tool selection and config
 
 ## Source
 

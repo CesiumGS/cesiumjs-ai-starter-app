@@ -6,6 +6,9 @@ repo_name: CesiumGS/cesiumjs-ai-starter-app
 
 docs_dir: docs
 
+not_in_nav: |
+  README.md
+
 theme:
   name: material
   logo: assets/cesium-favicon.ico
@@ -34,6 +37,10 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+plugins:
+  - search
+  - include-markdown
+
 markdown_extensions:
   - pymdownx.superfences:
       custom_fences:
@@ -44,12 +51,18 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Architecture: architecture.md
+  - Architecture:
+      - Overview: architectures/architecture.md
+      - Codegen Architecture: architectures/architecture-codegen.md
+      - Codegen Security: architectures/codegen-tool-security-attacks-vectors.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Cesium Viewer Tools Tutorial: tutorials/cesium-viewer-tools-tutorial.md
+      - Codegen Tool Tutorial: tutorials/codegen-tool-tutorial.md
+      - How Codegen Works: tutorials/codegen-pipeline.md
   - Packages:
       - Overview: packages/index.md
+      - cesium-ai/codegen-cesium: packages/codegen-cesium/index.md
       - cesium-ai/tools-schemas:
           - Overview: packages/tools-schemas/index.md
           - Tool Catalogue: packages/tools-schemas/tools.md
