@@ -53,6 +53,39 @@ flowchart LR
 The `@cesium-ai/codegen-cesium` package is a pure server-side dependency — it is never
 bundled into the client.
 
+### Request lifecycle
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant UI as Chat Panel (React)
+    participant Viewer as CesiumJS Viewer
+    participant API as Backend API
+    participant Codegen as Codegen Pipeline
+    participant LLM as LLM Provider
+
+    User->>UI: natural-language intent
+    UI->>API: POST /api/chat
+    API-->>UI: tool call: executeCesiumCode(intent)
+    UI-->>User: approval prompt — show intent
+    User->>UI: approve
+    UI-->>API: tool result (approved)
+    API->>Codegen: generateVerifiedCesiumCode(intent)
+    Codegen->>LLM: buildCodegenPrompt + skills context
+    LLM-->>Codegen: candidate JavaScript
+    Codegen->>Codegen: verifyCesiumCode (AST)
+    alt verified
+        Codegen-->>API: verified true, code string
+        API-->>UI: SSE: code string
+        UI->>Viewer: execute code against viewer
+        Viewer-->>UI: render updated
+    else verification failed after retries
+        Codegen-->>API: verified false, error
+        API-->>UI: SSE: error message
+    end
+    UI-->>User: confirmation or error
+```
+
 ---
 
 ## 2. Package structure
@@ -93,15 +126,15 @@ descriptions into the browser — the package structure prevents this by design.
 
 ## 3. Component responsibilities
 
-| Component           | File                                            | Responsibility                                                                                                                            |
-| ------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Tool definition** | `tools/executeCesiumCode/executeCesiumCode.ts`  | Declares the `executeCesiumCode` tool with its model-facing description. Schema-only — no `execute` handler here.                         |
-| **Tool wiring**     | `backend/src/tools/execute-cesium-code-tool.ts` | `createExecuteCesiumCodeTool` wraps the pipeline in an AI SDK `Tool`. Catches all exceptions and returns `{ error }` instead of throwing. |
-| **Pipeline entry**  | `pipeline/generate-verified-cesium-code.ts`     | Orchestrates the full domain-match → prompt → generate → verify → retry flow.                                                             |
-| **Domain matching** | `pipeline/domain-matcher.ts`                    | BM25-ranks intent against SKILL.md descriptions. Returns top-N `CesiumSkill[]`.                                                           |
-| **Prompt builder**  | `pipeline/prompt-builder.ts`                    | Assembles the generation prompt with skill context and output constraints.                                                                |
-| **AST verifier**    | `pipeline/ast-verifier.ts`                      | `verifyCesiumCode` — parse-only static analysis via `acorn`. Collects all violations before returning.                                    |
-| **Skills loader**   | `pipeline/skills-loader.ts`                     | Reads all `skills/cesiumjs-*/SKILL.md` files from the installed `@cesium/cesiumjs-skills` package. Caches after first load.               |
+| Component           | File                                                                                                                                                                                     | Responsibility                                                                                                                                                                                |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tool definition** | [`tools/executeCesiumCode/executeCesiumCode.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tools/executeCesiumCode/executeCesiumCode.ts) | Declares the `executeCesiumCode` tool with its model-facing description. Schema-only — no `execute` handler here.                                                                             |
+| **Tool wiring**     | [`backend/src/tools/execute-cesium-code-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/execute-cesium-code-tool.ts)                           | `createExecuteCesiumCodeTool` wraps the pipeline in an [AI SDK](https://sdk.vercel.ai/docs) `Tool`. Catches all exceptions and returns `{ error }` instead of throwing.                       |
+| **Pipeline entry**  | [`pipeline/generate-verified-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts)       | Orchestrates the full domain-match → prompt → generate → verify → retry flow.                                                                                                                 |
+| **Domain matching** | [`pipeline/domain-matcher.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/domain-matcher.ts)                                     | [BM25](https://en.wikipedia.org/wiki/Okapi_BM25)-ranks intent against SKILL.md descriptions. Returns top-N `CesiumSkill[]`.                                                                   |
+| **Prompt builder**  | [`pipeline/prompt-builder.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/prompt-builder.ts)                                     | Assembles the generation prompt with skill context and output constraints.                                                                                                                    |
+| **AST verifier**    | [`pipeline/ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts)                                         | `verifyCesiumCode` — parse-only [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree) analysis via [`acorn`](https://github.com/acornjs/acorn). Collects all violations before returning. |
+| **Skills loader**   | [`pipeline/skills-loader.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/skills-loader.ts)                                       | Reads all `skills/cesiumjs-*/SKILL.md` files from the installed [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) package. Caches after first load.                    |
 
 ---
 
@@ -136,7 +169,8 @@ flowchart TB
 It rejects code that contains banned constructs (`eval`, `Function`, dynamic `import`,
 computed member access) or banned browser globals (`fetch`, `window`, `document`,
 `localStorage`, etc.), code that exceeds size limits, and code with statically detectable
-infinite loops. Unverified code is never returned as the verified result.
+infinite loops. Unverified code is never returned as the verified result. The LLM API key
+and raw skill bodies never cross the Backend → Browser boundary — both stay server-side.
 
 **Gate 2 — Browser-side Sandbox Isolation** is not yet implemented. Currently, verified
 code is returned to the chat panel but not automatically executed against the `Viewer`.
@@ -149,42 +183,9 @@ approach) before Gate 2 is added.
 
 ## 5. How the tool is registered in the backend
 
-`backend/src/app.ts` wires the codegen tool into the agent loop alongside the viewer tools:
+[`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts) wires the codegen tool into the agent loop alongside the viewer tools via `createExecuteCesiumCodeTool`. The tool is only registered when a model is configured; if no API key is available it is silently omitted even if listed in `ENABLED_CESIUM_TOOLS`.
 
-```ts
-// backend/src/app.ts (simplified)
-import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool";
-import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-
-// Only registered when a model is configured and the tool is enabled
-const executeCesiumCodeTool = model
-  ? createExecuteCesiumCodeTool({ model, maxSkills, maxAttempts })
-  : undefined;
-
-const toolApproval = {
-  [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval",
-};
-```
-
-The `"user-approval"` setting is what triggers the browser's approval prompt — the agent
-loop pauses and streams the tool call back to the client, which shows the raw intent and
-waits for an explicit user click before returning a result. This is the only tool in the
-starter app with this setting.
-
----
-
-## 6. Data boundaries
-
-| Boundary                  | What crosses it                           | Direction |
-| ------------------------- | ----------------------------------------- | --------- |
-| Browser → Backend         | User's natural-language `intent` string   | In        |
-| Backend → LLM provider    | Assembled prompt (intent + skill context) | Out       |
-| LLM provider → Backend    | Candidate JavaScript string               | In        |
-| Backend → Browser         | Verified JavaScript string (or error)     | Out       |
-| Browser → CesiumJS Viewer | Executed JavaScript (Gate 2, planned)     | In        |
-
-The LLM API key never crosses the Backend → Browser boundary. The skill bodies (which can
-contain detailed API examples) are assembled server-side and never sent raw to the browser.
+`executeCesiumCode` is registered with `toolApproval: "user-approval"`, making it the only tool in the starter app that pauses the agent loop and requires an explicit browser confirmation before the backend generates any code. See [Codegen Tool Tutorial — Human-in-the-loop approval](../tutorials/codegen-tool-tutorial.md#3-human-in-the-loop-approval) for the wiring details and configuration options.
 
 ---
 

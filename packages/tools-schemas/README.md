@@ -1,6 +1,6 @@
 # @cesium-ai/tools-schemas
 
-Zod-schemed CesiumJS viewer tool definitions for the AI SDK — schemas only, no `execute`. The AI SDK streams tool calls to the browser, which runs them against the live `Viewer` and posts results back to the agent loop.
+[Zod](https://zod.dev)-schemed CesiumJS viewer tool definitions for the [AI SDK](https://sdk.vercel.ai/docs) — schemas only, no `execute`. The AI SDK streams tool calls to the browser, which runs them against the live `Viewer` and posts results back to the agent loop.
 
 ## Tool catalogue
 

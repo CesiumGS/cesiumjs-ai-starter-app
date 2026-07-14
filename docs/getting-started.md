@@ -16,7 +16,7 @@ Pick **one** of the two run modes below; each has its own prerequisites.
 
 You'll also want, before you start:
 
-- An **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI. This powers
+- An **LLM API key** from one of: [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/settings/keys), or [Google Generative AI](https://aistudio.google.com/apikey). This powers
   the chat panel. Without one, the app still runs as a plain 3D globe viewer — the chat
   panel is simply omitted.
 - (Optional) A free [Cesium Ion](https://ion.cesium.com) access token, for high-quality

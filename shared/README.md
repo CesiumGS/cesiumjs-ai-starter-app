@@ -4,13 +4,11 @@ Shared tool configuration between backend and frontend: the enabled-tools allowl
 
 ## Structure
 
-```
-src/
-├── enabled-tools.ts    # ENABLED_CESIUM_TOOLS — which tools this app turns on
-├── tools/
-│   └── flyto-schema.ts # flyToShape — flyTo args contract (base + duration/easingFunction)
-└── index.ts            # Public exports
-```
+| File                                                                                                                          | Description                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [`src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts)           | `ENABLED_CESIUM_TOOLS` — which tools this app turns on                    |
+| [`src/tools/flyto-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/flyto-schema.ts) | `flyToShape` — `flyTo` args contract (base + `duration`/`easingFunction`) |
+| [`src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/index.ts)                           | Public exports                                                            |
 
 ## `ENABLED_CESIUM_TOOLS`
 
@@ -23,7 +21,7 @@ To toggle a tool, edit `enabled-tools.ts`. Each entry is type-checked against `C
 
 ## `flyToShape`
 
-This app's structural `flyTo` args contract — `flyToInputShape` from `@cesium-ai/tools-schemas/schemas` extended with `duration` and `easingFunction`. It carries no model-facing text, so the frontend can import it safely. The backend layers `.describe()` hints on top in `backend/src/tools/flyto-tool.ts`.
+This app's structural `flyTo` args contract — `flyToInputShape` from `@cesium-ai/tools-schemas/schemas` extended with `duration` and `easingFunction`. It carries no model-facing text, so the frontend can import it safely. The backend layers `.describe()` hints on top in [`backend/src/tools/flyto-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts).
 
 ## Scripts
 

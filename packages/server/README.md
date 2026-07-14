@@ -1,6 +1,6 @@
 # @cesium-ai/server
 
-Express router that mounts the AI SDK chat endpoint (`POST /api/chat`). Runs the `streamText` agent loop server-side — the LLM API key never reaches the browser. Model-agnostic: the host app owns provider selection, SDK instantiation, and API keys.
+[Express](https://expressjs.com) router that mounts the [AI SDK](https://sdk.vercel.ai/docs) chat endpoint (`POST /api/chat`). Runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop server-side — the LLM API key never reaches the browser. Model-agnostic: the host app owns provider selection, SDK instantiation, and API keys.
 
 ## Usage
 
@@ -64,11 +64,11 @@ const result = await runAgent({
 
 ## Exports
 
-| Export                  | Description                                            |
-| ----------------------- | ------------------------------------------------------ |
-| `createChatRouter`      | Builds the Express `Router` mounting `POST /api/chat`. |
-| `ChatRouterOptions`     | Type for `createChatRouter`'s options.                 |
-| `runAgent`              | Runs one agent-loop turn with `streamText`.            |
-| `DEFAULT_MAX_STEPS`     | Default `maxSteps` (`5`).                              |
-| `DEFAULT_SYSTEM_PROMPT` | Default system prompt string.                          |
-| `RunAgentOptions`       | Type for `runAgent`'s options.                         |
+| Export                  | Description                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `createChatRouter`      | Builds the [Express](https://expressjs.com) `Router` mounting `POST /api/chat`.                                                                  |
+| `ChatRouterOptions`     | Type for `createChatRouter`'s options.                                                                                                           |
+| `runAgent`              | Runs one agent-loop turn with [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text).                                      |
+| `DEFAULT_MAX_STEPS`     | Default `maxSteps` (`5`).                                                                                                                        |
+| `DEFAULT_SYSTEM_PROMPT` | Default system prompt string — see [`src/agent.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/agent.ts). |
+| `RunAgentOptions`       | Type for `runAgent`'s options.                                                                                                                   |

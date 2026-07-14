@@ -1,7 +1,7 @@
 # Tutorial: Using and Extending CesiumJS Viewer Tools
 
 This guide covers how to enable, wire up, and disable tools from the
-`@cesium-ai/tools-cesium` library in this starter app. The library ships
+`@cesium-ai/tools-schemas` library in this starter app. The library ships
 a catalogue of ready-made CesiumJS tools; you pick which ones your app exposes
 by editing **three app-layer files** — the library itself is never touched.
 
@@ -78,12 +78,12 @@ know which file to edit.
 
 ### The structural shape — `schemas.ts`
 
-[`packages/tools-cesium/src/schemas.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-cesium/src/schemas.ts)
+[`packages/tools-schemas/src/schemas.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/schemas.ts)
 holds the **args contract**: field names, types, min/max ranges, optional vs.
 required. This is a plain Zod object shape with no natural-language text.
 
 ```ts
-// packages/tools-cesium/src/schemas.ts (simplified)
+// packages/tools-schemas/src/schemas.ts (simplified)
 export const flyToInputShape = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
@@ -97,12 +97,12 @@ model-facing schema from it, layering natural-language hints on top.
 
 ### The model-facing hints — `flyTo.ts`
 
-[`packages/tools-cesium/src/tools/flyTo/flyTo.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-cesium/src/tools/flyTo/flyTo.ts)
+[`packages/tools-schemas/src/tools/flyTo/flyTo.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/tools/flyTo/flyTo.ts)
 holds the **human-readable text the LLM reads**: the tool `description` and
 per-field `.describe()` calls.
 
 ```ts
-// packages/tools-cesium/src/tools/flyTo/flyTo.ts (simplified)
+// packages/tools-schemas/src/tools/flyTo/flyTo.ts (simplified)
 export const DEFAULT_FLY_TO_DESCRIPTION =
   "Fly the camera to a geographic location with an animated transition.";
 
@@ -149,11 +149,11 @@ This separation also gives the design two security properties:
 
 The package therefore exposes three subpaths:
 
-| Subpath                           | Exports                                | Who imports it                                   |
-| --------------------------------- | -------------------------------------- | ------------------------------------------------ |
-| `@cesium-ai/tools-cesium`         | Full definitions incl. descriptions    | **Backend only.** Never import from client code. |
-| `@cesium-ai/tools-cesium/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`  | Both sides. String constants only.               |
-| `@cesium-ai/tools-cesium/schemas` | `<toolName>InputShape`, inferred types | Both sides. Structural shapes, no descriptions.  |
+| Subpath                            | Exports                                | Who imports it                                   |
+| ---------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| `@cesium-ai/tools-schemas`         | Full definitions incl. descriptions    | **Backend only.** Never import from client code. |
+| `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`  | Both sides. String constants only.               |
+| `@cesium-ai/tools-schemas/schemas` | `<toolName>InputShape`, inferred types | Both sides. Structural shapes, no descriptions.  |
 
 A contract change — e.g. tightening the lat/lon ranges — is a **single edit** to
 the structural shape in `schemas.ts` that both tiers pick up automatically. A
@@ -183,7 +183,7 @@ createCesiumTools({
 ```
 
 Omitting `description` keeps the default from
-[`packages/tools-cesium/src/tools/flyTo/flyTo.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-cesium/src/tools/flyTo/flyTo.ts)
+[`packages/tools-schemas/src/tools/flyTo/flyTo.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/tools/flyTo/flyTo.ts)
 (`DEFAULT_FLY_TO_DESCRIPTION`).
 
 ### Update individual field descriptions
@@ -204,7 +204,7 @@ const DEFAULT_FLY_TO_EXTENSION_DESCRIPTIONS = {
 
 Edit the string for whichever field you want to change. The base field hints
 (`latitude`, `longitude`, `altitude`) come from `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS`
-exported by `@cesium-ai/tools-cesium` — override any of them by adding the key
+exported by `@cesium-ai/tools-schemas` — override any of them by adding the key
 explicitly:
 
 ```ts
@@ -236,7 +236,7 @@ configuration:
 ```ts
 // shared/src/tools/flyto-schema.ts  (already exists — shown for reference)
 import { z } from "zod";
-import { flyToInputShape } from "@cesium-ai/tools-cesium/schemas";
+import { flyToInputShape } from "@cesium-ai/tools-schemas/schemas";
 
 export const flyToShape = z.object({
   ...flyToInputShape.shape,
@@ -263,7 +263,7 @@ use it directly in the executor.
 The full tool catalogue is documented in the
 [Tool Catalogue](../packages/tools-schemas/tools.md) reference page, which lists
 every tool name and what it does. All tools are defined in
-[`packages/tools-cesium/src/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-cesium/src/)
+[`packages/tools-schemas/src/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/)
 and can be enabled in the starter app by following Section 6.
 
 ---
@@ -288,14 +288,14 @@ export const ENABLED_CESIUM_TOOLS = [
 ```
 
 The `satisfies` constraint catches typos at compile time — every entry is
-checked against `CesiumToolName` from `@cesium-ai/tools-cesium/names`, so a
+checked against `CesiumToolName` from `@cesium-ai/tools-schemas/names`, so a
 name that isn't a real tool fails to build.
 
 Both tiers import this array from `@cesium-ai/sample-config` and use it
 differently:
 
 **Backend** — [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)
-passes it to `createCesiumTools` from `@cesium-ai/tools-cesium`, which builds
+passes it to `createCesiumTools` from `@cesium-ai/tools-schemas`, which builds
 the tool registry the model is offered. A tool not in this list is never
 registered, so the model cannot call it:
 
@@ -335,7 +335,7 @@ camera tools in `camera.ts`).
 
 The executor must:
 
-1. Import the tool's **structural shape** from `@cesium-ai/tools-cesium/schemas`
+1. Import the tool's **structural shape** from `@cesium-ai/tools-schemas/schemas`
    (never from the root — that would pull descriptions into the bundle).
 2. Re-validate `rawArgs` before touching the `Viewer` — the payload is
    AI-generated and therefore untrusted.
@@ -346,7 +346,7 @@ The executor must:
 // frontend/src/tools/entity.ts
 import type { Viewer } from "cesium";
 import { Cartesian3, Color } from "cesium";
-import { entityAddPointInputShape } from "@cesium-ai/tools-cesium/schemas";
+import { entityAddPointInputShape } from "@cesium-ai/tools-schemas/schemas";
 
 export interface EntityResult {
   success: boolean;
@@ -449,12 +449,12 @@ from `ENABLED_CESIUM_TOOLS` as described above.
 
 ## 8. Quick reference
 
-| I want to…                                   | Edit                                                                                                                                                                             |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Turn a tool on                               | [`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts) — add name to `ENABLED_CESIUM_TOOLS`                  |
-| Turn a tool off                              | Same file — remove the name                                                                                                                                                      |
-| Change how a tool runs in the browser        | [`frontend/src/tools/<groupName>.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/) — edit the executor                                     |
-| Wire a new executor into the dispatch map    | [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) — add entry to `TOOL_EXECUTORS`   |
-| Extend a tool's input schema with new fields | [`shared/src/tools/<toolName>-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/) — spread the base shape and add fields                |
-| Add guidance to the system prompt            | [`packages/server/src/agent.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/agent.ts) — extend `DEFAULT_SYSTEM_PROMPT`                    |
-| See what tools the library offers            | [Tool Catalogue](../packages/tools-schemas/tools.md) or [`packages/tools-cesium/src/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-cesium/src/) |
+| I want to…                                   | Edit                                                                                                                                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Turn a tool on                               | [`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts) — add name to `ENABLED_CESIUM_TOOLS`                    |
+| Turn a tool off                              | Same file — remove the name                                                                                                                                                        |
+| Change how a tool runs in the browser        | [`frontend/src/tools/<groupName>.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/) — edit the executor                                       |
+| Wire a new executor into the dispatch map    | [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) — add entry to `TOOL_EXECUTORS`     |
+| Extend a tool's input schema with new fields | [`shared/src/tools/<toolName>-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/) — spread the base shape and add fields                  |
+| Add guidance to the system prompt            | [`packages/server/src/agent.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/agent.ts) — extend `DEFAULT_SYSTEM_PROMPT`                      |
+| See what tools the library offers            | [Tool Catalogue](../packages/tools-schemas/tools.md) or [`packages/tools-schemas/src/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/) |

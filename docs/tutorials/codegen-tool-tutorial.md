@@ -1,6 +1,8 @@
 # Tutorial: Using the Codegen Tool
 
-The `executeCesiumCode` tool lets users describe what they want to see on the globe in plain English. The backend translates that description into verified CesiumJS JavaScript, which the browser then executes against the live `Viewer`. This tutorial explains how to use the tool, what you can configure, and how to tune its behaviour.
+<img src="../../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
+
+This tutorial covers the `executeCesiumCode` tool provided by the [`@cesium-ai/codegen-cesium`](../packages/codegen-cesium/index.md) package. The tool lets users describe what they want to see on the globe in plain English. The backend translates that description into verified CesiumJS JavaScript, which the browser then executes against the live `Viewer`. This tutorial explains how to use the tool, what you can configure, and how to tune its behaviour.
 
 For a deep-dive into the internal generation pipeline, see the companion
 [How Codegen Works](codegen-pipeline.md) guide.
@@ -18,36 +20,7 @@ _"draw a red point at the Eiffel Tower"_. Here is what happens:
 4. On approval, the backend runs the full generation pipeline (domain matching → prompt building → LLM generation → AST verification → optional retry).
 5. Verified code is streamed back to the browser, which executes it against the live `Viewer`.
 
-```mermaid
-sequenceDiagram
-    actor User
-    participant UI as Chat Panel (React)
-    participant Viewer as CesiumJS Viewer
-    participant API as Backend API
-    participant Codegen as Codegen Pipeline
-    participant LLM as LLM Provider
-
-    User->>UI: add a polygon over France
-    UI->>API: POST /api/chat
-    API-->>UI: tool call: executeCesiumCode(intent)
-    UI-->>User: approval prompt — show intent
-    User->>UI: approve
-    UI-->>API: tool result (approved)
-    API->>Codegen: generateVerifiedCesiumCode(intent)
-    Codegen->>LLM: buildCodegenPrompt + skills context
-    LLM-->>Codegen: candidate JavaScript
-    Codegen->>Codegen: verifyCesiumCode (AST)
-    alt verified
-        Codegen-->>API: verified true, code string
-        API-->>UI: SSE: code string
-        UI->>Viewer: execute code against viewer
-        Viewer-->>UI: render updated
-    else verification failed after retries
-        Codegen-->>API: verified false, error
-        API-->>UI: SSE: error message
-    end
-    UI-->>User: confirmation or error
-```
+For the full request lifecycle sequence diagram, see [Codegen Architecture — Request lifecycle](../architectures/architecture-codegen.md#request-lifecycle).
 
 ---
 
@@ -99,7 +72,7 @@ abandon the request. No code is generated or executed.
 
 ### Environment variables
 
-These are validated through Zod in `backend/src/utils/env.ts` and read at startup.
+These are validated through [Zod](https://zod.dev) in [`backend/src/utils/env.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/env.ts) and read at startup.
 
 | Variable               | Default | Description                                                                                                                                                                            |
 | ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -115,7 +88,7 @@ CODEGEN_MAX_ATTEMPTS=5
 
 ### Programmatic options
 
-`createExecuteCesiumCodeTool` (used in `backend/src/app.ts`) accepts the same options
+`createExecuteCesiumCodeTool` (used in [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)) accepts the same options
 programmatically, letting you override env defaults without changing environment configuration:
 
 ```ts
@@ -144,7 +117,7 @@ generateVerifiedCesiumCode({
 
 ## 5. AST verifier rules
 
-The verifier (`verifyCesiumCode` in `packages/codegen-cesium/src/pipeline/ast-verifier.ts`)
+The verifier (`verifyCesiumCode` in [`packages/codegen-cesium/src/pipeline/ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts))
 runs **parse-only static analysis** — it never executes the candidate code. All violations
 are collected before the result is returned, so a single failing code block reports every
 problem at once.
@@ -158,7 +131,7 @@ problem at once.
 
 ### Parse check
 
-The code is parsed with `acorn` (`ecmaVersion: "latest"`, `sourceType: "script"`). A parse
+The code is parsed with [`acorn`](https://github.com/acornjs/acorn) (`ecmaVersion: "latest"`, `sourceType: "script"`). A parse
 error is a violation. If parsing fails entirely, remaining checks are skipped.
 
 ### Banned constructs
@@ -203,7 +176,7 @@ most obvious infinite loops but is not a termination proof.
 
 ## 6. How results flow back to the browser
 
-The tool's `execute` handler in `backend/src/tools/execute-cesium-code-tool.ts` returns either:
+The tool's `execute` handler in [`backend/src/tools/execute-cesium-code-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/execute-cesium-code-tool.ts) returns either:
 
 ```ts
 {

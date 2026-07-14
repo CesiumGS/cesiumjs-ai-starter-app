@@ -28,7 +28,7 @@ flowchart LR
 ```
 
 **Split-execution model:** viewer tools (camera navigation, entity manipulation) are
-streamed to the browser and executed there, against the live `Viewer` instance. Any future
+streamed via [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) to the browser and executed there, against the live `Viewer` instance. Any future
 MCP-backed tools would run entirely server-side and never stream as client tool calls. The
 **LLM API key never reaches the browser** — all inference happens behind the Node.js API.
 

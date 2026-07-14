@@ -33,10 +33,10 @@ executed inside `@cesium-ai/codegen-cesium`.
 
 ## Stage 1 — Domain matching
 
-**File:** `packages/codegen-cesium/src/pipeline/domain-matcher.ts`
+**File:** [`packages/codegen-cesium/src/pipeline/domain-matcher.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/domain-matcher.ts)
 
 `matchBestSkill(intent)` ranks every available CesiumJS skill domain against the user's
-intent using **BM25** (a term-frequency/inverse-document-frequency ranking algorithm). It
+intent using **[BM25](https://en.wikipedia.org/wiki/Okapi_BM25)** (a term-frequency/inverse-document-frequency ranking algorithm). It
 returns the top-N `CesiumSkill` objects whose score exceeds a minimum threshold.
 
 ```
@@ -47,7 +47,7 @@ BM25 ranking against 14 skill domains
 Top match: Entities/DataSources (score > 1.0)
 ```
 
-Skills are loaded from the `@cesium/cesiumjs-skills` dependency. Each skill is a `SKILL.md`
+Skills are loaded from the [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) dependency. Each skill is a `SKILL.md`
 file with YAML frontmatter (`name`, `description`) and a Markdown body of CesiumJS API
 guidance. The loader caches the full skill set after first load so subsequent calls pay no
 I/O cost.
@@ -77,7 +77,7 @@ Increasing it injects broader context at the cost of a longer prompt.
 
 ## Stage 2 — Prompt building
 
-**File:** `packages/codegen-cesium/src/pipeline/prompt-builder.ts`
+**File:** [`packages/codegen-cesium/src/pipeline/prompt-builder.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/prompt-builder.ts)
 
 `buildCodegenPrompt({ intent, skills, maxSkills })` assembles the generation prompt that is
 sent to the LLM. The prompt:
@@ -101,17 +101,11 @@ without hallucination.
 
 ## Stage 3 — LLM generation
 
-**File:** `packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts`
+**File:** [`packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts)
 
-The assembled prompt is passed to the AI SDK `generateText({ model, prompt })` call. The
+The assembled prompt is passed to the [AI SDK](https://sdk.vercel.ai/docs) [`generateText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/generate-text)`({ model, prompt })` call. The
 `model` parameter is the `LanguageModel` instance supplied by the caller — the pipeline is
-completely provider-agnostic. Default models configured in the starter app are:
-
-| Provider  | Default model     |
-| --------- | ----------------- |
-| OpenAI    | `gpt-4.1`         |
-| Anthropic | `claude-opus-4-8` |
-| Google    | `gemini-2.5-pro`  |
+completely provider-agnostic.
 
 The call produces a single completion string. On success that string is a block of
 JavaScript; on LLM-level failure (rate limit, timeout, context overflow) an exception is
@@ -131,13 +125,14 @@ the completion string, leaving bare JavaScript ready for parsing.
 
 ## Stage 5 — AST verification
 
-**File:** `packages/codegen-cesium/src/pipeline/ast-verifier.ts`
+**File:** [`packages/codegen-cesium/src/pipeline/ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts)
 
-`verifyCesiumCode(code)` runs **parse-only static analysis** using `acorn` and `acorn-walk`.
+`verifyCesiumCode(code)` runs **parse-only static analysis** using [`acorn`](https://github.com/acornjs/acorn) and [`acorn-walk`](https://github.com/acornjs/acorn/tree/master/acorn-walk).
 The code is never executed during verification. All violations are collected before the
 result is returned.
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '17px'}}}%%
 flowchart LR
     subgraph Verifier["verifyCesiumCode"]
         SZ["Size check<br/>maxLength · maxLines"]
@@ -194,6 +189,7 @@ is ever returned as verified.
 ## Data flow summary
 
 ```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '17px'}}}%%
 flowchart LR
     subgraph Input
         I([intent: string])
@@ -230,8 +226,8 @@ flowchart LR
 
 ## Skills data source
 
-Skills are loaded at runtime from the `@cesium/cesiumjs-skills` npm dependency
-(currently a GitHub branch reference in `package.json`). The loader resolves the installed
+Skills are loaded at runtime from the [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) npm dependency
+(currently a GitHub branch reference in [`package.json`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/package.json)). The loader resolves the installed
 package via `require.resolve("@cesium/cesiumjs-skills/package.json")`, reads all
 `skills/cesiumjs-*/SKILL.md` files, parses their YAML frontmatter, and caches the result.
 

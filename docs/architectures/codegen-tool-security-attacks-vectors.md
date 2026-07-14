@@ -166,7 +166,7 @@ the primary defence against whatever the LLM produces.
 
 **Mitigations:**
 
-1. **Static AST Verification (Gate 1)** — The verifier operates in parse-only mode — it
+1. **Static [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree) Verification (Gate 1)** — The verifier ([`ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts), powered by [`acorn`](https://github.com/acornjs/acorn)) operates in parse-only mode — it
    never evaluates the code — and uses a real AST walk rather than regex matching (regex
    can be bypassed via string concatenation or unicode escapes). It rejects:
    - `eval(...)` and bare `eval` references
@@ -195,7 +195,7 @@ the primary defence against whatever the LLM produces.
 
 ### 4. Validation Bypass
 
-**Where it occurs:** The AST verifier (`verifyCesiumCode`) in `@cesium-ai/codegen-cesium`.
+**Where it occurs:** The [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree) verifier (`verifyCesiumCode`) in [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium).
 
 Static verification has inherent limits. Some patterns that the verifier does not currently
 block include:
@@ -337,8 +337,8 @@ containment.
 
 ### Option B: QuickJS WASM sandbox
 
-Generated code runs inside QuickJS-emscripten — a JavaScript interpreter compiled to
-WebAssembly — with an explicit timeout and heap cap. The viewer is exposed through an
+Generated code runs inside [QuickJS-emscripten](https://github.com/justjake/quickjs-emscripten) — a JavaScript interpreter compiled to
+[WebAssembly](https://webassembly.org) — with an explicit timeout and heap cap. The viewer is exposed through an
 opaque handle bridge, so the sandbox cannot reach page globals.
 
 This provides strong process-level isolation, handles infinite loops gracefully (via

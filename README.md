@@ -71,14 +71,14 @@ Browser                          Server
          └───────────────────────────────────┘
 ```
 
-Viewer tools (camera, entities) are streamed to the browser and executed against the live `Viewer`. The workspace packages provide the reusable pieces:
+Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) to the browser and executed against the live `Viewer`. The workspace packages provide the reusable pieces:
 
-| Package                                                 | Role                                                                                             |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| [`@cesium-ai/server`](packages/server/)                 | Express router — mounts `POST /api/chat`, runs the `streamText` agent loop                       |
-| [`@cesium-ai/tools-schemas`](packages/tools-schemas/)   | Zod-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute` |
-| [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/) | Intent → AST-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition       |
-| [`@cesium-ai/sample-config`](shared/)                   | App-level tool allowlist and shared `flyTo` args contract                                        |
+| Package                                                 | Role                                                                                                                                                                |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@cesium-ai/server`](packages/server/)                 | [Express](https://expressjs.com) router — mounts `POST /api/chat`, runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop |
+| [`@cesium-ai/tools-schemas`](packages/tools-schemas/)   | [Zod](https://zod.dev)-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute`                                                 |
+| [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/) | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                    |
+| [`@cesium-ai/sample-config`](shared/)                   | App-level tool allowlist and shared `flyTo` args contract                                                                                                           |
 
 See [Architecture](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architecture/) for more detail.
 
@@ -88,7 +88,7 @@ See [Architecture](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectu
 
 **Enable or disable a tool:** edit `ENABLED_CESIUM_TOOLS` in [`shared/src/enabled-tools.ts`](shared/src/enabled-tools.ts). Both the backend registry and frontend executor map derive from this array — a typo fails to build, and enabling a tool without a client-side executor also fails to compile.
 
-**Update a tool's schema:** structural args rules live in `flyToInputShape` (both tiers derive from it); model-facing descriptions live in `flyTo.ts` backend-only and are never bundled into the client.
+**Update a tool's schema:** structural args rules live in `flyToInputShape` (both tiers derive from it); model-facing descriptions live in [`flyTo.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts) backend-only and are never bundled into the client.
 
 See the [Cesium Viewer Tools Tutorial](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/cesium-viewer-tools-tutorial/) for the full step-by-step walkthrough.
 
@@ -96,18 +96,18 @@ See the [Cesium Viewer Tools Tutorial](https://cesiumgs.github.io/cesiumjs-ai-st
 
 ## Environment Variables
 
-| Variable                       | Required          | Description                                                                   |
-| ------------------------------ | ----------------- | ----------------------------------------------------------------------------- |
-| `VITE_CESIUM_ION_ACCESS_TOKEN` | Yes               | Cesium Ion token — baked into the client bundle at build time.                |
-| `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                 |
-| `OPENAI_API_KEY`               | When chat enabled | Required when `AI_PROVIDER=openai`.                                           |
-| `ANTHROPIC_API_KEY`            | When chat enabled | Required when `AI_PROVIDER=anthropic`.                                        |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                           |
-| `AI_MODEL`                     | No                | Override the default model for the selected provider.                         |
-| `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                        |
-| `CODEGEN_MAX_SKILLS`           | No                | Max BM25-matched skill domains inlined in the codegen prompt (default `1`).   |
-| `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts on AST verification failure (default `3`).          |
-| `VITE_API_BASE_URL`            | No                | Backend URL. In Docker this is `""` so nginx proxies `/api/*` to the backend. |
+| Variable                       | Required          | Description                                                                                                                |
+| ------------------------------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_CESIUM_ION_ACCESS_TOKEN` | Yes               | Cesium Ion token — baked into the client bundle at build time.                                                             |
+| `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                                                              |
+| `OPENAI_API_KEY`               | When chat enabled | Required when `AI_PROVIDER=openai`.                                                                                        |
+| `ANTHROPIC_API_KEY`            | When chat enabled | Required when `AI_PROVIDER=anthropic`.                                                                                     |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                                                                        |
+| `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                      |
+| `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                     |
+| `CODEGEN_MAX_SKILLS`           | No                | Max [BM25](https://en.wikipedia.org/wiki/Okapi_BM25)-matched skill domains inlined in the codegen prompt (default `1`).    |
+| `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts on [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree) verification failure (default `3`). |
+| `VITE_API_BASE_URL`            | No                | Backend URL. In Docker this is `""` so nginx proxies `/api/*` to the backend.                                              |
 
 See [`.env.example`](.env.example) for the complete list.
 

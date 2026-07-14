@@ -56,8 +56,8 @@ Because of the graph above, packages must be built before the apps that depend o
 | `npm run build:packages` | Builds `tools-schemas` → `sample-config` → `server` in dependency order     |
 | `npm run build`          | `build:packages`, then builds `frontend` and `backend`                      |
 | `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode) |
-| `npm test`               | Runs the Vitest suite across the workspace                                  |
-| `npm run test:e2e`       | Runs the Playwright end-to-end suite                                        |
+| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace            |
+| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite              |
 
 ## Packages
 

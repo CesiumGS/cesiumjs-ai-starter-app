@@ -1,5 +1,7 @@
 # CesiumJS AI Starter App
 
+<img src="assets/ty-calm2.png" alt="Ty mascot" class="doc-illustration" />
+
 A ready-to-run starter that pairs a [CesiumJS](https://cesium.com/platform/cesiumjs/)
 3D globe viewer with an LLM-powered chat interface. The LLM drives the globe through
 structured tool calls (e.g. _"fly to Paris"_) while the **LLM API key never reaches the
