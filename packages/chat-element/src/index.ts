@@ -1,3 +1,4 @@
 export { AiChatPanel } from "./AiChatPanel";
 export type { AiChatPanelProps } from "./AiChatPanel";
-export type { Message, ToolInvocation } from "./chat-client";
+export { ChatClient } from "./chat-client";
+export type { Message, ToolExecutionOutcome, ToolInvocation } from "./chat-client";

@@ -11,7 +11,8 @@ src/
 │   ├── CesiumGlobe.tsx          # CesiumJS Viewer lifecycle wrapper
 │   └── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
 ├── tools/
-│   └── camera.ts                 # flyToLocation — client-side flyTo executor
+│   ├── camera.ts                 # flyToLocation — client-side flyTo executor
+│   └── execute-cesium-code.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
 ├── utils/
 │   ├── cesium-loader.ts          # Viewer initialization (terrain, imagery, defaults)
 │   └── config.ts                 # Reads VITE_* env vars (Ion token, chat API base URL)
@@ -22,7 +23,11 @@ src/
 
 `ChatPanel.tsx` keys `TOOL_EXECUTORS` by `EnabledCesiumTool` (from `ENABLED_CESIUM_TOOLS` in `@cesium-ai/sample-config`, see [`shared/`](../shared)), so it's self-checking in both directions: it fails to compile unless there's a client-side executor for every enabled tool, and it rejects an executor for any non-enabled tool. It also gates every incoming tool call against that same allowlist at runtime as defense-in-depth, so a disabled or spoofed tool call never drives the live `Viewer`.
 
-The frontend imports only two schema-free pieces from `@cesium-ai/tools-cesium`: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only.
+The frontend imports only schema-free pieces from these packages: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only. `flyTo`'s name/shape come from `@cesium-ai/tools-schemas`; `executeCesiumCode`'s come from `@cesium-ai/codegen-cesium`, which owns that tool since it can't run directly against a `Viewer` the way `flyTo` does (see [`packages/tools-schemas/README.md`](../packages/tools-schemas/README.md)).
+
+## `executeCesiumCode`: server-verified, client-executed
+
+`executeCesiumCode` is a "Code Mode" tool resolved server-side — `@cesium-ai/codegen-cesium` generates and verifies the snippet via AST inspection, then streams it to `ChatPanel.tsx`'s `handleServerToolResult` (see [`backend/README.md`](../backend/README.md)). After user approval, `runApprovedCode` executes it via `new Function("viewer", "Cesium", code)` with try/catch error handling. The AST verification and frontend try/catch are defense-in-depth only; a real runtime isolation boundary (sandboxed interpreter, capability proxy) is planned for a follow-up PR.
 
 ## Environment
 

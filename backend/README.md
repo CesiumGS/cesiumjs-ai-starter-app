@@ -10,7 +10,8 @@ See the [top-level README](../README.md) for architecture, quick start, and the 
 src/
 ├── app.ts                 # Express app: CORS, JSON body parsing, /health, rate limiter, chat router
 ├── tools/
-│   └── flyto-tool.ts       # This app's model-facing flyTo input schema (extends the shared shape with descriptions)
+│   ├── flyto-tool.ts       # This app's model-facing flyTo input schema (extends the shared shape with descriptions)
+│   └── execute-cesium-code-tool.ts # This app's server-executed executeCesiumCode tool (wraps @cesium-ai/codegen-cesium)
 └── utils/
     ├── env.ts              # Zod-validated, typed environment config (loads .env)
     ├── providers.ts        # LLM provider factory — resolves an AI SDK LanguageModel from Env
@@ -21,7 +22,11 @@ src/
 
 ## Tool surface
 
-The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sample-config`, in [`shared/`](../shared)) via `createCesiumTools` (`@cesium-ai/tools-cesium`), so the model is only ever offered tools this app turned on. `flyTo`'s model-facing input schema is this app's extended `flyToInputSchema` (`src/tools/flyto-tool.ts`), which layers `.describe()` hints onto the shared structural shape (`flyToShape` in `@cesium-ai/sample-config`) that the frontend also validates against — see [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README.
+The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sample-config`, in [`shared/`](../shared)) via `createCesiumTools` (`@cesium-ai/tools-schemas`), so the model is only ever offered tools this app turned on. `flyTo`'s model-facing input schema is this app's extended `flyToInputSchema` (`src/tools/flyto-tool.ts`), which layers `.describe()` hints onto the shared structural shape (`flyToShape` in `@cesium-ai/sample-config`) that the frontend also validates against — see [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README.
+
+### `executeCesiumCode`: code generation and verification
+
+`executeCesiumCode` is built in `src/tools/execute-cesium-code-tool.ts` and wraps the code generation from `@cesium-ai/codegen-cesium`. The backend generates and verifies code (AST-based), then the frontend receives the verified code and executes it directly against the live Viewer. AST-based verification is the primary security gate; runtime isolation is recommended for production deployments.
 
 ## Environment
 

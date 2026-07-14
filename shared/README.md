@@ -1,6 +1,6 @@
 # Shared (`@cesium-ai/sample-config`)
 
-A small workspace package: this sample app's tool selection, shared as the single source of truth between the [`backend/`](../backend) and [`frontend/`](../frontend). It holds app-level configuration, not tool implementations — those live in `packages/tools-cesium`.
+A small workspace package: this sample app's tool selection, shared as the single source of truth between the [`backend/`](../backend) and [`frontend/`](../frontend). It holds app-level configuration, not tool implementations — those live in `packages/tools-schemas`.
 
 ## Structure
 
@@ -23,7 +23,7 @@ To enable or disable a tool, edit the array in `enabled-tools.ts`. Each entry is
 
 ## `flyToShape`
 
-This app's structural `flyTo` args contract: the library's base shape (`flyToInputShape` from `@cesium-ai/tools-cesium/schemas`) extended with the two fields this app adds — `duration` and `easingFunction`. It carries no model-facing description text, so the frontend can import it (via `flyToLocation`'s validation) without pulling LLM-facing hints into the client bundle. The backend layers `.describe()` hints on top of this same shape in `backend/src/tools/flyto-tool.ts` to build the model-facing schema.
+This app's structural `flyTo` args contract: the library's base shape (`flyToInputShape` from `@cesium-ai/tools-schemas/schemas`) extended with the two fields this app adds — `duration` and `easingFunction`. It carries no model-facing description text, so the frontend can import it (via `flyToLocation`'s validation) without pulling LLM-facing hints into the client bundle. The backend layers `.describe()` hints on top of this same shape in `backend/src/tools/flyto-tool.ts` to build the model-facing schema.
 
 ## Scripts
 

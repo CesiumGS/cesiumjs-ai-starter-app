@@ -30,6 +30,8 @@ describe("env parsing", () => {
       AI_PROVIDER: undefined,
       ALLOWED_ORIGIN: undefined,
       RATE_LIMIT_RPM: undefined,
+      CODEGEN_MAX_SKILLS: undefined,
+      CODEGEN_MAX_ATTEMPTS: undefined,
       TELEMETRY_ENABLED: undefined,
     });
 
@@ -37,6 +39,8 @@ describe("env parsing", () => {
     expect(env.AI_PROVIDER).toBe("openai");
     expect(env.ALLOWED_ORIGIN).toEqual(["http://localhost:5173"]);
     expect(env.RATE_LIMIT_RPM).toBe(20);
+    expect(env.CODEGEN_MAX_SKILLS).toBe(1);
+    expect(env.CODEGEN_MAX_ATTEMPTS).toBe(3);
     expect(env.TELEMETRY_ENABLED).toBe(false);
   });
 
@@ -118,6 +122,28 @@ describe("env parsing", () => {
 
   it("rejects a non-positive RATE_LIMIT_RPM", async () => {
     await expect(loadEnv({ RATE_LIMIT_RPM: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("coerces CODEGEN_MAX_SKILLS to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_SKILLS: "3" });
+    expect(env.CODEGEN_MAX_SKILLS).toBe(3);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_SKILLS", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_SKILLS: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("coerces CODEGEN_MAX_ATTEMPTS to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_ATTEMPTS: "5" });
+    expect(env.CODEGEN_MAX_ATTEMPTS).toBe(5);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_ATTEMPTS", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_ATTEMPTS: "0" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
   });

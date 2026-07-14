@@ -19,8 +19,15 @@ import type {
   Message,
   StreamToolCall,
   StreamToolResult,
+  ToolExecutionOutcome,
   ToolInvocation,
 } from "./types";
+
+/** A server tool result outcome the host is still computing, tied to the invocation it updates. */
+interface PendingServerResult {
+  invocation: ToolInvocation;
+  promise: Promise<ToolExecutionOutcome | void>;
+}
 
 /**
  * Default hard cap on consecutive server round trips driven by client-resolved
@@ -40,6 +47,8 @@ export class ChatClient {
   private onUpdate: () => void;
   private onError: (error: Error) => void;
   private onToolCall: ChatClientOptions["onToolCall"];
+  private onServerToolResult: ChatClientOptions["onServerToolResult"];
+  private onApprovalRequired: ChatClientOptions["onApprovalRequired"];
   private maxToolCallRounds: number;
   private abortController: AbortController | null = null;
   private nextId = 0;
@@ -50,6 +59,8 @@ export class ChatClient {
     this.onUpdate = options.onUpdate;
     this.onError = options.onError;
     this.onToolCall = options.onToolCall;
+    this.onServerToolResult = options.onServerToolResult;
+    this.onApprovalRequired = options.onApprovalRequired;
     this.maxToolCallRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_CALL_ROUNDS;
   }
 
@@ -144,6 +155,8 @@ export class ChatClient {
     let buffer = "";
     let assistantMsg: Message | null = null;
     const pendingToolCalls: ToolInvocation[] = [];
+    const pendingApprovals: ToolInvocation[] = [];
+    const pendingServerResults: PendingServerResult[] = [];
 
     const ensureAssistantMsg = () => (assistantMsg ??= this.createAssistantMessage());
 
@@ -157,7 +170,13 @@ export class ChatClient {
         buffer = lines.pop()!; // keep incomplete line in buffer
 
         for (const line of lines) {
-          this.handleStreamLine(line, ensureAssistantMsg, pendingToolCalls);
+          this.handleStreamLine(
+            line,
+            ensureAssistantMsg,
+            pendingToolCalls,
+            pendingApprovals,
+            pendingServerResults,
+          );
         }
       }
     } catch (err) {
@@ -171,11 +190,14 @@ export class ChatClient {
     }
 
     await this.resolveClientToolCalls(pendingToolCalls);
+    await this.resolveApprovals(pendingApprovals);
+    const continueForServerResults = await this.resolveServerToolOutcomes(pendingServerResults);
 
-    // If there were tool calls, send another request so the model can
-    // continue with the results (resolveClientToolCalls above guarantees
-    // every entry here is now in "result" state).
-    if (pendingToolCalls.length > 0) {
+    // If there were tool calls or approval decisions to send back, or a host
+    // reaction to a server-resolved result asked to continue, make another
+    // request so the model can react (the resolve* calls above guarantee
+    // every entry here is now resolved).
+    if (pendingToolCalls.length > 0 || pendingApprovals.length > 0 || continueForServerResults) {
       this.toolCallRound++;
       if (this.toolCallRound > this.maxToolCallRounds) {
         this.emitError(
@@ -209,13 +231,17 @@ export class ChatClient {
    * Dispatch a single decoded chunk. We act on the chunks this client renders
    * — `text-delta`, `tool-input-available` (a tool call to run client-side),
    * `tool-output-available` (a server-resolved result), `tool-input-error`/
-   * `tool-output-error` (a server-side tool failure), and `error` — and
-   * ignore lifecycle chunks (`start`, `text-start`/`text-end`, `finish`, …).
+   * `tool-output-error` (a server-side tool failure), `tool-approval-request`/
+   * `tool-output-denied` (the `needsApproval` human-in-the-loop gate), and
+   * `error` — and ignore lifecycle chunks (`start`, `text-start`/`text-end`,
+   * `finish`, …).
    */
   private handleStreamLine(
     line: string,
     ensureAssistantMsg: EnsureAssistantMessage,
     pendingToolCalls: ToolInvocation[],
+    pendingApprovals: ToolInvocation[],
+    pendingServerResults: PendingServerResult[],
   ) {
     const chunk = parseSSELine(line);
     if (!chunk) return;
@@ -235,6 +261,16 @@ export class ChatClient {
         this.applyToolResult(
           { toolCallId: chunk.toolCallId!, result: chunk.output },
           ensureAssistantMsg,
+        );
+        // Note: unlike `tool-input-available`, the `tool-output-available`
+        // chunk carries no `toolName` of its own — the tool name was
+        // established by the earlier `tool-input-available` chunk for the
+        // same `toolCallId`, so we look the invocation back up here.
+        this.fireServerToolResult(
+          chunk.toolCallId!,
+          chunk.output,
+          ensureAssistantMsg,
+          pendingServerResults,
         );
         break;
       case "tool-input-error":
@@ -263,12 +299,61 @@ export class ChatClient {
           ensureAssistantMsg,
         );
         break;
+      case "tool-approval-request":
+        // The server declared this tool `needsApproval` and paused the agent
+        // loop right after `tool-input-available` established its args — the
+        // invocation already exists, so we just flag it as awaiting a human
+        // decision instead of creating a new one.
+        this.addToolApprovalRequest(
+          {
+            toolCallId: chunk.toolCallId!,
+            approvalId: chunk.approvalId!,
+            isAutomatic: chunk.isAutomatic,
+            signature: chunk.signature,
+          },
+          ensureAssistantMsg,
+          pendingApprovals,
+        );
+        break;
+      case "tool-output-denied":
+        // The user (or an `isAutomatic` policy) denied the approval request —
+        // the tool's `execute` never ran. Surface it exactly like any other
+        // resolved tool result so the transcript and the agent loop both move
+        // on; the model sees this and can respond to the decline in text.
+        this.applyToolResult(
+          {
+            toolCallId: chunk.toolCallId!,
+            result: { error: "Tool call was declined." },
+          },
+          ensureAssistantMsg,
+        );
+        break;
       case "error":
         this.emitError(chunk.errorText ?? "Stream error");
         break;
       // `start`, `text-start`/`text-end`, `tool-input-start`, `finish`, … are
       // lifecycle markers with nothing to render — let the stream carry on.
     }
+  }
+
+  /**
+   * Finds a previously recorded tool invocation by `toolCallId`, searching
+   * every assistant message rather than just the one currently being built by
+   * `parseStream`. Needed because a `needsApproval`-gated call's `call` /
+   * `approval-requested` state is recorded in one HTTP turn's message, but its
+   * eventual `tool-output-available`/`tool-output-denied` resolution can
+   * arrive in a *later* turn's stream (a fresh `parseStream` call, and
+   * therefore a fresh assistant message) once the client resends the approval
+   * decision and the server resumes the paused step.
+   */
+  private findToolInvocation(toolCallId: string): ToolInvocation | undefined {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const invocation = this.messages[i].toolInvocations?.find(
+        (tool) => tool.toolCallId === toolCallId,
+      );
+      if (invocation) return invocation;
+    }
+    return undefined;
   }
 
   private appendTextDelta(text: string, ensureAssistantMsg: EnsureAssistantMessage) {
@@ -295,11 +380,40 @@ export class ChatClient {
     this.onUpdate();
   }
 
+  /**
+   * Flags an already-recorded invocation (added by an earlier
+   * `tool-input-available` chunk) as awaiting a human approval decision, and
+   * queues it for {@link resolveApprovals}. If no matching invocation exists
+   * (shouldn't happen — the server always streams the call before pausing for
+   * approval) this is a defensive no-op rather than a thrown error.
+   */
+  private addToolApprovalRequest(
+    approvalRequest: {
+      toolCallId: string;
+      approvalId: string;
+      isAutomatic?: boolean;
+      signature?: string;
+    },
+    ensureAssistantMsg: EnsureAssistantMessage,
+    pendingApprovals: ToolInvocation[],
+  ) {
+    ensureAssistantMsg();
+    const invocation = this.findToolInvocation(approvalRequest.toolCallId);
+    if (!invocation) return;
+
+    invocation.state = "approval-requested";
+    invocation.approval = {
+      id: approvalRequest.approvalId,
+      isAutomatic: approvalRequest.isAutomatic,
+      signature: approvalRequest.signature,
+    };
+    pendingApprovals.push(invocation);
+    this.onUpdate();
+  }
+
   private applyToolResult(result: StreamToolResult, ensureAssistantMsg: EnsureAssistantMessage) {
-    const message = ensureAssistantMsg();
-    const invocation = message.toolInvocations!.find(
-      (tool) => tool.toolCallId === result.toolCallId,
-    );
+    ensureAssistantMsg();
+    const invocation = this.findToolInvocation(result.toolCallId);
 
     if (invocation) {
       invocation.state = "result";
@@ -307,6 +421,65 @@ export class ChatClient {
     }
 
     this.onUpdate();
+  }
+
+  /**
+   * Starts {@link ChatClientOptions.onServerToolResult} for a server-resolved
+   * `tool-output-available` chunk, once the invocation it belongs to (whose
+   * `toolName` was recorded when its `tool-input-available` chunk arrived) can
+   * be found. Doesn't block stream parsing — the callback's promise is queued
+   * into `pendingServerResults` and only awaited by
+   * {@link resolveServerToolOutcomes} once the current stream finishes, mirroring
+   * how `pendingToolCalls`/`pendingApprovals` are resolved after the loop.
+   */
+  private fireServerToolResult(
+    toolCallId: string,
+    output: unknown,
+    ensureAssistantMsg: EnsureAssistantMessage,
+    pendingServerResults: PendingServerResult[],
+  ) {
+    if (!this.onServerToolResult) return;
+
+    ensureAssistantMsg();
+    const invocation = this.findToolInvocation(toolCallId);
+    if (!invocation) return;
+
+    const promise = Promise.resolve().then(() =>
+      this.onServerToolResult!({ toolCallId, toolName: invocation.toolName, output }),
+    );
+    pendingServerResults.push({ invocation, promise });
+  }
+
+  /**
+   * Awaits every queued {@link ChatClientOptions.onServerToolResult} outcome
+   * from the just-finished stream. When a host reaction returns a
+   * {@link ToolExecutionOutcome}, its `result` replaces the invocation's
+   * recorded result (so the next request reflects the real, e.g. runtime,
+   * outcome rather than just the server's verification), and its
+   * `continueConversation` flag is folded into the return value so the caller
+   * knows whether to send a follow-up request. A thrown/rejected callback is
+   * reported via `onError`, the same as `resolveClientToolCalls` does for
+   * client-side tool errors, and doesn't request a follow-up.
+   */
+  private async resolveServerToolOutcomes(pending: PendingServerResult[]): Promise<boolean> {
+    let shouldContinue = false;
+
+    for (const { invocation, promise } of pending) {
+      let outcome: ToolExecutionOutcome | void;
+      try {
+        outcome = await promise;
+      } catch (err) {
+        this.onError(err instanceof Error ? err : new Error(String(err)));
+        continue;
+      }
+
+      if (!outcome) continue;
+      invocation.result = outcome.result;
+      shouldContinue ||= outcome.continueConversation === true;
+      this.onUpdate();
+    }
+
+    return shouldContinue;
   }
 
   private async resolveClientToolCalls(pendingToolCalls: ToolInvocation[]) {
@@ -330,6 +503,56 @@ export class ChatClient {
       invocation.state = "result";
       this.onUpdate();
     }
+  }
+
+  /**
+   * Resolves every `needsApproval`-gated invocation flagged by
+   * {@link addToolApprovalRequest} via {@link ChatClientOptions.onApprovalRequired},
+   * sequentially (same reasoning as {@link resolveClientToolCalls}: a host
+   * showing one confirmation dialog at a time shouldn't have to juggle
+   * several at once). Missing handler or a thrown decision both fail closed
+   * — denied, with the reason surfaced back to the model — rather than
+   * silently letting a gated tool run.
+   */
+  private async resolveApprovals(pendingApprovals: ToolInvocation[]) {
+    for (const invocation of pendingApprovals) {
+      if (invocation.state !== "approval-requested") continue;
+
+      let decision: { approved: boolean; reason?: string };
+      try {
+        decision = this.onApprovalRequired
+          ? await this.onApprovalRequired({
+              toolCallId: invocation.toolCallId,
+              toolName: invocation.toolName,
+              args: invocation.args,
+            })
+          : { approved: false, reason: "No approval handler configured on this host." };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        decision = { approved: false, reason: message };
+        this.onError(new Error(message));
+      }
+
+      invocation.approval = { ...invocation.approval!, ...decision };
+      invocation.state = "approval-responded";
+      this.onUpdate();
+    }
+  }
+
+  /**
+   * Public method to emit an error message to the chat transcript.
+   * Used for reporting errors that occur outside the normal chat flow
+   * (e.g., sandbox execution failures).
+   */
+  reportError(errorMessage: string) {
+    this.messages.push({
+      id: this.genId(),
+      role: "assistant",
+      content: errorMessage,
+      error: true,
+    });
+    this.onError(new Error(errorMessage));
+    this.onUpdate();
   }
 
   private emitError(error: ChatError | string) {

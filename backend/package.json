@@ -12,9 +12,10 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.0",
+    "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/server": "*",
-    "@cesium-ai/tools-cesium": "*",
+    "@cesium-ai/tools-schemas": "*",
     "ai": "^7.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

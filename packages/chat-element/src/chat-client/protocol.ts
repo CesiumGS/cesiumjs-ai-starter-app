@@ -27,9 +27,11 @@ export function isNotConfiguredError(error: ChatError): boolean {
 /**
  * Project a flat UI {@link Message} into the AI SDK `UIMessage` `parts` array
  * the server's `convertToModelMessages` consumes. Text becomes a `text` part;
- * each tool invocation becomes a `tool-<toolName>` part — `output-available`
- * (carrying its result) once the client has resolved it, otherwise
- * `input-available` (the call without a result yet).
+ * each tool invocation becomes a `tool-<toolName>` part, in one of three
+ * states: `output-available` (client- or server-resolved result already in
+ * hand), `approval-responded` (a `needsApproval`-gated call this client has
+ * just approved/denied — see {@link ChatClientOptions.onApprovalRequired}),
+ * or `input-available` (the call, with neither a result nor a decision yet).
  */
 export function toRequestParts(message: Message): Array<Record<string, unknown>> {
   const parts: Array<Record<string, unknown>> = [];
@@ -39,22 +41,34 @@ export function toRequestParts(message: Message): Array<Record<string, unknown>>
   }
 
   for (const t of message.toolInvocations ?? []) {
-    parts.push(
-      t.state === "result"
-        ? {
-            type: `tool-${t.toolName}`,
-            toolCallId: t.toolCallId,
-            state: "output-available",
-            input: t.args,
-            output: t.result,
-          }
-        : {
-            type: `tool-${t.toolName}`,
-            toolCallId: t.toolCallId,
-            state: "input-available",
-            input: t.args,
-          },
-    );
+    if (t.state === "result") {
+      parts.push({
+        type: `tool-${t.toolName}`,
+        toolCallId: t.toolCallId,
+        state: "output-available",
+        input: t.args,
+        output: t.result,
+      });
+    } else if (t.state === "approval-responded" && t.approval?.approved !== undefined) {
+      parts.push({
+        type: `tool-${t.toolName}`,
+        toolCallId: t.toolCallId,
+        state: "approval-responded",
+        input: t.args,
+        approval: {
+          id: t.approval.id,
+          approved: t.approval.approved,
+          reason: t.approval.reason,
+        },
+      });
+    } else {
+      parts.push({
+        type: `tool-${t.toolName}`,
+        toolCallId: t.toolCallId,
+        state: "input-available",
+        input: t.args,
+      });
+    }
   }
 
   return parts;
