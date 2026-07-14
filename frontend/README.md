@@ -23,7 +23,7 @@ src/
 
 `ChatPanel.tsx` keys `TOOL_EXECUTORS` by `EnabledCesiumTool` (from `ENABLED_CESIUM_TOOLS` in `@cesium-ai/sample-config`, see [`shared/`](../shared)), so it's self-checking in both directions: it fails to compile unless there's a client-side executor for every enabled tool, and it rejects an executor for any non-enabled tool. It also gates every incoming tool call against that same allowlist at runtime as defense-in-depth, so a disabled or spoofed tool call never drives the live `Viewer`.
 
-The frontend imports only schema-free pieces from these packages: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only. `flyTo`'s name/shape come from `@cesium-ai/tools-cesium`; `executeCesiumCode`'s come from `@cesium-ai/codegen-cesium`, which owns that tool since it can't run directly against a `Viewer` the way `flyTo` does (see [`packages/tools-cesium/README.md`](../packages/tools-cesium/README.md)).
+The frontend imports only schema-free pieces from these packages: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only. `flyTo`'s name/shape come from `@cesium-ai/tools-schemas`; `executeCesiumCode`'s come from `@cesium-ai/codegen-cesium`, which owns that tool since it can't run directly against a `Viewer` the way `flyTo` does (see [`packages/tools-schemas/README.md`](../packages/tools-schemas/README.md)).
 
 ## `executeCesiumCode`: server-verified, client-executed
 

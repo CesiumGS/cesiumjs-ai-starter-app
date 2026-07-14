@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
-import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-cesium/names";
+import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
 import { flyToLocation } from "../tools/camera";
 import {

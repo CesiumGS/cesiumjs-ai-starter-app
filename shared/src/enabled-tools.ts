@@ -1,4 +1,4 @@
-import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-cesium/names";
+import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-schemas/names";
 import {
   CODEGEN_CESIUM_TOOL_NAMES,
   type CodegenCesiumToolName,

@@ -22,7 +22,7 @@ src/
 
 ## Tool surface
 
-The backend builds its viewer tool registry from `ENABLED_CESIUM_TOOLS` via `createCesiumTools` (`@cesium-ai/tools-cesium`). The `flyTo` tool uses an extended schema (`src/tools/flyto-tool.ts`) with descriptions for the model. See [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README for details.
+The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sample-config`, in [`shared/`](../shared)) via `createCesiumTools` (`@cesium-ai/tools-schemas`), so the model is only ever offered tools this app turned on. `flyTo`'s model-facing input schema is this app's extended `flyToInputSchema` (`src/tools/flyto-tool.ts`), which layers `.describe()` hints onto the shared structural shape (`flyToShape` in `@cesium-ai/sample-config`) that the frontend also validates against — see [Working with Cesium Tools](../README.md#working-with-cesium-tools) in the top-level README.
 
 ### `executeCesiumCode`: code generation and verification
 

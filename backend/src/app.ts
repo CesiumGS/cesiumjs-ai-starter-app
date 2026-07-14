@@ -1,6 +1,6 @@
 import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
 import { createChatRouter } from "@cesium-ai/server";
-import { createCesiumTools } from "@cesium-ai/tools-cesium";
+import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
 import type { LanguageModel, ToolSet } from "ai";
 import cors from "cors";

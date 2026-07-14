@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-// Same schema-sync contract as `@cesium-ai/tools-cesium`'s own
+// Same schema-sync contract as `@cesium-ai/tools-schemas`'s own
 // `schema-sync.test.ts`, but for this app's extension: the backend's
 // model-facing `flyToInputSchema` (what the LLM sees) and the shared
 // `flyToShape` (what the frontend's `flyToLocation` validates against) must
