@@ -109,8 +109,6 @@ Browser                          Server
 
 This app builds its own executable `executeCesiumCode` tool on top of the library's schema (`backend/src/tools/execute-cesium-code-tool.ts`, wrapping `@cesium-ai/codegen-cesium`), the same "app extends the shared schema" pattern `flyTo` uses via `backend/src/tools/flyto-tool.ts`. Because `executeCesiumCode` is a "Code Mode" tool — the model's output is arbitrary generated code, not bounded typed args like `flyTo`'s lat/lon/altitude — it needs a materially different security posture than `flyTo`. The backend's AST verification (see [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md)) is defense-in-depth only, not a substitute for runtime isolation; this app does not yet execute the verified snippet anywhere — that requires a real runtime isolation boundary (e.g. a sandboxed interpreter bound to a narrow, explicit, allowlisted capability proxy, never a generic bridge to `fetch`-like primitives), which is planned for a follow-up PR. See [`packages/tools-schemas/README.md`](packages/tools-schemas/README.md) and [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md) for the full generation/verification pipeline.
 
-See [.architecture/ACD(draft).md](<.architecture/ACD(draft).md>) for full architecture decisions.
-
 ---
 
 ## Working with Cesium Tools

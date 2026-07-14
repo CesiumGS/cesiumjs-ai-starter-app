@@ -15,7 +15,7 @@ describe("verifyCesiumCode — happy path", () => {
   });
 
   it("passes code using top-level `await` (matches the sandbox's async-IIFE execution context)", () => {
-    // The frontend sandbox (`code-sandbox.ts`) always executes generated snippets inside an
+    // The frontend sandbox always executes generated snippets inside an
     // `(async () => { <code> })()` wrapper, so real generated code is expected to use top-level
     // `await`. Regression test for a bug where the verifier's acorn parse config rejected this.
     const code = `await addEntity({ latitude: 1, longitude: 2 });`;

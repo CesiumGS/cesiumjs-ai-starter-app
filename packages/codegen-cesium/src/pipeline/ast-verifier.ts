@@ -195,11 +195,11 @@ export function verifyCesiumCode(code: string, options: VerifyOptions = {}): Ver
   // (there's no AST to walk).
   let ast: Node;
   try {
-    // `allowAwaitOutsideFunction` is required because the frontend sandbox (`code-sandbox.ts`)
-    // executes generated snippets inside an async IIFE (`(async () => { <code> })()`), so the
-    // model is expected to write top-level `await addEntity(...)` style calls. Without this
-    // option, acorn's default "script" grammar rejects top-level `await` as a syntax error,
-    // which would make the verifier reject legitimate, correctly-written generated code.
+    // `allowAwaitOutsideFunction` is required because the frontend sandbox executes generated
+    // snippets inside an async IIFE (`(async () => { <code> })()`), so the model is expected
+    // to write top-level `await addEntity(...)` style calls. Without this option, acorn's
+    // default "script" grammar rejects top-level `await` as a syntax error, which would make
+    // the verifier reject legitimate, correctly-written generated code.
     ast = parse(code, {
       ecmaVersion: "latest",
       sourceType: "script",

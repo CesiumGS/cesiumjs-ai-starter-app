@@ -37,7 +37,7 @@ graph TD
 
     D -->|unverified code| E["5️⃣ AST Verification<br/>verifyCesiumCode<br/>ast-verifier.ts<br/>Parse-only static analysis"]
 
-    E -->|violations?| E_retry["Retry Loop<br/>maxAttempts: 2"]
+    E -->|violations?| E_retry["Retry Loop<br/>maxAttempts: 3"]
     E_retry -->|feedback to model| D
 
     E -->|verified| F["✅ GATE 1: Static Analysis<br/>Size, constructs, identifiers<br/>No execution"]
@@ -258,7 +258,7 @@ generation retry loop below — can see the full picture in one pass.
 3. **Code generation** (via AI SDK `generateText`) — Generate raw code string with caller-supplied `LanguageModel`
 4. **Cleanup** — Strip markdown code fences
 5. **Verification** (via `verifyCesiumCode`) — Static AST verification
-6. **Retry on failure** — If violations found, feed back to model and retry (up to `maxAttempts` total, default 2)
+6. **Retry on failure** — If violations found, feed back to model and retry (up to `maxAttempts` total, default 3)
 7. **Return result** — `{ verified: true, code }` or `{ verified: false, error, violations }`
 
 **Key characteristics:**

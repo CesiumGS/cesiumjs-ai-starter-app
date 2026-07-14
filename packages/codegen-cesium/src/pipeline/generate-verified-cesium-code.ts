@@ -23,7 +23,7 @@ export interface GenerateVerifiedCesiumCodeOptions {
   model: LanguageModel;
   /** Max regeneration attempts if a generation fails verification. Default 3. */
   maxAttempts?: number;
-  /** Max number of matched skills to inline as grounding context in the generation prompt. */
+  /** Max number of matched skills to inline as grounding context in the generation prompt. Controlled by `CODEGEN_MAX_SKILLS` env var in the sample app (default `1`). */
   maxSkills?: number;
 }
 
