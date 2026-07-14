@@ -3,7 +3,7 @@
 # context MUST be the repo root (npm workspace), e.g.
 # `docker build -f backend/Dockerfile .` — this is what compose.yaml uses.
 #
-# This app's workspace packages (@cesium-ai/server, @cesium-ai/tools-cesium,
+# This app's workspace packages (@cesium-ai/server, @cesium-ai/tools-schemas,
 # @cesium-ai/sample-config) are resolved via npm workspaces from the repo
 # root, so the backend image can't be built from the backend/ folder alone.
 # Only manifests for workspaces the backend actually depends on are copied —
@@ -19,12 +19,12 @@ COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY shared/package.json shared/package.json
 COPY packages/server/package.json packages/server/package.json
-COPY packages/tools-cesium/package.json packages/tools-cesium/package.json
+COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 RUN npm ci
 
 COPY shared shared
 COPY packages/server packages/server
-COPY packages/tools-cesium packages/tools-cesium
+COPY packages/tools-schemas packages/tools-schemas
 COPY backend backend
 
 RUN npm run build:packages && npm run build -w backend
@@ -50,8 +50,8 @@ COPY --from=build /app/shared/package.json shared/package.json
 COPY --from=build /app/shared/dist shared/dist
 COPY --from=build /app/packages/server/package.json packages/server/package.json
 COPY --from=build /app/packages/server/dist packages/server/dist
-COPY --from=build /app/packages/tools-cesium/package.json packages/tools-cesium/package.json
-COPY --from=build /app/packages/tools-cesium/dist packages/tools-cesium/dist
+COPY --from=build /app/packages/tools-schemas/package.json packages/tools-schemas/package.json
+COPY --from=build /app/packages/tools-schemas/dist packages/tools-schemas/dist
 
 USER node
 

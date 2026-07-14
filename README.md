@@ -6,7 +6,7 @@ A production-ready starter that pairs a [CesiumJS](https://cesium.com/platform/c
 
 ## Get Started
 
-To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI. 
+To run the AI-powered chat with the CesiumJS globe, you need an **LLM API key** from one of: OpenAI, Anthropic, or Google Generative AI.
 
 Optionally, add a free [Cesium Ion](https://ion.cesium.com) access token for high-quality terrain and imagery (without it, the globe displays basic imagery).
 
@@ -102,7 +102,7 @@ Browser                          Server
 **Workspace packages:** The reusable, model-agnostic pieces live in `packages/` and are consumed by the `backend/` host app:
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
-- **`@cesium-ai/tools-cesium`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
+- **`@cesium-ai/tools-schemas`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute` — tool calls run client-side against the live `Viewer`.
 
 ---
 
@@ -138,16 +138,16 @@ After editing, rebuild the shared package so both tiers pick up the change: `npm
 npm test -- enabled-tools
 ```
 
-> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-cesium/src/tool-names.ts`](packages/tools-cesium/src/tool-names.ts)); (2) add its schema/definition module under `packages/tools-cesium/src/` and wire it into `createCesiumTools` ([`index.ts`](packages/tools-cesium/src/index.ts)); (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts)); (2) add its schema/definition module under `packages/tools-schemas/src/` and wire it into `createCesiumTools` ([`index.ts`](packages/tools-schemas/src/index.ts)); (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
 
 ### Update a tool's schema
 
 A tool's schema lives in **two layers**, split so the LLM-facing hints never ship to the browser. Pick the layer that matches what you're changing:
 
-| You want to change…                                                                                               | Edit                                                                                                                                                                                               | Who sees it                                                         |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| **The args contract** — structural rules (lat/lon ranges, which fields exist, optional vs. required)              | `flyToInputShape` in [`packages/tools-cesium/src/schemas.ts`](packages/tools-cesium/src/schemas.ts)                                                                                                | Both tiers — backend derives from it, frontend validates against it |
-| **The model-facing hints** — the human-readable tool `description` and per-field `.describe()` text the LLM reads | `DEFAULT_FLY_TO_DESCRIPTION` / `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS` / `buildFlyToInputSchema` in [`packages/tools-cesium/src/tools/flyTo/flyTo.ts`](packages/tools-cesium/src/tools/flyTo/flyTo.ts) | Backend (model) only — never bundled into the client                |
+| You want to change…                                                                                               | Edit                                                                                                                                                                                                 | Who sees it                                                         |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| **The args contract** — structural rules (lat/lon ranges, which fields exist, optional vs. required)              | `flyToInputShape` in [`packages/tools-schemas/src/schemas.ts`](packages/tools-schemas/src/schemas.ts)                                                                                                | Both tiers — backend derives from it, frontend validates against it |
+| **The model-facing hints** — the human-readable tool `description` and per-field `.describe()` text the LLM reads | `DEFAULT_FLY_TO_DESCRIPTION` / `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS` / `buildFlyToInputSchema` in [`packages/tools-schemas/src/tools/flyTo/flyTo.ts`](packages/tools-schemas/src/tools/flyTo/flyTo.ts) | Backend (model) only — never bundled into the client                |
 
 The structural shape (`schemas.ts`) is the **single source of truth for the args contract**. The frontend imports it directly (via the `/schemas` subpath) to validate untrusted args; the backend's model-facing schema is _derived_ from it in `buildFlyToInputSchema` (`flyToInputShape.shape.*.describe(...)`), layering the LLM hints on without redefining the rules. So a contract change — e.g. tightening the lat/lon ranges — is a **single edit** to `flyToInputShape` that both tiers pick up automatically.
 
@@ -230,7 +230,7 @@ cesiumjs-ai-tools-sample/
 │   │   └── src/
 │   │       ├── chat-router.ts  # createChatRouter — POST /api/chat (SSE)
 │   │       └── agent.ts        # Agent loop — streamText with tool registry
-│   └── tools-cesium/           # @cesium-ai/tools-cesium — viewer tool schemas
+│   └── tools-schemas/   # @cesium-ai/tools-schemas — viewer tool schemas
 │       └── src/
 │           ├── tool-names.ts   # CESIUM_TOOL_NAMES — canonical tool identifiers
 │           ├── schemas.ts      # flyToInputShape — shared args contract (structural)
