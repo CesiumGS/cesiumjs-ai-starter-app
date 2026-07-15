@@ -60,6 +60,8 @@ Output rules:
 - Never use computed/bracket member access (e.g. \`someArray[i]\`, \`coordinates[index]\`, \`obj["prop"]\`) anywhere in your output — it is rejected outright by static verification, even for plain array indexing. When you need to iterate over an array (e.g. per-vertex coordinates, a list of positions) and act on each element, use \`array.forEach((element) => { ... })\` or \`for (const element of array)\` so you bind the element directly instead of indexing into the array. Plain non-computed property/method access (\`viewer.entities\`, \`entity.position\`) is dot notation, not computed access, and remains fully allowed.
 - \`document\`, \`window\`, \`Image\`, and any other DOM/canvas API are never available in the code execution environment, even though your snippet ultimately runs in a browser — never call \`document.createElement("canvas")\` or similar to draw your own texture (e.g. for a \`ParticleSystem\`'s \`image\` option). If you need an ad-hoc image/canvas and the intent doesn't supply a concrete image URL, use \`new Cesium.PinBuilder().fromColor(Cesium.Color.<NAME>, size)\` — it synchronously returns a real canvas you can pass directly as the image.
 - If the intent cannot be accomplished with the documented APIs, or requires a concrete external asset URL/ID that isn't supplied by the intent or reference material, output a single-line JavaScript comment explaining why, instead of guessing at an API or inventing an asset path.${
-    extraInstructions?.trim() ? `\n\nAdditional instructions from the host application:\n${extraInstructions.trim()}` : ""
+    extraInstructions?.trim()
+      ? `\n\nAdditional instructions from the host application:\n${extraInstructions.trim()}`
+      : ""
   }`;
 }

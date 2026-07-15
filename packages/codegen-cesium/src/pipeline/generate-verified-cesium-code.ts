@@ -61,7 +61,8 @@ function stripCodeFences(raw: string): string {
 export async function generateVerifiedCesiumCode(
   options: GenerateVerifiedCesiumCodeOptions,
 ): Promise<GenerateVerifiedCesiumCodeResult> {
-  const { intent, model, maxSkills, maxLength, maxLines, allowedSymbols, extraInstructions } = options;
+  const { intent, model, maxSkills, maxLength, maxLines, allowedSymbols, extraInstructions } =
+    options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
   // Retrieve top candidate skills to provide grounding context for code generation.

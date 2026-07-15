@@ -152,7 +152,9 @@ describe("generateVerifiedCesiumCode", () => {
     });
 
     it("threads a small maxLength through to verifyCesiumCode, rejecting oversized generated code", async () => {
-      generateTextMock.mockResolvedValue({ text: `viewer.camera.flyTo({ destination: undefined });` });
+      generateTextMock.mockResolvedValue({
+        text: `viewer.camera.flyTo({ destination: undefined });`,
+      });
 
       const result = await generateVerifiedCesiumCode({
         intent: "xyzzy plugh qux totally unrelated nonsense request",

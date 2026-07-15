@@ -141,10 +141,7 @@ function guestAsyncFactoryBody(): void {
   };
   Cesium.CesiumTerrainProvider = {
     fromIonAssetId: function (assetId: number, options: any) {
-      return __callAsyncCesiumFactory__("cesiumTerrainProviderFromIonAssetId", [
-        assetId,
-        options,
-      ]);
+      return __callAsyncCesiumFactory__("cesiumTerrainProviderFromIonAssetId", [assetId, options]);
     },
   };
   Cesium.GeoJsonDataSource = {

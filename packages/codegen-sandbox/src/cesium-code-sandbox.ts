@@ -133,26 +133,23 @@ function registerHostSetSync(ctx: QuickJSAsyncContext, handles: SandboxHandles):
 
 /** Registers `__hostApplySync__`: invokes a bound function handle with marshaled arguments. */
 function registerHostApplySync(ctx: QuickJSAsyncContext, handles: SandboxHandles): void {
-  const hostApplySyncHandle = ctx.newFunction(
-    "__hostApplySync__",
-    (handleIdHandle, argsHandle) => {
-      const handleId = ctx.getString(handleIdHandle);
-      const argsJson = ctx.getString(argsHandle);
-      try {
-        const fn = handles.resolve(handleId);
-        if (typeof fn !== "function") throw new Error("Sandbox handle is not callable");
-        const rawArgs = JSON.parse(argsJson) as unknown[];
-        const unwrapped = rawArgs.map((arg) => handles.unwrap(arg));
-        const result = (fn as (...a: unknown[]) => unknown)(...unwrapped);
-        return toEnvelopeString(ctx, { ok: true, value: handles.wrap(result ?? null) });
-      } catch (err) {
-        return toEnvelopeString(ctx, {
-          ok: false,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    },
-  );
+  const hostApplySyncHandle = ctx.newFunction("__hostApplySync__", (handleIdHandle, argsHandle) => {
+    const handleId = ctx.getString(handleIdHandle);
+    const argsJson = ctx.getString(argsHandle);
+    try {
+      const fn = handles.resolve(handleId);
+      if (typeof fn !== "function") throw new Error("Sandbox handle is not callable");
+      const rawArgs = JSON.parse(argsJson) as unknown[];
+      const unwrapped = rawArgs.map((arg) => handles.unwrap(arg));
+      const result = (fn as (...a: unknown[]) => unknown)(...unwrapped);
+      return toEnvelopeString(ctx, { ok: true, value: handles.wrap(result ?? null) });
+    } catch (err) {
+      return toEnvelopeString(ctx, {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
   ctx.setProp(ctx.global, "__hostApplySync__", hostApplySyncHandle);
   hostApplySyncHandle.dispose();
 }
@@ -215,10 +212,7 @@ function registerAsyncHostBridge(ctx: QuickJSAsyncContext, handles: SandboxHandl
     ["createWorldTerrainAsync", DEFAULT_CESIUM_ASYNC_FACTORIES.createWorldTerrainAsync],
     ["createWorldBathymetryAsync", DEFAULT_CESIUM_ASYNC_FACTORIES.createWorldBathymetryAsync],
     ["cesium3DTilesetFromUrl", DEFAULT_CESIUM_ASYNC_FACTORIES.cesium3DTilesetFromUrl],
-    [
-      "cesium3DTilesetFromIonAssetId",
-      DEFAULT_CESIUM_ASYNC_FACTORIES.cesium3DTilesetFromIonAssetId,
-    ],
+    ["cesium3DTilesetFromIonAssetId", DEFAULT_CESIUM_ASYNC_FACTORIES.cesium3DTilesetFromIonAssetId],
     [
       "cesiumTerrainProviderFromIonAssetId",
       DEFAULT_CESIUM_ASYNC_FACTORIES.cesiumTerrainProviderFromIonAssetId,

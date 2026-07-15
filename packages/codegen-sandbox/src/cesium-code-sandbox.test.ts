@@ -47,7 +47,11 @@ vi.mock("cesium", async (importOriginal) => {
     })),
     Cesium3DTileset: {
       ...actual.Cesium3DTileset,
-      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({ kind: "tileset", url, options })),
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "tileset",
+        url,
+        options,
+      })),
       fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
         kind: "tileset",
         assetId,
@@ -64,7 +68,11 @@ vi.mock("cesium", async (importOriginal) => {
     },
     GeoJsonDataSource: {
       ...actual.GeoJsonDataSource,
-      load: vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options })),
+      load: vi.fn(async (data: unknown, options?: unknown) => ({
+        kind: "dataSource",
+        data,
+        options,
+      })),
     },
     Model: {
       ...actual.Model,

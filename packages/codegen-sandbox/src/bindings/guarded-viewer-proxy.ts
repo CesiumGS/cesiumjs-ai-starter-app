@@ -183,8 +183,7 @@ function createProxiedCamera(camera: object): unknown {
 function createProxiedEntities(entities: object, viewer: Viewer): unknown {
   return createGuardedProxy(entities, {
     guarded: {
-      add: (real, target) =>
-        guardedAdd(real, target, () => assertEntityCapNotExceeded(viewer)),
+      add: (real, target) => guardedAdd(real, target, () => assertEntityCapNotExceeded(viewer)),
     },
   });
 }

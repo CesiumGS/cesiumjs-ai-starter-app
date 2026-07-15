@@ -180,7 +180,9 @@ describe("env parsing", () => {
 
   describe("CODEGEN_ALLOWED_SYMBOLS comma-splitting", () => {
     it("splits and trims a comma-separated list", async () => {
-      const { env } = await loadEnv({ CODEGEN_ALLOWED_SYMBOLS: "viewer, Cartesian3 ,Cartographic" });
+      const { env } = await loadEnv({
+        CODEGEN_ALLOWED_SYMBOLS: "viewer, Cartesian3 ,Cartographic",
+      });
       expect(env.CODEGEN_ALLOWED_SYMBOLS).toEqual(["viewer", "Cartesian3", "Cartographic"]);
     });
 
