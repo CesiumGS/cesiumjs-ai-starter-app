@@ -10,7 +10,7 @@ export default defineConfig({
     // Required so CesiumJS web workers can resolve their own asset paths at runtime
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}/`),
   },
-  // `quickjs-emscripten` (used by `@cesium-ai/sandbox-cesium`) ships its actual QuickJS runtime as
+  // `quickjs-emscripten` (used by `@cesium-ai/codegen-sandbox`) ships its actual QuickJS runtime as
   // a loose `.wasm` file (via `@jitl/quickjs-wasmfile-*`) fetched by a relative URL at runtime,
   // not as a statically-analyzable import. Vite's esbuild-based dependency pre-bundling
   // (`optimizeDeps`) doesn't reliably copy that sibling `.wasm` asset alongside the bundled JS —

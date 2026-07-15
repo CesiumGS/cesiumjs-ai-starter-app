@@ -69,4 +69,33 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("PrimitiveCollection");
     expect(prompt).toContain(".get(index)");
   });
+
+  describe("extraInstructions", () => {
+    it("appends extraInstructions to the end of the prompt when provided", () => {
+      const prompt = buildCodegenPrompt({
+        intent: "fly to Paris",
+        skills: [cameraSkill],
+        extraInstructions: "Always use flat, non-3D-tiles styling for this app.",
+      });
+
+      expect(prompt).toContain("Additional instructions from the host application:");
+      expect(prompt).toContain("Always use flat, non-3D-tiles styling for this app.");
+    });
+
+    it("does not add an extra-instructions section when omitted", () => {
+      const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
+
+      expect(prompt).not.toContain("Additional instructions from the host application:");
+    });
+
+    it("does not add an extra-instructions section when blank/whitespace-only", () => {
+      const prompt = buildCodegenPrompt({
+        intent: "fly to Paris",
+        skills: [cameraSkill],
+        extraInstructions: "   ",
+      });
+
+      expect(prompt).not.toContain("Additional instructions from the host application:");
+    });
+  });
 });

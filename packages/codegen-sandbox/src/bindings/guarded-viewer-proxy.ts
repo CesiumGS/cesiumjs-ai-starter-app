@@ -18,11 +18,7 @@
  * as it evolves — nothing here needs updating when Cesium adds a new method.
  */
 import type { Viewer } from "cesium";
-import {
-  assertCollectionCapNotExceeded,
-  assertEntityCapNotExceeded,
-  DEFAULT_MAX_ENTITIES,
-} from "../execution-guards.js";
+import { assertCollectionCapNotExceeded, assertEntityCapNotExceeded } from "../execution-guards.js";
 import { PROXY_MARKER } from "./sandbox-handles.js";
 
 /**
@@ -188,9 +184,7 @@ function createProxiedEntities(entities: object, viewer: Viewer): unknown {
   return createGuardedProxy(entities, {
     guarded: {
       add: (real, target) =>
-        guardedAdd(real, target, () =>
-          assertEntityCapNotExceeded(viewer, { maxEntities: DEFAULT_MAX_ENTITIES }),
-        ),
+        guardedAdd(real, target, () => assertEntityCapNotExceeded(viewer)),
     },
   });
 }

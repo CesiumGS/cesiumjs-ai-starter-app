@@ -20,6 +20,14 @@ export interface CreateExecuteCesiumCodeToolOptions {
   maxSkills?: number;
   /** Max regeneration attempts if a generation fails verification. Passed through to `generateVerifiedCesiumCode`. */
   maxAttempts?: number;
+  /** Hard cap on generated source size in characters. Passed through to `generateVerifiedCesiumCode`. */
+  maxLength?: number;
+  /** Hard cap on generated line count. Passed through to `generateVerifiedCesiumCode`. */
+  maxLines?: number;
+  /** Free-identifier allowlist. Passed through to `generateVerifiedCesiumCode`. */
+  allowedSymbols?: readonly string[];
+  /** Extra instructions appended to the generation prompt. Passed through to `generateVerifiedCesiumCode`. */
+  extraInstructions?: string;
 }
 
 /**
@@ -45,13 +53,26 @@ export function createExecuteCesiumCodeTool({
   model,
   maxSkills,
   maxAttempts,
+  maxLength,
+  maxLines,
+  allowedSymbols,
+  extraInstructions,
 }: CreateExecuteCesiumCodeToolOptions): Tool {
   return tool({
     description: DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
     inputSchema: defaultExecuteCesiumCodeInputSchema,
     execute: async ({ intent }: { intent: string }): Promise<ExecuteCesiumCodeResult> => {
       try {
-        const result = await generateVerifiedCesiumCode({ intent, model, maxSkills, maxAttempts });
+        const result = await generateVerifiedCesiumCode({
+          intent,
+          model,
+          maxSkills,
+          maxAttempts,
+          maxLength,
+          maxLines,
+          allowedSymbols,
+          extraInstructions,
+        });
         return result.verified ? { code: result.code } : { error: result.error };
       } catch (err) {
         return {

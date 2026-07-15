@@ -2,7 +2,7 @@
  * Frontend-only, browser-executed CesiumJS "Code Mode" sandbox: a QuickJS-wasm interpreter bound
  * directly to real CesiumJS primitives on a live `Viewer` (`cesium-bindings.ts` /
  * `cesium-code-sandbox.ts`), plus the client-side guardrails around running it
- * (`execution-guards.ts`) — entity cap, call rate limiter.
+ * (`execution-guards.ts`) — entity/collection caps.
  *
  * Deliberately separate from `@cesium-ai/codegen-cesium`: that package generates and *statically
  * verifies* (AST parse-only, never executes) a CesiumJS snippet from a model intent, and is safe
@@ -30,10 +30,6 @@ export {
 export {
   assertEntityCapNotExceeded,
   DEFAULT_MAX_ENTITIES,
-  DEFAULT_RATE_LIMIT,
   EntityCapExceededError,
-  RateLimitExceededError,
-  SandboxCallRateLimiter,
   type EntityCapOptions,
-  type RateLimiterOptions,
 } from "./execution-guards.js";

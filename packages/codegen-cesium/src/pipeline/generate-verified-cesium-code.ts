@@ -25,6 +25,19 @@ export interface GenerateVerifiedCesiumCodeOptions {
   maxAttempts?: number;
   /** Max number of matched skills to inline as grounding context in the generation prompt. Controlled by `CODEGEN_MAX_SKILLS` env var in the sample app (default `1`). */
   maxSkills?: number;
+  /** Hard cap on generated source size in characters, passed through to `verifyCesiumCode`. Default 4000. */
+  maxLength?: number;
+  /** Hard cap on generated line count, passed through to `verifyCesiumCode`. Default 100. */
+  maxLines?: number;
+  /** Free-identifier allowlist passed through to `verifyCesiumCode`. Omit to skip the allowlist check entirely (see `VerifyOptions.allowedSymbols`). */
+  allowedSymbols?: readonly string[];
+  /**
+   * Optional extra instructions appended to the generation prompt's output rules, passed through
+   * to `buildCodegenPrompt`. Controlled by `CODEGEN_EXTRA_INSTRUCTIONS` env var in the sample app.
+   * Intended for app/operator-supplied constraints, never end-user chat input (see
+   * `BuildPromptOptions.extraInstructions`'s doc comment for why).
+   */
+  extraInstructions?: string;
 }
 
 export type GenerateVerifiedCesiumCodeResult =
@@ -48,13 +61,13 @@ function stripCodeFences(raw: string): string {
 export async function generateVerifiedCesiumCode(
   options: GenerateVerifiedCesiumCodeOptions,
 ): Promise<GenerateVerifiedCesiumCodeResult> {
-  const { intent, model, maxSkills } = options;
+  const { intent, model, maxSkills, maxLength, maxLines, allowedSymbols, extraInstructions } = options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 
   // Retrieve top candidate skills to provide grounding context for code generation.
   const skills = matchBestSkill(intent);
 
-  const basePrompt = buildCodegenPrompt({ intent, skills, maxSkills });
+  const basePrompt = buildCodegenPrompt({ intent, skills, maxSkills, extraInstructions });
 
   const correctionPrompt = (basePromptStr: string, violations: string[]) =>
     `${basePromptStr}
@@ -81,7 +94,7 @@ Generate a corrected code snippet that avoids all of the above issues, still fol
     }
 
     const code = stripCodeFences(rawCode);
-    const verifyResult = verifyCesiumCode(code);
+    const verifyResult = verifyCesiumCode(code, { maxLength, maxLines, allowedSymbols });
 
     if (verifyResult.verified) {
       return { verified: true, code };

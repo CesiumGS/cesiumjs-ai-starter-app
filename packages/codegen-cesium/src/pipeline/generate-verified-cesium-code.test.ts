@@ -133,4 +133,81 @@ describe("generateVerifiedCesiumCode", () => {
       expect(prompt).toContain("Reference: cesiumjs-camera");
     });
   });
+
+  describe("maxLength / maxLines / allowedSymbols", () => {
+    it("threads a restrictive allowedSymbols list through to verifyCesiumCode, rejecting a disallowed free identifier", async () => {
+      generateTextMock.mockResolvedValue({ text: `helper.doSomething();` });
+
+      const result = await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        allowedSymbols: ["viewer"],
+      });
+
+      expect(result.verified).toBe(false);
+      if (!result.verified) {
+        expect(result.violations?.some((v) => /disallowed identifier `helper`/.test(v))).toBe(true);
+      }
+    });
+
+    it("threads a small maxLength through to verifyCesiumCode, rejecting oversized generated code", async () => {
+      generateTextMock.mockResolvedValue({ text: `viewer.camera.flyTo({ destination: undefined });` });
+
+      const result = await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        maxLength: 10,
+      });
+
+      expect(result.verified).toBe(false);
+      if (!result.verified) {
+        expect(result.violations?.some((v) => /maximum length/.test(v))).toBe(true);
+      }
+    });
+
+    it("threads a small maxLines through to verifyCesiumCode, rejecting generated code with too many lines", async () => {
+      generateTextMock.mockResolvedValue({ text: "const a = 1;\nconst b = 2;\nconst c = 3;" });
+
+      const result = await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        maxLines: 1,
+      });
+
+      expect(result.verified).toBe(false);
+      if (!result.verified) {
+        expect(result.violations?.some((v) => /maximum line count/.test(v))).toBe(true);
+      }
+    });
+  });
+
+  describe("extraInstructions", () => {
+    it("threads extraInstructions through to buildCodegenPrompt, appearing in the generation prompt", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+
+      await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        extraInstructions: "Always prefer Cartesian3.fromDegrees over fromRadians.",
+      });
+
+      const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+      expect(prompt).toContain("Always prefer Cartesian3.fromDegrees over fromRadians.");
+    });
+
+    it("omits the extra-instructions section when not provided", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+
+      await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+      });
+
+      const prompt = (generateTextMock.mock.calls[0][0] as { prompt: string }).prompt;
+      expect(prompt).not.toContain("Additional instructions from the host application:");
+    });
+  });
 });

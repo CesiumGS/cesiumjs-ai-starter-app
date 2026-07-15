@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Viewer } from "cesium";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-import { runCesiumCodeInSandbox } from "@cesium-ai/sandbox-cesium";
+import { runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
 
 /**
  * The `executeCesiumCode` tool's server-resolved output shape — this app's

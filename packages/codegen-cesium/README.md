@@ -159,7 +159,7 @@ all — a materially bigger lift than an AST walk. This package sidesteps that p
 never executing anything; the consuming app's frontend sandbox is the actual runtime isolation boundary, and it must
 independently validate and execute the code with appropriate isolation — it can never treat "the backend already verified it"
 as a substitute for its own runtime isolation. This repo's sample app executes verified code in
-the frontend through `@cesium-ai/sandbox-cesium`: a fresh QuickJS-WASM interpreter with
+the frontend through `@cesium-ai/codegen-sandbox`: a fresh QuickJS-WASM interpreter with
 memory/deadline limits and a guarded bridge to the live Viewer. See
 [`frontend/README.md`](../../frontend/README.md).
 
@@ -248,7 +248,15 @@ generation retry loop below — can see the full picture in one pass.
 
 ## Generation + verification entry point (`src/pipeline/generate-verified-cesium-code.ts`)
 
-**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts? })`
+**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts?, maxSkills?, maxLength?, maxLines?, allowedSymbols?, extraInstructions? })`
+
+`maxLength`, `maxLines`, and `allowedSymbols` are passed straight through to `verifyCesiumCode` (see
+Verification Rules above). `extraInstructions` is passed straight through to `buildCodegenPrompt`,
+appended to the end of the generation prompt's output rules — intended for app/operator-supplied
+constraints (e.g. house style, app-specific caveats), never raw end-user chat input, since it feeds
+directly into the codegen model's prompt. The sample backend's `createExecuteCesiumCodeTool`
+exposes matching options wired from the `CODEGEN_MAX_CODE_LENGTH`, `CODEGEN_MAX_CODE_LINES`,
+`CODEGEN_ALLOWED_SYMBOLS`, and `CODEGEN_EXTRA_INSTRUCTIONS` env vars (see the root `.env.example`).
 
 **Purpose:** Single orchestration entry point that coordinates intent-to-verified-code generation.
 

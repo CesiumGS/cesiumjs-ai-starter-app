@@ -4,12 +4,12 @@ import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "@cesium-ai/sandbox-cesium";
 import { flyToLocation } from "../tools/camera";
 import {
   handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
+import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
@@ -66,8 +66,10 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
     }): Promise<ToolExecutionOutcome | undefined> => {
       if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
 
-      const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output, () =>
-        sandboxRateLimiterRef.current?.checkAndRecord(),
+      const errorMessage = await handleExecuteCesiumCodeResult(
+        viewerRef.current,
+        toolCall.output,
+        () => sandboxRateLimiterRef.current?.checkAndRecord(),
       );
       if (!errorMessage) return undefined;
 

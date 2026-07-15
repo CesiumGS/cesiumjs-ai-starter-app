@@ -91,6 +91,62 @@ describe("createExecuteCesiumCodeTool", () => {
     });
   });
 
+  it("threads maxLength, maxLines, and allowedSymbols through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({
+      model: fakeModel,
+      maxLength: 2000,
+      maxLines: 50,
+      allowedSymbols: ["viewer"],
+    });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1d",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      maxLength: 2000,
+      maxLines: 50,
+      allowedSymbols: ["viewer"],
+    });
+  });
+
+  it("threads extraInstructions through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({
+      model: fakeModel,
+      extraInstructions: "Prefer flat styling.",
+    });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1e",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      extraInstructions: "Prefer flat styling.",
+    });
+  });
+
   it("returns { error } when generation fails verification", async () => {
     generateVerifiedCesiumCode.mockResolvedValueOnce({
       verified: false,

@@ -14,6 +14,7 @@ interface ViewerSnapshot {
   entities: number;
   dataSources: number;
   primitives: number;
+  groundPrimitives: number;
   imageryLayers: number;
   cameraPosition: { x: number; y: number; z: number };
   cameraHeading: number;
@@ -38,6 +39,7 @@ async function getViewerSnapshot(page: Page): Promise<ViewerSnapshot> {
       entities: viewer.entities.values.length,
       dataSources: viewer.dataSources.length,
       primitives: viewer.scene.primitives.length,
+      groundPrimitives: viewer.scene.groundPrimitives.length,
       imageryLayers: viewer.imageryLayers.length,
       cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
       cameraHeading: camera.heading,
@@ -63,6 +65,7 @@ function hasChanged(before: ViewerSnapshot, after: ViewerSnapshot): boolean {
     after.entities !== before.entities ||
     after.dataSources !== before.dataSources ||
     after.primitives !== before.primitives ||
+    after.groundPrimitives !== before.groundPrimitives ||
     after.imageryLayers !== before.imageryLayers ||
     after.sceneMode !== before.sceneMode ||
     after.enableLighting !== before.enableLighting ||
@@ -82,7 +85,9 @@ async function assertSomethingChanged(page: Page, before: ViewerSnapshot, domain
   await expect(async () => {
     const current = await getViewerSnapshot(page);
     expect(hasChanged(before, current)).toBe(true);
-  }, `[${domain}] expected the generated code to visibly change the Viewer (entities/primitives/imageryLayers/dataSources/camera/sceneMode/lighting)`).toPass({ timeout: 10_000 });
+  }, `[${domain}] expected the generated code to visibly change the Viewer (entities/primitives/imageryLayers/dataSources/camera/sceneMode/lighting)`).toPass(
+    { timeout: 10_000 },
+  );
 }
 
 /**
@@ -123,13 +128,14 @@ const DOMAIN_ASSERTIONS: Record<string, (page: Page, before: ViewerSnapshot) => 
   "cesiumjs-time-properties": async (page, before) =>
     assertEntityAdded(page, before, "the time-dynamic SampledProperty entity"),
   "cesiumjs-imagery": async (page, before) => assertImageryLayerAdded(page, before),
-  "cesiumjs-3d-tiles": async (page, before) => assertPrimitiveAdded(page, before, "the Cesium3DTileset"),
+  "cesiumjs-3d-tiles": async (page, before) =>
+    assertPrimitiveAdded(page, before, "the Cesium3DTileset"),
   "cesiumjs-custom-shader": async (page, before) =>
     assertPrimitiveAdded(page, before, "the Cesium3DTileset with CustomShader attached"),
   "cesiumjs-materials-shaders": async (page, before) =>
     assertPrimitiveAdded(page, before, "the Primitive with the custom Fabric material"),
   "cesiumjs-primitives": async (page, before) =>
-    assertPrimitiveAdded(page, before, "the GeoJsonPrimitive"),
+    assertPrimitiveAdded(page, before, "the ground-clamped polygon primitive"),
   "cesiumjs-models-particles": async (page, before) =>
     assertPrimitiveAdded(page, before, "the glTF Model and/or ParticleSystem"),
 };
@@ -145,11 +151,17 @@ async function assertEntityAdded(page: Page, before: ViewerSnapshot, what: strin
 
 async function assertPrimitiveAdded(page: Page, before: ViewerSnapshot, what: string) {
   await expect
-    .poll(async () => (await getViewerSnapshot(page)).primitives, {
-      message: `expected ${what} to be added to scene.primitives`,
-      timeout: 10_000,
-    })
-    .toBeGreaterThan(before.primitives);
+    .poll(
+      async () => {
+        const current = await getViewerSnapshot(page);
+        return current.primitives + current.groundPrimitives;
+      },
+      {
+        message: `expected ${what} to be added to scene.primitives or scene.groundPrimitives`,
+        timeout: 10_000,
+      },
+    )
+    .toBeGreaterThan(before.primitives + before.groundPrimitives);
 }
 
 async function assertImageryLayerAdded(page: Page, before: ViewerSnapshot) {
@@ -160,7 +172,6 @@ async function assertImageryLayerAdded(page: Page, before: ViewerSnapshot) {
     })
     .toBeGreaterThan(before.imageryLayers);
 }
-
 
 /**
  * Real end-to-end coverage of the `executeCesiumCode` tool across a representative intent from
@@ -224,7 +235,7 @@ const DOMAIN_INTENTS: Record<string, string> = {
   // Names a real, publicly-reachable sample glTF (Khronos's BoxAnimated) so the scenario is
   // deterministic, mirroring the cesiumjs-3d-tiles fix above.
   "cesiumjs-models-particles":
-    "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb, play its animation, and add a ParticleSystem for fire at its base",
+    "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb, play its animation, and add a ParticleSystem for fire at its base — for the particle's image, use new Cesium.PinBuilder().fromColor(Cesium.Color.ORANGE, size) (synchronous, returns a real canvas) instead of drawing your own canvas with document.createElement",
   // Supplies concrete inline GeoJSON since this app has no pre-loaded GeoJSON for the model to
   // reference. Explicitly forbids clearing/removing existing scene content first — `removeAll()`
   // is deliberately blocked by the sandbox's security guardrail (against wiping the whole scene),
@@ -307,7 +318,10 @@ test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skill
       // "succeeded" from the tool's perspective, but threw at runtime against the live Viewer
       // (see `handleServerToolResult`'s `continueConversation` feedback loop). Silently ignoring
       // this previously let real runtime failures pass this test undetected.
-      expect(result.executionError, `runtime execution failed: ${result.executionError}`).toBeUndefined();
+      expect(
+        result.executionError,
+        `runtime execution failed: ${result.executionError}`,
+      ).toBeUndefined();
       expect(typeof result.code).toBe("string");
       await expect(page.locator('[data-testid="error-text"]')).toHaveCount(0);
 

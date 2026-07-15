@@ -13,6 +13,14 @@ export interface BuildPromptOptions {
   skills: CesiumSkill[];
   /** Max number of skills to inline as grounding context. Defaults to 1. */
   maxSkills?: number;
+  /**
+   * Optional extra instructions appended to the end of the prompt's output rules, e.g. app-specific
+   * constraints ("this app's Viewer has no timeline/animation widgets") or house style preferences.
+   * Supplied by the host app/operator (via `generateVerifiedCesiumCode`'s own `extraInstructions`
+   * option, in turn from `CODEGEN_EXTRA_INSTRUCTIONS` in the sample backend) — never end-user
+   * chat input, to avoid injecting untrusted text into this second, code-generating model call.
+   */
+  extraInstructions?: string;
 }
 
 const DEFAULT_MAX_SKILLS = 1;
@@ -26,6 +34,7 @@ export function buildCodegenPrompt({
   intent,
   skills,
   maxSkills = DEFAULT_MAX_SKILLS,
+  extraInstructions,
 }: BuildPromptOptions): string {
   const groundingSkills = skills.slice(0, maxSkills);
 
@@ -48,5 +57,9 @@ Output rules:
 - The host Viewer's optional UI widgets (e.g. \`viewer.timeline\`, \`viewer.animation\`, \`viewer.baseLayerPicker\`, \`viewer.geocoder\`, \`viewer.fullscreenButton\`) may be disabled/undefined depending on how the host app constructed its \`Viewer\` — never assume one of these exists just because a reference example calls it. Only reference \`viewer.timeline\`/\`viewer.animation\` if the intent explicitly asks to interact with that widget. For controlling simulation time (e.g. bounds, playback speed, looping), set properties directly on \`viewer.clock\` (\`startTime\`, \`stopTime\`, \`currentTime\`, \`multiplier\`, \`shouldAnimate\`, \`clockRange\`) instead of calling methods on \`viewer.timeline\`.
 - Any file path or URL for an external asset (a model, texture, GeoJSON file, etc.) shown in the reference material (e.g. \`"model.glb"\`, \`"path/to/model.glb"\`, \`"/data/counties.geojson"\`) is illustrative only, not a real network-reachable resource — never reuse a reference example's placeholder path verbatim as if it will resolve. Only use a concrete asset URL/ID if the user's intent explicitly supplies one (a URL, an Ion asset ID, or a named public sample asset called out by the reference material itself).
 - In a \`Cesium3DTileStyle\` style expression (e.g. \`Cesium.Cesium3DTileStyle\`'s \`color\`/\`show\` conditions), a feature property that a tile doesn't have (e.g. \`\${feature['height']}\`) evaluates to \`undefined\`, NOT \`null\` — guarding a numeric comparison with \`!== null\` does NOT protect it (\`undefined !== null\` is \`true\`, so the comparison still runs and throws "Operator ... requires number arguments"). Guard with \`!== undefined\` instead (or check both), and always list the guard clause before the numeric comparison in the same \`&&\` condition.
-- If the intent cannot be accomplished with the documented APIs, or requires a concrete external asset URL/ID that isn't supplied by the intent or reference material, output a single-line JavaScript comment explaining why, instead of guessing at an API or inventing an asset path.`;
+- Never use computed/bracket member access (e.g. \`someArray[i]\`, \`coordinates[index]\`, \`obj["prop"]\`) anywhere in your output — it is rejected outright by static verification, even for plain array indexing. When you need to iterate over an array (e.g. per-vertex coordinates, a list of positions) and act on each element, use \`array.forEach((element) => { ... })\` or \`for (const element of array)\` so you bind the element directly instead of indexing into the array. Plain non-computed property/method access (\`viewer.entities\`, \`entity.position\`) is dot notation, not computed access, and remains fully allowed.
+- \`document\`, \`window\`, \`Image\`, and any other DOM/canvas API are never available in the code execution environment, even though your snippet ultimately runs in a browser — never call \`document.createElement("canvas")\` or similar to draw your own texture (e.g. for a \`ParticleSystem\`'s \`image\` option). If you need an ad-hoc image/canvas and the intent doesn't supply a concrete image URL, use \`new Cesium.PinBuilder().fromColor(Cesium.Color.<NAME>, size)\` — it synchronously returns a real canvas you can pass directly as the image.
+- If the intent cannot be accomplished with the documented APIs, or requires a concrete external asset URL/ID that isn't supplied by the intent or reference material, output a single-line JavaScript comment explaining why, instead of guessing at an API or inventing an asset path.${
+    extraInstructions?.trim() ? `\n\nAdditional instructions from the host application:\n${extraInstructions.trim()}` : ""
+  }`;
 }

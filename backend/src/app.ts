@@ -63,6 +63,10 @@ export function createBackendApp({ env, model }: BackendAppOptions): Express {
             model,
             maxSkills: env.CODEGEN_MAX_SKILLS,
             maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
+            maxLength: env.CODEGEN_MAX_CODE_LENGTH,
+            maxLines: env.CODEGEN_MAX_CODE_LINES,
+            allowedSymbols: env.CODEGEN_ALLOWED_SYMBOLS,
+            extraInstructions: env.CODEGEN_EXTRA_INSTRUCTIONS,
           }),
         }
       : {}),

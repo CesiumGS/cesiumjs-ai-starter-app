@@ -1,5 +1,14 @@
-import { describe, expect, test, vi } from "vitest";
-import { Cartesian3, Cesium3DTileStyle } from "cesium";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import {
+  Cartesian3,
+  Cesium3DTileset,
+  Cesium3DTileStyle,
+  CesiumTerrainProvider,
+  createOsmBuildingsAsync,
+  createWorldImageryAsync,
+  createWorldTerrainAsync,
+  GeoJsonDataSource,
+} from "cesium";
 import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
 
 /**
@@ -8,7 +17,61 @@ import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
  * itself (`Cesium.Cartesian3.fromDegrees`, `viewer.camera.flyTo`, `viewer.entities.add`) rather
  * than calling one pre-implemented, per-intent capability function — proving the LLM is the one
  * writing the CesiumJS logic, not the frontend.
+ *
+ * The genuinely async, network/Ion-backed `Cesium.*` factories (`createWorldImageryAsync`,
+ * `Cesium3DTileset.fromUrl`, ...) are mocked at the module level below (`vi.mock("cesium", ...)`)
+ * so these tests never hit the real network or Cesium Ion — `runCesiumCodeInSandbox` itself has
+ * no test-only injection seam for this; it always binds the real `cesium` module's exports, so
+ * mocking that module is the only way to intercept them.
  */
+
+vi.mock("cesium", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("cesium")>();
+  return {
+    ...actual,
+    createWorldImageryAsync: vi.fn(async (options?: unknown) => ({
+      kind: "imageryProvider",
+      options,
+    })),
+    createOsmBuildingsAsync: vi.fn(async (options?: unknown) => ({
+      kind: "osmBuildingsTileset",
+      options,
+    })),
+    createWorldTerrainAsync: vi.fn(async (options?: unknown) => ({
+      kind: "terrainProvider",
+      options,
+    })),
+    createWorldBathymetryAsync: vi.fn(async (options?: unknown) => ({
+      kind: "bathymetryProvider",
+      options,
+    })),
+    Cesium3DTileset: {
+      ...actual.Cesium3DTileset,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({ kind: "tileset", url, options })),
+      fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
+        kind: "tileset",
+        assetId,
+        options,
+      })),
+    },
+    CesiumTerrainProvider: {
+      ...actual.CesiumTerrainProvider,
+      fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
+        kind: "terrainProvider",
+        assetId,
+        options,
+      })),
+    },
+    GeoJsonDataSource: {
+      ...actual.GeoJsonDataSource,
+      load: vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options })),
+    },
+    Model: {
+      ...actual.Model,
+      fromGltfAsync: vi.fn(async (options?: unknown) => ({ kind: "model", options })),
+    },
+  };
+});
 
 // A minimal class (not a plain `{}` object literal) standing in for real Cesium's `Globe` class
 // instance — `SandboxHandles.isPlainData` distinguishes a real class instance (opaque handle,
@@ -74,51 +137,9 @@ function fakeViewer() {
   };
 }
 
-/** A fake `CesiumAsyncFactories` (see `cesium-bindings.ts`) so tests never hit the real network/Ion. */
-function fakeAsyncFactories() {
-  return {
-    createWorldImageryAsync: vi.fn(async (options?: unknown) => ({
-      kind: "imageryProvider",
-      options,
-    })),
-    createOsmBuildingsAsync: vi.fn(async (options?: unknown) => ({
-      kind: "osmBuildingsTileset",
-      options,
-    })),
-    createWorldTerrainAsync: vi.fn(async (options?: unknown) => ({
-      kind: "terrainProvider",
-      options,
-    })),
-    createWorldBathymetryAsync: vi.fn(async (options?: unknown) => ({
-      kind: "bathymetryProvider",
-      options,
-    })),
-    cesium3DTilesetFromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
-      kind: "tileset",
-      url,
-      options,
-    })),
-    cesium3DTilesetFromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
-      kind: "tileset",
-      assetId,
-      options,
-    })),
-    cesiumTerrainProviderFromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
-      kind: "terrainProvider",
-      assetId,
-      options,
-    })),
-    geoJsonDataSourceLoad: vi.fn(async (data: unknown, options?: unknown) => ({
-      kind: "dataSource",
-      data,
-      options,
-    })),
-    modelFromGltfAsync: vi.fn(async (options?: unknown) => ({
-      kind: "model",
-      options,
-    })),
-  };
-}
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("runCesiumCodeInSandbox", () => {
   test("composes Cesium.Cartesian3.fromDegrees + viewer.camera.flyTo from generated code", async () => {
@@ -302,7 +323,10 @@ describe("runCesiumCodeInSandbox", () => {
       code: `
         const a = new Cesium.Cartesian3(1, 2, 3);
         const b = new Cesium.Cartesian3(4, 5, 6);
-        const sum = Cesium.Cartesian3.add(a, b);
+        // Real CesiumJS's \`Cartesian3.add\`/\`subtract\`/... always take a \`result\` output
+        // parameter (to avoid an allocation) rather than returning a new instance — unlike the
+        // sandbox's previous hand-rolled reimplementation, this now runs the real bundled class.
+        const sum = Cesium.Cartesian3.add(a, b, new Cesium.Cartesian3());
         const dist = Cesium.Cartesian3.distance(a, b);
         const clamped = Cesium.Math.clamp(15, 0, 10);
         return { sum: { x: sum.x, y: sum.y, z: sum.z }, dist, clamped };
@@ -320,13 +344,11 @@ describe("runCesiumCodeInSandbox", () => {
     expect(result.clamped).toBe(10);
   });
 
-  test("loads world imagery via the injected async factory and adds it as an imagery layer", async () => {
+  test("loads world imagery via the (mocked) async factory and adds it as an imagery layer", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const provider = await Cesium.createWorldImageryAsync();
         const layer = await viewer.imageryLayers.addImageryProvider(provider);
@@ -335,7 +357,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: true });
-    expect(asyncFactories.createWorldImageryAsync).toHaveBeenCalledTimes(1);
+    expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
     expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledTimes(1);
     const passedProvider = viewer.imageryLayers.addImageryProvider.mock.calls[0][0] as {
       kind: string;
@@ -345,11 +367,9 @@ describe("runCesiumCodeInSandbox", () => {
 
   test("loads OSM buildings via the bare Cesium.createOsmBuildingsAsync alias and adds them to scene.primitives", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const tileset = await createOsmBuildingsAsync();
         await viewer.scene.primitives.add(tileset);
@@ -358,17 +378,15 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "added" });
-    expect(asyncFactories.createOsmBuildingsAsync).toHaveBeenCalledTimes(1);
+    expect(createOsmBuildingsAsync).toHaveBeenCalledTimes(1);
     expect(viewer.scene.primitives.add).toHaveBeenCalledTimes(1);
   });
 
   test("loads a 3D Tileset by URL and adds it to scene.primitives", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const tileset = await Cesium.Cesium3DTileset.fromUrl("https://example.com/tileset.json");
         await viewer.scene.primitives.add(tileset);
@@ -377,7 +395,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(asyncFactories.cesium3DTilesetFromUrl).toHaveBeenCalledWith(
+    expect(Cesium3DTileset.fromUrl).toHaveBeenCalledWith(
       "https://example.com/tileset.json",
       undefined,
     );
@@ -386,11 +404,9 @@ describe("runCesiumCodeInSandbox", () => {
 
   test("loads a 3D Tileset by Ion asset id and styles it via property assignment (tileset.style = ...)", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const tileset = await Cesium.Cesium3DTileset.fromIonAssetId(75343);
         tileset.style = new Cesium.Cesium3DTileStyle({ color: "color('red')" });
@@ -400,7 +416,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(asyncFactories.cesium3DTilesetFromIonAssetId).toHaveBeenCalledWith(75343, undefined);
+    expect(Cesium3DTileset.fromIonAssetId).toHaveBeenCalledWith(75343, undefined);
     const addedTileset = viewer.scene.primitives.add.mock.calls[0][0] as { style: unknown };
     // Proves the guest's `tileset.style = ...` assignment actually reached the real object
     // (the `set` trap on the remote proxy), not just the guest's own inert local proxy target.
@@ -409,11 +425,9 @@ describe("runCesiumCodeInSandbox", () => {
 
   test("loads a terrain provider by Ion asset id and assigns it via scene.globe.terrainProvider = ...", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const terrainProvider = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
         viewer.scene.globe.terrainProvider = terrainProvider;
@@ -422,7 +436,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(asyncFactories.cesiumTerrainProviderFromIonAssetId).toHaveBeenCalledWith(1, undefined);
+    expect(CesiumTerrainProvider.fromIonAssetId).toHaveBeenCalledWith(1, undefined);
     expect((viewer.scene.globe.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
@@ -432,11 +446,9 @@ describe("runCesiumCodeInSandbox", () => {
   // across separate sandboxed runs.
   test("switches the terrain provider via Cesium.createWorldTerrainAsync", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const terrain = await Cesium.createWorldTerrainAsync();
         await viewer.scene.setTerrainProvider(terrain);
@@ -445,17 +457,15 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(asyncFactories.createWorldTerrainAsync).toHaveBeenCalledTimes(1);
+    expect(createWorldTerrainAsync).toHaveBeenCalledTimes(1);
     expect((viewer.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
   test("loads GeoJSON via Cesium.GeoJsonDataSource.load and adds it to viewer.dataSources", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         const dataSource = await Cesium.GeoJsonDataSource.load("https://example.com/data.geojson", { clampToGround: true });
         await viewer.dataSources.add(dataSource);
@@ -464,22 +474,17 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(asyncFactories.geoJsonDataSourceLoad).toHaveBeenCalledWith(
-      "https://example.com/data.geojson",
-      {
-        clampToGround: true,
-      },
-    );
+    expect(GeoJsonDataSource.load).toHaveBeenCalledWith("https://example.com/data.geojson", {
+      clampToGround: true,
+    });
     expect(viewer.dataSources.add).toHaveBeenCalledTimes(1);
   });
 
   test("rejects a second async CesiumJS call in the same script (Asyncify one-call-per-script guard)", async () => {
     const viewer = fakeViewer();
-    const asyncFactories = fakeAsyncFactories();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      asyncFactories,
       code: `
         await Cesium.createWorldImageryAsync();
         await Cesium.createWorldTerrainAsync();
@@ -489,7 +494,7 @@ describe("runCesiumCodeInSandbox", () => {
 
     expect(outcome.success).toBe(false);
     expect(outcome.error).toMatch(/only one async cesiumjs call/i);
-    expect(asyncFactories.createWorldImageryAsync).toHaveBeenCalledTimes(1);
-    expect(asyncFactories.createWorldTerrainAsync).not.toHaveBeenCalled();
+    expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
+    expect(createWorldTerrainAsync).not.toHaveBeenCalled();
   });
 });

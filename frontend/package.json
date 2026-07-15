@@ -13,7 +13,7 @@
     "@cesium-ai/chat-element": "*",
     "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/sample-config": "*",
-    "@cesium-ai/sandbox-cesium": "*",
+    "@cesium-ai/codegen-sandbox": "*",
     "@cesium-ai/tools-schemas": "*",
     "@stratakit/mui": "^0.5.0",
     "cesium": "^1.127.0",

@@ -27,14 +27,37 @@
  * `buildCesiumAsyncFactoryGuestPrelude` (whose explicit `Cesium.X = ...` assignments must land on
  * the same underlying plain object this proxy still forwards property *writes* to by default).
  */
+import { extractFunctionBody } from "./function-source.js";
+
+// Ambient shims for guest-only globals `guestStaticFallbackBody` references: `__staticCesiumHandleId__`
+// is injected as a `const` declaration ahead of the extracted body (see
+// `buildCesiumStaticFallbackGuestPrelude` below), `__remoteProxy__` is declared by
+// `guest-prelude-host-bridge.ts`'s prelude (evaluated earlier), and `Cesium` is declared (as
+// `let`) by `guest-prelude-value-types.ts`'s prelude. None of these `declare`s emit any JS or
+// appear in the extracted text — they exist purely so this file's guest-side logic can be
+// written as a real, type-checked function instead of an opaque template-literal string.
+declare const __staticCesiumHandleId__: string;
+declare function __remoteProxy__(handleId: string): any;
+declare let Cesium: any;
+
+/**
+ * Never invoked — exists only so `extractFunctionBody` can recover its exact source text (see
+ * `function-source.ts`). Declares the guest-side static-namespace fallback proxy described in
+ * this file's top-level doc comment.
+ */
+function guestStaticFallbackBody(): void {
+  const __staticCesium__ = __remoteProxy__(__staticCesiumHandleId__);
+  Cesium = new Proxy(Cesium, {
+    get(target: any, prop: string | symbol) {
+      if (typeof prop === "symbol" || prop in target) return Reflect.get(target, prop);
+      return __staticCesium__[prop];
+    },
+  });
+}
+
 export function buildCesiumStaticFallbackGuestPrelude(staticCesiumHandleId: string): string {
-  return `
-const __staticCesium__ = __remoteProxy__(${JSON.stringify(staticCesiumHandleId)});
-Cesium = new Proxy(Cesium, {
-  get(target, prop) {
-    if (typeof prop === "symbol" || prop in target) return Reflect.get(target, prop);
-    return __staticCesium__[prop];
-  },
-});
-  `.trim();
+  return [
+    `const __staticCesiumHandleId__ = ${JSON.stringify(staticCesiumHandleId)};`,
+    extractFunctionBody(guestStaticFallbackBody),
+  ].join("\n");
 }
