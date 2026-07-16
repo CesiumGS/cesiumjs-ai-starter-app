@@ -1,7 +1,7 @@
 /**
  * Builds the guest-side prelude that upgrades the `Cesium` namespace object (declared by
  * `buildCesiumValueTypeGuestPrelude`) into a `Proxy` falling back to the *real* static CesiumJS
- * module for any property not explicitly reimplemented as a pure guest-side value type.
+ * allowlist for properties not explicitly reimplemented as pure guest-side value types.
  *
  * `buildCesiumValueTypeGuestPrelude` only reimplements a handful of the most commonly generated,
  * pure/side-effect-free value types (`Cartesian3`, `Color`, ...) directly in guest JS — real
@@ -12,12 +12,10 @@
  * (no AST-verification failure, no thrown error surfaced as a tool result `error`), but nothing
  * ever reached the live Viewer for that specific call.
  *
- * Instead of hand-maintaining an ever-growing explicit allowlist of static classes, this falls
- * back to a `__remoteProxy__` (see `guest-prelude-host-bridge.ts`) bound to the *entire* real
- * `Cesium` module, registered host-side as a single root handle
- * (`cesium-code-sandbox.ts`'s `staticCesiumHandleId`) — the same generic, dynamically-dispatched
- * mechanism already used for the live `viewer`, so newly reached static classes never require
- * touching this marshaling layer again. The existing `assertSandboxPropertyAllowed` guard (run by
+ * This falls back to a `__remoteProxy__` (see `guest-prelude-host-bridge.ts`) bound to a curated
+ * object of non-network Cesium exports, registered host-side as a single root handle
+ * (`guest-prelude.ts`'s `staticCesiumHandleId`) — the same generic, dynamically-dispatched
+ * mechanism already used for the live `viewer`. The existing `assertSandboxPropertyAllowed` guard (run by
  * every `__hostGetSync__`/`__hostApplySync__`/`__hostConstructSync__` call, regardless of which
  * handle it targets) still applies, so e.g. `Cesium.Material._materialCache` (a private,
  * underscore-prefixed internal) remains blocked exactly as it would on the `viewer` itself.

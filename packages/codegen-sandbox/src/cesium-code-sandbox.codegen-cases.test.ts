@@ -5,7 +5,7 @@ import {
   Color,
   GeoJsonPrimitive,
   Ion,
-  ScreenSpaceEventType,
+  ModelAnimationLoop,
   WebMapServiceImageryProvider,
 } from "cesium";
 import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
@@ -25,11 +25,9 @@ import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
  * documenting real, currently-unfixed boundaries of this sandbox design (found while writing
  * this suite) rather than papering over them:
  *
- *  - a bare native constructor reference (e.g. `Number`) can never cross the JSON marshaling
- *    boundary as a real function — it silently becomes `null`.
- *  - a guest-defined callback passed into a bound host method (e.g.
- *    `ScreenSpaceEventHandler.prototype.setInputAction`) never survives the boundary either, for
- *    the same reason — there is no guest->host callback bridge, only host->guest data returns.
+ *  - `Number`, `String`, and `Boolean` constructor references cross through explicit tags.
+ *  - guest-defined callbacks are rejected explicitly because they cannot outlive the disposable
+ *    guest VM; they are never silently converted to `null`.
  *  - anything that genuinely needs a browser `document`/canvas (`PinBuilder.fromColor`) cannot
  *    run under Vitest's Node environment at all — this is a real environment limitation of this
  *    *test*, not a bug in the sandbox itself (the real browser sandbox handles it fine — see the
@@ -67,8 +65,10 @@ function fakeViewer() {
     camera: {
       setView: vi.fn(),
       flyTo: vi.fn(),
+      flyToBoundingSphere: vi.fn(),
       positionCartographic: { latitude: 0.8527, longitude: 0.041, height: 1000 },
     },
+    flyTo: vi.fn(async () => true),
     entities: {
       get values() {
         return Array.from(entitiesById.values());
@@ -285,19 +285,9 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(outcome.result).toBeCloseTo(3600, 5);
   });
 
-  test("cesiumjs-time-properties: KNOWN GAP — new Cesium.SampledProperty(Number) fails because a bare native constructor can't cross the JSON marshaling boundary", async () => {
+  test("cesiumjs-time-properties: passes a supported native constructor to Cesium.SampledProperty", async () => {
     const viewer = fakeViewer();
 
-    // Real-world generated code for "time-dynamic property" almost always looks exactly like
-    // this (`new Cesium.SampledProperty(Number)`) — `Number`/`String`/`Boolean` are guest-native
-    // global functions with no `__isCesiumRemoteProxy__` marker, so `__marshalArg__` falls through
-    // to its final `return value` branch, and the outer `JSON.stringify` of the args array then
-    // silently drops the function value entirely (arrays serialize a function element as `null`).
-    // The host receives `null` where it expected the `Number` constructor, and Cesium's own
-    // `Check.defined("type", type)` guard at the top of the real `SampledProperty` constructor
-    // rejects it. This is a real, currently-unfixed gap in this sandbox's marshaling design (no
-    // guest->host support for passing along language-level constructor references) — not a model
-    // mistake, and not something `assertSandboxPropertyAllowed` is meant to catch.
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
@@ -306,23 +296,12 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
       `,
     });
 
-    expect(outcome.success).toBe(false);
+    expect(outcome).toEqual({ success: true, result: "created" });
   });
 
-  test("cesiumjs-interaction: KNOWN GAP — a guest callback passed into screenSpaceEventHandler.setInputAction never reaches the host as a callable", async () => {
+  test("cesiumjs-interaction: explicitly rejects callbacks that cannot outlive the guest VM", async () => {
     const viewer = fakeViewer();
 
-    // Real-world generated code registers click handlers on the `Viewer`'s own pre-built
-    // `screenSpaceEventHandler` rather than constructing a new one (which would need
-    // `viewer.scene.canvas` — deliberately in `BLOCKED_SANDBOX_PROPERTIES` as a DOM-escape guard).
-    // But the guest-defined callback closure hits the exact same "function crossing the JSON
-    // boundary" problem as the `SampledProperty(Number)` case above: there is no guest->host
-    // callback bridge in this design (only host->guest data returns) — `__marshalArg__` leaves a
-    // plain function value untagged, and the outer `JSON.stringify` of the args array then
-    // silently drops it to `null`. The real host-side handler ends up with `null` stored as its
-    // click action instead of the intended callback — silently, with no thrown error. Generated
-    // "on click, do X" code therefore currently can never actually run its handler body when a
-    // user later clicks.
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
@@ -334,12 +313,9 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
       `,
     });
 
-    expect(outcome).toEqual({ success: true, result: "registered" });
-    expect(viewer.screenSpaceEventHandler.setInputAction).toHaveBeenCalledTimes(1);
-    const [passedAction, passedType] = viewer.screenSpaceEventHandler.setInputAction.mock.calls[0];
-    // The intended callback never survives the boundary — it silently arrives as `null`.
-    expect(passedAction).toBeNull();
-    expect(passedType).toBe(ScreenSpaceEventType.LEFT_CLICK);
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/guest callbacks cannot cross/i);
+    expect(viewer.screenSpaceEventHandler.setInputAction).not.toHaveBeenCalled();
   });
 
   test("cesiumjs-terrain-environment: sets scene.globe.terrainProvider from CesiumTerrainProvider.fromIonAssetId(1)", async () => {
@@ -453,5 +429,301 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
 
     expect(outcome).toEqual({ success: true, result: 5 });
     expect(viewer.scene.primitives.add).toHaveBeenCalledTimes(1);
+  });
+
+  test("cesiumjs-camera: animated Camera.flyTo with an explicit duration and orientation", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const destination = await Cesium.Cartesian3.fromDegrees(139.6917, 35.6895, 15000);
+        await viewer.camera.flyTo({
+          destination,
+          duration: 3,
+          orientation: {
+            heading: Cesium.Math.toRadians(90),
+            pitch: Cesium.Math.toRadians(-45),
+          },
+        });
+        return "flying";
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: "flying" });
+    expect(viewer.camera.flyTo).toHaveBeenCalledTimes(1);
+    const passedOptions = viewer.camera.flyTo.mock.calls[0][0] as {
+      duration: number;
+      orientation: { heading: number; pitch: number };
+    };
+    expect(passedOptions.duration).toBe(3);
+    expect(passedOptions.orientation.heading).toBeCloseTo(Math.PI / 2, 5);
+    expect(passedOptions.orientation.pitch).toBeCloseTo(-Math.PI / 4, 5);
+  });
+
+  test("cesiumjs-camera: a `complete` callback on Camera.flyTo is rejected the same as any other guest callback", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const destination = await Cesium.Cartesian3.fromDegrees(0, 0, 1000);
+        await viewer.camera.flyTo({
+          destination,
+          complete: function () {
+            return "arrived";
+          },
+        });
+        return "unreachable";
+      `,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/guest callbacks cannot cross/i);
+    expect(viewer.camera.flyTo).not.toHaveBeenCalled();
+  });
+
+  test("cesiumjs-camera: flyToBoundingSphere frames a real BoundingSphere with a HeadingPitchRange offset", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const center = await Cesium.Cartesian3.fromDegrees(-122.4194, 37.7749, 0);
+        const boundingSphere = new Cesium.BoundingSphere(center, 5000);
+        const offset = new Cesium.HeadingPitchRange(
+          Cesium.Math.toRadians(45),
+          Cesium.Math.toRadians(-30),
+          10000,
+        );
+        await viewer.camera.flyToBoundingSphere(boundingSphere, { offset, duration: 1.5 });
+        return "done";
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: "done" });
+    expect(viewer.camera.flyToBoundingSphere).toHaveBeenCalledTimes(1);
+    const [passedSphere, passedOptions] = viewer.camera.flyToBoundingSphere.mock.calls[0] as [
+      { center: { x: number; y: number; z: number }; radius: number },
+      { offset: { heading: number; pitch: number; range: number }; duration: number },
+    ];
+    expect(passedSphere.radius).toBe(5000);
+    expect(passedOptions.offset.heading).toBeCloseTo(Math.PI / 4, 5);
+    expect(passedOptions.offset.range).toBe(10000);
+    expect(passedOptions.duration).toBe(1.5);
+  });
+
+  test("cesiumjs-entities: adds a polyline entity with a height-per-vertex path and a real Color material", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const positions = await Cesium.Cartesian3.fromDegreesArrayHeights([
+          -122.4194, 37.7749, 0,
+          -118.2437, 34.0522, 0,
+          -73.9857, 40.7484, 0,
+        ]);
+        const entity = await viewer.entities.add({
+          polyline: {
+            positions,
+            width: 4,
+            material: Cesium.Color.DODGERBLUE,
+          },
+        });
+        return entity.polyline.positions.length;
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: 3 });
+    expect(viewer.entities.add).toHaveBeenCalledTimes(1);
+    const passedOptions = viewer.entities.add.mock.calls[0][0] as {
+      polyline: { positions: unknown[]; width: number; material: Color };
+    };
+    expect(passedOptions.polyline.positions).toHaveLength(3);
+    expect(passedOptions.polyline.width).toBe(4);
+    expect(passedOptions.polyline.material).toBeInstanceOf(Color);
+  });
+
+  test("cesiumjs-entities: enforces the client-side entity cap once the collection limit is reached", async () => {
+    const viewer = fakeViewer();
+    // Seeds one pre-existing entity directly (host-side, bypassing the sandbox) so the cap is
+    // already at its limit before the generated code runs its own `viewer.entities.add`.
+    viewer.entities.add({ id: "seed-entity", point: { pixelSize: 4 } });
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      maxItemsPerCollection: 1,
+      code: `
+        const position = await Cesium.Cartesian3.fromDegrees(-100, 40, 0);
+        await viewer.entities.add({ position });
+        return "unreachable";
+      `,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/Entity cap of 1 reached/);
+    // Only the host-side seed call above, never the sandboxed one — the cap check runs before
+    // the real `add` is ever forwarded.
+    expect(viewer.entities.add).toHaveBeenCalledTimes(1);
+  });
+
+  test("cesiumjs-spatial-math: Cartesian3.distance measures a straight-line distance entirely in-guest (no host round trip)", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const paris = await Cesium.Cartesian3.fromDegrees(2.3522, 48.8566, 0);
+        const london = await Cesium.Cartesian3.fromDegrees(-0.1276, 51.5072, 0);
+        return Cesium.Cartesian3.distance(paris, london);
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const expectedDistance = Cartesian3.distance(
+      Cartesian3.fromDegrees(2.3522, 48.8566, 0),
+      Cartesian3.fromDegrees(-0.1276, 51.5072, 0),
+    );
+    expect(outcome.result).toBeCloseTo(expectedDistance, 5);
+  });
+
+  test("cesiumjs-spatial-math: Transforms.eastNorthUpToFixedFrame + Matrix4.getTranslation round-trips a local frame's origin", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const origin = await Cesium.Cartesian3.fromDegrees(-75.59777, 40.03883, 0);
+        const frame = await Cesium.Transforms.eastNorthUpToFixedFrame(origin);
+        const translation = await Cesium.Matrix4.getTranslation(frame, new Cesium.Cartesian3());
+        return { x: translation.x, y: translation.y, z: translation.z };
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const result = outcome.result as { x: number; y: number; z: number };
+    const expectedOrigin = Cartesian3.fromDegrees(-75.59777, 40.03883, 0);
+    expect(result.x).toBeCloseTo(expectedOrigin.x, 2);
+    expect(result.y).toBeCloseTo(expectedOrigin.y, 2);
+    expect(result.z).toBeCloseTo(expectedOrigin.z, 2);
+  });
+
+  test("cesiumjs-core-utilities: Rectangle.fromDegrees + BoundingSphere composition needs no DOM/WebGL", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const rectangle = await Cesium.Rectangle.fromDegrees(-109, 37, -102, 41);
+        const center = await Cesium.Rectangle.center(rectangle, new Cesium.Cartographic());
+        const centerPosition = await Cesium.Cartesian3.fromRadians(center.longitude, center.latitude, 0);
+        const boundingSphere = new Cesium.BoundingSphere(centerPosition, 500000);
+        return { west: rectangle.west, radius: boundingSphere.radius };
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const result = outcome.result as { west: number; radius: number };
+    expect(result.west).toBeCloseTo((-109 * Math.PI) / 180, 5);
+    expect(result.radius).toBe(500000);
+  });
+
+  test("cesiumjs-time-properties: SampledPositionProperty.addSample builds a moving path, sampled back via entity.position.getValue", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const property = new Cesium.SampledPositionProperty();
+        const startTime = await Cesium.JulianDate.fromIso8601("2024-01-01T00:00:00Z");
+        const startPosition = await Cesium.Cartesian3.fromDegrees(-75, 40, 100);
+        await property.addSample(startTime, startPosition);
+
+        const laterTime = await Cesium.JulianDate.addSeconds(startTime, 10, new Cesium.JulianDate());
+        const laterPosition = await Cesium.Cartesian3.fromDegrees(-75.01, 40.01, 200);
+        await property.addSample(laterTime, laterPosition);
+
+        const entity = await viewer.entities.add({ position: property });
+        const sampled = await entity.position.getValue(startTime);
+        return { x: sampled.x, y: sampled.y, z: sampled.z };
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const result = outcome.result as { x: number; y: number; z: number };
+    const expectedStart = Cartesian3.fromDegrees(-75, 40, 100);
+    expect(result.x).toBeCloseTo(expectedStart.x, 1);
+    expect(result.y).toBeCloseTo(expectedStart.y, 1);
+    expect(result.z).toBeCloseTo(expectedStart.z, 1);
+  });
+
+  test("cesiumjs-models-particles: entity model options reference the real Cesium.ModelAnimationLoop enum", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const position = await Cesium.Cartesian3.fromDegrees(-116.52, 35.02, 0);
+        const entity = await viewer.entities.add({
+          position,
+          model: {
+            uri: "https://example.com/model.glb",
+            animationLoop: Cesium.ModelAnimationLoop.REPEAT,
+            minimumPixelSize: 64,
+          },
+        });
+        return entity.model.animationLoop;
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: ModelAnimationLoop.REPEAT });
+    const passedOptions = viewer.entities.add.mock.calls[0][0] as {
+      model: { animationLoop: number; minimumPixelSize: number };
+    };
+    expect(passedOptions.model.minimumPixelSize).toBe(64);
+  });
+
+  test("cesiumjs-camera: viewer.flyTo(entity) flies to a just-added entity via the async viewer-method bridge", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const position = await Cesium.Cartesian3.fromDegrees(-87.6298, 41.8781, 0);
+        const entity = await viewer.entities.add({ position });
+        const arrived = await viewer.flyTo(entity, { duration: 2 });
+        return arrived;
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: true });
+    expect(viewer.flyTo).toHaveBeenCalledTimes(1);
+    const [passedEntity, passedOptions] = viewer.flyTo.mock.calls[0] as [
+      { id: string },
+      { duration: number },
+    ];
+    expect(passedEntity.id).toBeDefined();
+    expect(passedOptions.duration).toBe(2);
+  });
+
+  test("cesiumjs-terrain-environment: only one async CesiumJS factory call is allowed per generated script", async () => {
+    const viewer = fakeViewer();
+    const callsBefore = vi.mocked(CesiumTerrainProvider.fromIonAssetId).mock.calls.length;
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const first = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
+        const second = await Cesium.CesiumTerrainProvider.fromIonAssetId(2);
+        return "unreachable";
+      `,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/only one async cesiumjs call/i);
+    // Only the first `fromIonAssetId` call actually reaches the mock — the second is rejected by
+    // the async-bridge's own call-count guard before ever dispatching to the real factory.
+    expect(vi.mocked(CesiumTerrainProvider.fromIonAssetId).mock.calls.length).toBe(callsBefore + 1);
   });
 });

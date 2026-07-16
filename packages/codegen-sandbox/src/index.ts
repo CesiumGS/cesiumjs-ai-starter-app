@@ -29,7 +29,7 @@ export {
 
 export {
   assertEntityCapNotExceeded,
-  DEFAULT_MAX_ENTITIES,
+  DEFAULT_MAX_ITEMS_PER_COLLECTION,
   EntityCapExceededError,
-  type EntityCapOptions,
+  type SceneCollectionCapOptions,
 } from "./execution-guards.js";

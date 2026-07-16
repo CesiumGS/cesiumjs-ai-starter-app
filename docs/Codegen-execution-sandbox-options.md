@@ -206,7 +206,7 @@ type FrameCommand =
 function handleFrameCommand(viewer: Cesium.Viewer, command: FrameCommand) {
   switch (command.type) {
     case "addPoint": {
-      assertEntityCapNotExceeded(viewer, { maxEntities: 200 });
+      assertEntityCapNotExceeded(viewer, { maxItemsPerCollection: 200 });
       const position = Cesium.Cartesian3.fromDegrees(command.longitude, command.latitude);
       const entity = viewer.entities.add({ position, label: { text: command.label ?? "" } });
       return { entityId: entity.id };

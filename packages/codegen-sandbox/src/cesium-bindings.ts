@@ -12,8 +12,12 @@
  * - `bindings/guarded-viewer-proxy.ts` -- `createProxiedViewer`, the `Proxy`-based guardrail layer
  *   (entity/primitive/data-source caps) that transparently forwards the rest of the real Cesium
  *   `Viewer` API.
- * - `bindings/cesium-async-factories.ts` -- the injectable seam for the small, fixed set of
- *   genuinely async, network/Ion-backed `Cesium.*` factories, plus their guest-side prelude.
+ * - `bindings/host-bridge.ts` -- registers the host-side property, call, constructor, and async
+ *   functions consumed by the guest-side bridge.
+ * - `bindings/guest-prelude.ts` -- owns the static Cesium allowlist, root handles, and dependency
+ *   order for all guest-side binding preludes.
+ * - `bindings/cesium-async-factories.ts` -- the registry for the small, fixed set of genuinely
+ *   async, network/Ion-backed `Cesium.*` factories, plus their guest-side prelude.
  * - `bindings/guest-prelude-host-bridge.ts` -- the guest-side `__remoteProxy__` bridge for
  *   synchronous host calls (property reads / method calls on opaque handles).
  * - `bindings/guest-prelude-value-types.ts` -- the guest-side prelude reimplementing pure,
@@ -38,3 +42,5 @@ export { buildCesiumHostBridgeGuestPrelude } from "./bindings/guest-prelude-host
 export { buildCesiumValueTypeGuestPrelude } from "./bindings/guest-prelude-value-types.js";
 
 export { buildCesiumStaticFallbackGuestPrelude } from "./bindings/guest-prelude-static-fallback.js";
+
+export { buildViewerAsyncMethodGuestPrelude } from "./bindings/guest-prelude-viewer-async.js";

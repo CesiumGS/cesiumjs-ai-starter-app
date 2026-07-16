@@ -17,6 +17,7 @@ import { build } from "esbuild";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { format, resolveConfig } from "prettier";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "../src/bindings/generated");
@@ -62,7 +63,9 @@ bundleSource = bundleSource.replace(/^"use strict";\s*/, "");
 // escaped). The function is never called; `Function.prototype.toString()` (which the spec
 // guarantees returns the exact original source text) recovers the bundle text back out at
 // module-load time, and a simple first-`{`/last-`}` slice strips the wrapper.
-const fileContents = `// @ts-nocheck
+const prettierConfig = (await resolveConfig(outFile)) ?? {};
+const fileContents = await format(
+  `// @ts-nocheck
 // GENERATED FILE — do not edit by hand.
 // Regenerate with: npm run generate:cesium-bundle -w @cesium-ai/codegen-sandbox
 // (see ../../../scripts/generate-cesium-core-bundle.mjs)
@@ -89,7 +92,9 @@ export const CESIUM_CORE_BUNDLE_SOURCE = __cesiumCoreBundleFnText__.slice(
   __cesiumCoreBundleFnText__.indexOf("{") + 1,
   __cesiumCoreBundleFnText__.lastIndexOf("}"),
 );
-`;
+`,
+  { ...prettierConfig, filepath: outFile },
+);
 
 await mkdir(outDir, { recursive: true });
 await writeFile(outFile, fileContents, "utf8");

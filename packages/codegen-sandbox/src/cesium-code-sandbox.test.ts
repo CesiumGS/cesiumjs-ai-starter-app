@@ -125,19 +125,30 @@ function fakeViewer() {
     zoomTo: vi.fn(),
     flyTo: vi.fn(),
     imageryLayers: {
+      length: 0,
       addImageryProvider: vi.fn((provider: unknown) => ({ provider })),
       remove: vi.fn(),
       removeAll: vi.fn(),
     },
     scene: {
       primitives: {
+        length: 0,
         add: vi.fn((primitive: unknown) => primitive),
         remove: vi.fn(),
+      },
+      groundPrimitives: {
+        length: 0,
+        add: vi.fn((primitive: unknown) => primitive),
+      },
+      postProcessStages: {
+        length: 0,
+        add: vi.fn((stage: unknown) => stage),
       },
       globe: new FakeGlobe(),
     },
     terrainProvider: undefined as unknown,
     dataSources: {
+      length: 0,
       add: vi.fn(() => Promise.resolve()),
       remove: vi.fn(),
       removeAll: vi.fn(),
@@ -294,7 +305,7 @@ describe("runCesiumCodeInSandbox", () => {
     expect(viewer.entities.removeById).toHaveBeenCalledWith("my-entity");
   });
 
-  test("composes camera.flyHome/zoomIn/zoomOut/lookAt and viewer.zoomTo/flyTo", async () => {
+  test("composes camera.flyHome/zoomIn/zoomOut/lookAt", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
@@ -305,8 +316,6 @@ describe("runCesiumCodeInSandbox", () => {
         await viewer.camera.zoomIn(100);
         await viewer.camera.zoomOut(50);
         await viewer.camera.lookAt(entity.position, new Cesium.HeadingPitchRange(0, -0.5, 1000));
-        await viewer.zoomTo(entity);
-        await viewer.flyTo(entity);
         return "done";
       `,
     });
@@ -319,8 +328,42 @@ describe("runCesiumCodeInSandbox", () => {
     const [, offset] = viewer.camera.lookAt.mock.calls[0];
     expect(offset.heading).toBeCloseTo(0, 5);
     expect(offset.range).toBeCloseTo(1000, 5);
-    expect(viewer.zoomTo).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(["zoomTo", "flyTo"] as const)(
+    "routes Promise-returning viewer.%s through the async host bridge instead of rejecting it",
+    async (method) => {
+      const viewer = fakeViewer();
+      viewer[method].mockResolvedValueOnce(true);
+
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        code: `return await viewer.${method}({});`,
+      });
+
+      expect(outcome).toEqual({ success: true, result: true });
+      expect(viewer[method]).toHaveBeenCalledTimes(1);
+      expect(viewer[method]).toHaveBeenCalledWith({}, undefined);
+    },
+  );
+
+  test("rejects a second async CesiumJS call in the same script even when it's viewer.flyTo/zoomTo", async () => {
+    const viewer = fakeViewer();
+    viewer.flyTo.mockResolvedValueOnce(true);
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        await viewer.flyTo({});
+        await viewer.zoomTo({});
+        return "unreachable";
+      `,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/only one async cesiumjs call/i);
     expect(viewer.flyTo).toHaveBeenCalledTimes(1);
+    expect(viewer.zoomTo).not.toHaveBeenCalled();
   });
 
   test("computes Cartesian3 vector math and Cesium.Math helpers entirely in-guest", async () => {
@@ -469,7 +512,7 @@ describe("runCesiumCodeInSandbox", () => {
     expect((viewer.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
-  test("loads GeoJSON via Cesium.GeoJsonDataSource.load and adds it to viewer.dataSources", async () => {
+  test("rejects Promise-returning collection methods that lack an explicit async binding", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
@@ -481,11 +524,91 @@ describe("runCesiumCodeInSandbox", () => {
       `,
     });
 
-    expect(outcome).toEqual({ success: true, result: "done" });
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/promise-returning cesium api/i);
     expect(GeoJsonDataSource.load).toHaveBeenCalledWith("https://example.com/data.geojson", {
       clampToGround: true,
     });
-    expect(viewer.dataSources.add).toHaveBeenCalledTimes(1);
+    expect(viewer.dataSources.add).not.toHaveBeenCalled();
+  });
+
+  test("does not expose network-capable Cesium.Resource through the static namespace", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return Cesium.Resource.fetchJson({ url: "https://example.com/data.json" });`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/undefined|null|property/i);
+  });
+
+  test("applies a per-run entity cap", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      maxItemsPerCollection: 0,
+      code: `return viewer.entities.add({ id: "blocked" });`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/entity cap of 0/i);
+    expect(viewer.entities.add).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ["viewer.imageryLayers.addImageryProvider({})", "imagery layer"],
+    ["viewer.scene.groundPrimitives.add({})", "ground primitive"],
+    ["viewer.scene.postProcessStages.add({})", "post-process stage"],
+  ])("caps additional scene growth surface %s", async (code, kind) => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      maxItemsPerCollection: 0,
+      code: `return ${code};`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(new RegExp(`${kind} cap of 0`, "i"));
+  });
+
+  test("rejects a data source whose own entity count exceeds the per-run cap", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      maxItemsPerCollection: 1,
+      code: `return viewer.dataSources.add({ entities: { values: [{}, {}] } });`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/data source entity cap of 1/i);
+    expect(viewer.dataSources.add).not.toHaveBeenCalled();
+  });
+
+  test("times out a stalled explicitly bound async factory", async () => {
+    const viewer = fakeViewer();
+    vi.mocked(createWorldImageryAsync).mockImplementationOnce(
+      () =>
+        new Promise<never>((_resolve, reject) =>
+          setTimeout(() => reject(new Error("late factory failure")), 1500),
+        ),
+    );
+
+    const startedAt = Date.now();
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      timeoutMs: 1000,
+      code: `return await Cesium.createWorldImageryAsync();`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/timed out|interrupted/i);
+    expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
+    expect(Date.now() - startedAt).toBeLessThan(1400);
   });
 
   test("rejects a second async CesiumJS call in the same script (Asyncify one-call-per-script guard)", async () => {

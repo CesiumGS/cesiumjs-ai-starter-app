@@ -12,13 +12,25 @@
  *   viewer.scene.setTerrainProvider(...)    → synthetic method (real API is property-only)
  *   everything else                    → transparent forward to the real API
  *
+ * `viewer.flyTo`/`viewer.zoomTo` are notably absent from this proxy's own interception list:
+ * they're genuinely Promise-returning, so they're instead intercepted one layer up, guest-side,
+ * by `guest-prelude-viewer-async.ts` — routed through QuickJS's Asyncify bridge rather than this
+ * proxy's plain synchronous forwarding. This proxy still transparently forwards them (they simply
+ * behave like any other real `Viewer` method here), but generated code never actually reaches
+ * this layer for those two names.
+ *
  * `createGuardedProxy` is the single generic `get`-trap factory every wrapper below builds on;
  * each wrapper only declares its own exceptions to "forward everything transparently" via a
  * `GuardedProxySpec`. This means the guest-visible API surface tracks real CesiumJS automatically
  * as it evolves — nothing here needs updating when Cesium adds a new method.
  */
 import type { Viewer } from "cesium";
-import { assertCollectionCapNotExceeded, assertEntityCapNotExceeded } from "../execution-guards.js";
+import {
+  DEFAULT_MAX_ITEMS_PER_COLLECTION,
+  assertCollectionCapNotExceeded,
+  assertEntityCapNotExceeded,
+  type SceneCollectionCapOptions,
+} from "../execution-guards.js";
 import { PROXY_MARKER } from "./sandbox-handles.js";
 
 /**
@@ -131,10 +143,10 @@ function createGuardedProxy(target: object, spec: GuardedProxySpec): unknown {
 function guardedAdd(
   real: (...args: unknown[]) => unknown,
   target: object,
-  assertCapNotExceeded: () => void,
+  assertCapNotExceeded: (item: unknown) => void,
 ): (item: unknown) => unknown {
   return function addWithGuardrails(item: unknown): unknown {
-    assertCapNotExceeded();
+    assertCapNotExceeded(item);
     return Reflect.apply(real, target, [item]);
   };
 }
@@ -148,17 +160,23 @@ function guardedAdd(
  * never invoked as a function (`proxiedViewer(...)`), so an `apply` trap would
  * be unreachable dead code.
  */
-export function createProxiedViewer(viewer: Viewer): Viewer {
+export function createProxiedViewer(
+  viewer: Viewer,
+  options: SceneCollectionCapOptions = {},
+): Viewer {
+  const maxCount = options.maxItemsPerCollection ?? DEFAULT_MAX_ITEMS_PER_COLLECTION;
   return createGuardedProxy(viewer, {
     nested: {
-      entities: (real) => createProxiedEntities(real, viewer),
+      entities: (real) => createProxiedEntities(real, viewer, maxCount),
       // Camera needs a synthetic `getPositionCartographic()` accessor — the real Cesium `Camera`
       // only exposes `positionCartographic` as a readonly property, but generated code (and
       // callers going through the async host bridge) uniformly `await` every viewer call, so a
       // plain property read needs a matching zero-arg method form too.
       camera: (real) => createProxiedCamera(real),
-      scene: (real) => createProxiedScene(real, viewer),
-      dataSources: (real) => createProxiedDataSources(real),
+      scene: (real) => createProxiedScene(real, viewer, maxCount),
+      dataSources: (real) => createProxiedDataSources(real, maxCount),
+      imageryLayers: (real) =>
+        createProxiedCollection(real, "Imagery layer", maxCount, ["add", "addImageryProvider"]),
     },
   }) as Viewer;
 }
@@ -180,10 +198,13 @@ function createProxiedCamera(camera: object): unknown {
  * Creates a Proxy-wrapped EntityCollection that applies the entity cap
  * to `add` calls while transparently forwarding all other operations.
  */
-function createProxiedEntities(entities: object, viewer: Viewer): unknown {
+function createProxiedEntities(entities: object, viewer: Viewer, maxItems: number): unknown {
   return createGuardedProxy(entities, {
     guarded: {
-      add: (real, target) => guardedAdd(real, target, () => assertEntityCapNotExceeded(viewer)),
+      add: (real, target) =>
+        guardedAdd(real, target, () =>
+          assertEntityCapNotExceeded(viewer, { maxItemsPerCollection: maxItems }),
+        ),
     },
   });
 }
@@ -198,7 +219,7 @@ function createProxiedEntities(entities: object, viewer: Viewer): unknown {
  * generated code (and the async factory bridge) uniformly call methods rather
  * than assign properties, so this bridges the two.
  */
-function createProxiedScene(scene: object, viewer: Viewer): unknown {
+function createProxiedScene(scene: object, viewer: Viewer, maxCount: number): unknown {
   return createGuardedProxy(scene, {
     synthetic: {
       setTerrainProvider: () => (terrainProvider: unknown) => {
@@ -206,7 +227,9 @@ function createProxiedScene(scene: object, viewer: Viewer): unknown {
       },
     },
     nested: {
-      primitives: (real) => createProxiedPrimitives(real),
+      primitives: (real) => createProxiedCollection(real, "Primitive", maxCount),
+      groundPrimitives: (real) => createProxiedCollection(real, "Ground primitive", maxCount),
+      postProcessStages: (real) => createProxiedCollection(real, "Post-process stage", maxCount),
     },
   });
 }
@@ -216,33 +239,43 @@ function createProxiedScene(scene: object, viewer: Viewer): unknown {
  * to `add` calls (guards against unbounded 3D Tileset/primitive growth
  * bypassing the entity cap) while transparently forwarding everything else.
  */
-function createProxiedPrimitives(primitives: object): unknown {
-  return createGuardedProxy(primitives, {
-    guarded: {
-      add: (real, target) =>
+function createProxiedCollection(
+  collection: object,
+  kind: string,
+  maxCount: number,
+  addMethods = ["add"],
+): unknown {
+  const guarded = Object.fromEntries(
+    addMethods.map((method) => [
+      method,
+      (real: (...args: unknown[]) => unknown, target: object) =>
         guardedAdd(real, target, () =>
-          assertCollectionCapNotExceeded((target as { length: number }).length, "Primitive", {
-            maxCount: DEFAULT_MAX_ENTITIES,
-          }),
+          assertCollectionCapNotExceeded((target as { length: number }).length, kind, { maxCount }),
         ),
-    },
+    ]),
+  );
+  return createGuardedProxy(collection, {
+    guarded,
   });
 }
 
-/**
- * Creates a Proxy-wrapped DataSourceCollection that applies a collection cap
- * to `add` calls (guards against unbounded GeoJSON/KML data source growth
- * bypassing the entity cap) while transparently forwarding everything else.
- */
-function createProxiedDataSources(dataSources: object): unknown {
+function createProxiedDataSources(dataSources: object, maxCount: number): unknown {
   return createGuardedProxy(dataSources, {
     guarded: {
       add: (real, target) =>
-        guardedAdd(real, target, () =>
+        guardedAdd(real, target, (item) => {
           assertCollectionCapNotExceeded((target as { length: number }).length, "Data source", {
-            maxCount: DEFAULT_MAX_ENTITIES,
-          }),
-        ),
+            maxCount,
+          });
+          const entityCount = (item as { entities?: { values?: unknown[] } } | null)?.entities
+            ?.values?.length;
+          if (entityCount !== undefined) {
+            assertCollectionCapNotExceeded(entityCount, "Data source entity", { maxCount });
+          }
+          throw new Error(
+            'Promise-returning Cesium API "viewer.dataSources.add" requires an explicitly supported async sandbox binding.',
+          );
+        }),
     },
   });
 }

@@ -1,9 +1,9 @@
 import type { Viewer } from "cesium";
 
 /**
- * Client-side guards around sandboxed `executeCesiumCode` runs: an entity
- * count cap (bounds how much scene state a single session can accumulate) and
- * a generic collection cap (primitives/data sources). Defense-in-depth around
+ * Client-side guards around sandboxed `executeCesiumCode` runs: a shared
+ * per-collection item cap for entities, primitives, imagery layers, and data
+ * sources. Defense-in-depth around
  * LLM-generated code — independent of the sandbox's own isolation (see
  * `code-sandbox.ts`) and of the backend's static verification of the
  * generated snippet.
@@ -17,35 +17,39 @@ import type { Viewer } from "cesium";
  */
 
 // ---------------------------------------------------------------------------
-// Entity count cap
+// Scene collection caps
 // ---------------------------------------------------------------------------
 
-/** Default ceiling on the number of entities a sandboxed session may add. */
-export const DEFAULT_MAX_ENTITIES = 200;
+/** Default ceiling applied independently to each guarded scene collection. */
+export const DEFAULT_MAX_ITEMS_PER_COLLECTION = 200;
 
-export interface EntityCapOptions {
-  /** Maximum number of entities the live `Viewer` may hold. Defaults to {@link DEFAULT_MAX_ENTITIES}. */
-  maxEntities?: number;
+export interface SceneCollectionCapOptions {
+  /** Maximum items allowed in each guarded collection. */
+  maxItemsPerCollection?: number;
 }
 
 /** Thrown by {@link assertEntityCapNotExceeded} once the cap is reached. */
 export class EntityCapExceededError extends Error {
-  constructor(maxEntities: number) {
-    super(`Entity cap of ${maxEntities} reached; refusing to add another entity.`);
+  constructor(maxItemsPerCollection: number) {
+    super(`Entity cap of ${maxItemsPerCollection} reached; refusing to add another entity.`);
     this.name = "EntityCapExceededError";
   }
 }
 
 /**
  * Throws {@link EntityCapExceededError} once `viewer.entities.values.length`
- * has reached `options.maxEntities` (or {@link DEFAULT_MAX_ENTITIES} if
+ * has reached `options.maxItemsPerCollection` (or
+ * {@link DEFAULT_MAX_ITEMS_PER_COLLECTION} if
  * omitted). Callers should check this immediately before any
  * `viewer.entities.add(...)` call.
  */
-export function assertEntityCapNotExceeded(viewer: Viewer, options: EntityCapOptions = {}): void {
-  const maxEntities = options.maxEntities ?? DEFAULT_MAX_ENTITIES;
-  if (viewer.entities.values.length >= maxEntities) {
-    throw new EntityCapExceededError(maxEntities);
+export function assertEntityCapNotExceeded(
+  viewer: Viewer,
+  options: SceneCollectionCapOptions = {},
+): void {
+  const maxItems = options.maxItemsPerCollection ?? DEFAULT_MAX_ITEMS_PER_COLLECTION;
+  if (viewer.entities.values.length >= maxItems) {
+    throw new EntityCapExceededError(maxItems);
   }
 }
 

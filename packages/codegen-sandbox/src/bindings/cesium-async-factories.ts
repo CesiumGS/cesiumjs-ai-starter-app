@@ -20,10 +20,9 @@ import { extractFunctionBody } from "./function-source.js";
 
 /**
  * The real, network/Ion-backed CesiumJS async factory/loader functions bound under the `Cesium.`
- * namespace (imagery/terrain providers, OSM buildings, 3D Tiles, GeoJSON) — pulled out into an
- * injectable seam so tests can substitute fakes instead of hitting the network or Cesium Ion.
- * Defaults to the real imports (see {@link DEFAULT_CESIUM_ASYNC_FACTORIES}); production callers
- * never need to pass this explicitly.
+ * namespace (imagery/terrain providers, OSM buildings, 3D Tiles, GeoJSON). Keeping them in one
+ * registry lets the host bridge derive its dispatch map directly; tests mock the `cesium` module
+ * exports when they need to avoid the network or Cesium Ion.
  */
 export interface CesiumAsyncFactories {
   createWorldImageryAsync: typeof createWorldImageryAsync;
@@ -37,7 +36,7 @@ export interface CesiumAsyncFactories {
   modelFromGltfAsync: typeof Model.fromGltfAsync;
 }
 
-/** The real, network-backed factories — used whenever a caller doesn't inject a fake. */
+/** The real, network-backed factories used by the host bridge. */
 export const DEFAULT_CESIUM_ASYNC_FACTORIES: CesiumAsyncFactories = {
   createWorldImageryAsync,
   createOsmBuildingsAsync,
@@ -73,7 +72,7 @@ export const CESIUM_ASYNC_FACTORY_NAMES = [
  * ...) on top of the existing guest `Cesium` object (from `buildCesiumValueTypeGuestPrelude`)
  * and as bare top-level aliases, matching the same "usable both as `Cesium.x` and bare `x`"
  * convention as the value types. Unlike the rest of the bound API surface, these route through
- * QuickJS's Asyncify bridge (`__hostCallAsync__`, registered by `cesium-code-sandbox.ts`) since the
+ * QuickJS's Asyncify bridge (`__hostCallAsync__`, registered by `host-bridge.ts`) since the
  * whole point of calling them is to actually wait for the real network/Ion-backed result — subject
  * to the "only one async CesiumJS call per script" guard enforced host-side.
  *
@@ -83,7 +82,7 @@ export const CESIUM_ASYNC_FACTORY_NAMES = [
 // Ambient shims for guest-only globals `guestAsyncFactoryBody` references: all declared by
 // preludes evaluated earlier (`guest-prelude-value-types.ts`'s `Cesium`, `guest-prelude-host-
 // bridge.ts`'s `__marshalArg__`/`__reviveRemoteValue__`, and `__hostCallAsync__`, registered
-// host-side by `cesium-code-sandbox.ts`). None of these `declare`s emit any JS or appear in the
+// host-side by `host-bridge.ts`). None of these `declare`s emit any JS or appear in the
 // extracted text — they exist purely so this file's guest-side logic can be written as a real,
 // type-checked function instead of an opaque template-literal string.
 declare let Cesium: any;

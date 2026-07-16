@@ -31,9 +31,9 @@ The guest has:
   a live reference to the real `Viewer`/`Entity`/etc. — every value crossing the boundary is either
   plain JSON data or an opaque handle id (see `SandboxHandles` and the "Execution Sequence" diagram
   below).
-- **No access to the DOM, `fetch`, `window`, or any other browser global** unless explicitly bound
-  in by the host — the guest prelude only exposes the small, deliberate `Cesium`/`viewer` surface
-  built in `src/bindings/`.
+- **No access to the DOM, `fetch`, `window`, or network-capable static Cesium APIs** unless
+  explicitly bound by the host. `Cesium.Resource`, for example, is not in the static export
+  allowlist; supported network factories use the named async bridge.
 - **Enforceable resource limits.** `ctx.runtime.setInterruptHandler(...)` and
   `ctx.runtime.setMemoryLimit(...)` bound how long a script may run and how much memory it may
   use — an infinite loop or runaway allocation in generated code is caught and turned into a
@@ -86,9 +86,9 @@ Key points:
   `Viewer` so calls like `entities.add(...)`, `scene.primitives.add(...)`, and
   `dataSources.add(...)` are checked against caps before being forwarded — the generated code
   itself needs no changes to respect them.
-- **Failure is always structured, never thrown.** Timeouts (interrupt handler), memory-limit hits,
-  cap violations, and any other runtime error all resolve to `{ success: false, error }` rather
-  than an unhandled rejection or a crashed tab.
+- **Failure is always structured, never thrown.** Timeouts, memory-limit hits, cap violations,
+  unsupported guest callbacks, unbound Promise-returning APIs, and other runtime errors all
+  resolve to `{ success: false, error }` rather than an unhandled rejection or crashed tab.
 
 ### Execution Sequence: How Generated Code Reaches the Real `Viewer`
 
@@ -143,7 +143,7 @@ A few things this makes concrete:
   crosses as a live reference — it's wrapped as `{ __cesiumSandboxHandle__: "h2" }` and re-proxied,
   so later calls like `entity.position = ...` go through the exact same bridge.
 - **Guardrails run host-side, inside the real `Viewer` proxy, not in generated code.** The snippet
-  never needs to know about `DEFAULT_MAX_ENTITIES` — `createProxiedViewer`'s `entities` wrapper
+  never needs to know about `DEFAULT_MAX_ITEMS_PER_COLLECTION` — `createProxiedViewer`'s `entities` wrapper
   checks the cap before forwarding, so a cap violation surfaces as a normal thrown `Error` in the
   guest, then as `{ success: false, error }` from `runCesiumCodeInSandbox`.
 
@@ -221,7 +221,7 @@ sequenceDiagram
 
 1. The caller invokes `runCesiumCodeInSandbox({ code, viewer })` (`cesium-code-sandbox.ts`). It
    calls `newAsyncContext()` → a fresh QuickJS VM (`ctx`), creates `const handles = new
-   SandboxHandles()`, then `registerSyncHostBridge(ctx, handles)` and
+SandboxHandles()`, then `registerSyncHostBridge(ctx, handles)` and
    `registerAsyncHostBridge(ctx, handles)`, which register the five `__host*__` functions
    documented in the table below onto the QuickJS global object.
 2. `buildGuestPrelude(viewer, handles)` calls `handles.wrapRoot(createProxiedViewer(viewer))`.
@@ -231,7 +231,7 @@ sequenceDiagram
    yet wrapped in the `{ __cesiumSandboxHandle__: ... }` envelope, since this is a root binding,
    not a call result crossing the boundary.
 3. `buildGuestPrelude` joins the value-type, host-bridge, static-fallback, and async-factory
-   prelude builders with `` const viewer = __remoteProxy__("h0"); `` into one script string, and
+   prelude builders with `const viewer = __remoteProxy__("h0");` into one script string, and
    `runCesiumCodeInSandbox` wraps the snippet after it: `` `${prelude}\n(async () => {\n${code}\n})();` ``.
 4. `evaluateWrappedCode(ctx, wrapped)` calls `ctx.evalCodeAsync(wrapped)` — the prelude's top-level
    statements run first (defining `__remoteProxy__`, `__marshalArg__`, etc.), then the wrapped
@@ -250,7 +250,7 @@ sequenceDiagram
    trap (`guest-prelude-host-bridge.ts`), which calls `__hostGetSync__("h0", "entities")`.
    - Host side (`registerHostGetSync`): `assertSandboxPropertyAllowed("entities")` passes;
      `handles.resolve("h0")` returns the guarded `Viewer` proxy; `Reflect.get(viewerProxy,
-     "entities")` triggers `createProxiedViewer`'s `nested.entities` handler, returning a **new**
+"entities")` triggers `createProxiedViewer`'s `nested.entities` handler, returning a **new**
      `createProxiedEntities(...)` proxy around the real `EntityCollection`. `handles.wrap(...)`
      sees its `PROXY_MARKER` (so `isPlainData` is `false`), stores it under a new id (`"h2"`), and
      returns `{ __cesiumSandboxHandle__: "h2" }`.
@@ -269,12 +269,12 @@ sequenceDiagram
      `addWithGuardrails`. `handles.unwrap(...)` on the arguments **revives** the tagged
      `Cartesian3`/`Color` JSON back into real Cesium class instances. Calling the function runs
      `assertEntityCapNotExceeded(viewer)` (throws `EntityCapExceededError` past
-     `DEFAULT_MAX_ENTITIES`), then the real `EntityCollection.add(realOptions)` — CesiumJS creates
+    `DEFAULT_MAX_ITEMS_PER_COLLECTION`), then the real `EntityCollection.add(realOptions)` — CesiumJS creates
      and returns a real `Entity`.
    - `handles.wrap(entity)` isn't plain data or a value type, so it becomes a new handle (`"h4"`);
      the envelope `{ ok: true, value: { __cesiumSandboxHandle__: "h4" } }` crosses back, and the
      guest revives it to `__remoteProxy__("h4")` (usable in later snippet lines, e.g. `entity.show
-     = false`).
+= false`).
 
 **Finishing up:**
 
@@ -287,7 +287,7 @@ sequenceDiagram
     discarded. The real `Entity` that was created lives on only where real CesiumJS keeps it
     (`viewer.entities`), exactly as if ordinary trusted code had added it.
 
-If step 7 or 8 had instead exceeded `DEFAULT_MAX_ENTITIES`, `assertEntityCapNotExceeded` throws
+If step 7 or 8 had instead exceeded `DEFAULT_MAX_ITEMS_PER_COLLECTION`, `assertEntityCapNotExceeded` throws
 `EntityCapExceededError` host-side; `registerHostApplySync`'s `catch` turns that into `{ ok: false,
 error }`, the guest's remote proxy turns a `false` envelope into a thrown `Error`, and that
 propagates out of the async IIFE to `runCesiumCodeInSandbox`'s own `try`/`catch`, ending in `{
@@ -325,23 +325,23 @@ script is allowed to do with the `Viewer`).
 **Interpreter-level (QuickJS runtime) guards** — set up once per call in
 `runCesiumCodeInSandbox`:
 
-| Guard             | Mechanism                                                            | Default                               | What happens when it trips                                                                             |
-| ----------------- | -------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Execution timeout | `ctx.runtime.setInterruptHandler(shouldInterruptAfterDeadline(...))` | 5000 ms (`DEFAULT_TIMEOUT_MS`)        | An infinite loop or long-running script is interrupted; the call resolves `{ success: false, error }`. |
-| Memory limit      | `ctx.runtime.setMemoryLimit(...)`                                    | 64 MiB (`DEFAULT_MEMORY_LIMIT_BYTES`) | A runaway allocation aborts the script the same way QuickJS's own out-of-memory handling would.        |
-| Fresh VM per call | `newAsyncContext()` created and `vm.dispose()`d in a `finally` block | n/a                                   | No state, bindings, or object handles ever leak between separate `runCesiumCodeInSandbox` invocations. |
-| Handle table cap  | `MAX_HANDLES` in `SandboxHandles`                                    | 500                                   | Bounds how many live object handles a single run may accumulate.                                       |
+| Guard             | Mechanism                                                                       | Default                               | What happens when it trips                                                                             |
+| ----------------- | ------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Execution timeout | QuickJS interrupt handler plus a host-side deadline race around async factories | 5000 ms (`DEFAULT_TIMEOUT_MS`)        | Guest loops and stalled supported host factories resolve `{ success: false, error }`.                  |
+| Memory limit      | `ctx.runtime.setMemoryLimit(...)`                                               | 64 MiB (`DEFAULT_MEMORY_LIMIT_BYTES`) | A runaway allocation aborts the script the same way QuickJS's own out-of-memory handling would.        |
+| Fresh VM per call | `newAsyncContext()` created and `vm.dispose()`d in a `finally` block            | n/a                                   | No state, bindings, or object handles ever leak between separate `runCesiumCodeInSandbox` invocations. |
+| Handle table cap  | `MAX_HANDLES` in `SandboxHandles`                                               | 500                                   | Bounds how many live object handles a single run may accumulate.                                       |
 
 **Cesium-domain guards** — enforced host-side, transparently, inside `createProxiedViewer` and
 `execution-guards.ts`, so generated code never has to be aware of them:
 
-| Guard                         | Enforced on                                                                                                                          | Default                                                                                                                                                                                                                                                                                         | Failure mode                                                                                                                                                                |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Entity cap                    | `viewer.entities.add(...)`                                                                                                           | 200 (`DEFAULT_MAX_ENTITIES`); overridable per call via the optional `EntityCapOptions.maxEntities`                                                                                                                                                                                              | Throws `EntityCapExceededError` before forwarding to the real `add`.                                                                                                        |
-| Collection cap (primitives)   | `viewer.scene.primitives.add(...)`                                                                                                   | shares the generic collection-cap check                                                                                                                                                                                                                                                         | Throws `CollectionCapExceededError`.                                                                                                                                        |
-| Collection cap (data sources) | `viewer.dataSources.add(...)`                                                                                                        | shares the generic collection-cap check                                                                                                                                                                                                                                                         | Throws `CollectionCapExceededError`.                                                                                                                                        |
-| Blocked property allowlist    | Every `__hostGetSync__` / `__hostSetSync__` / `__hostApplySync__` / `__hostConstructSync__` call, via `assertSandboxPropertyAllowed` | blocks any `_`-prefixed member, plus an explicit list (`destroy`, `document`, `window`, `canvas`, `container`, `contentWindow`, `contentDocument`, `ownerDocument`, `parentElement`, `defaultView`, `prototype`, `constructor`, `__proto__`, `caller`, `arguments`, `removeAll`, `isDestroyed`) | Throws _before_ the real property is ever read, written, or called — blocks DOM/lifecycle escape and bulk-removal footguns, on every handle, not just the initial `viewer`. |
-| Single async call cap         | `__hostCallAsync__`'s dispatcher                                                                                                     | 1 async factory call per script run                                                                                                                                                                                                                                                             | A 2nd async call in the same script is rejected outright (works around a known Asyncify crash) rather than risked.                                                          |
+| Guard                      | Enforced on                                                                                                                          | Default                                                                                                                                                                                                                                                                                         | Failure mode                                                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entity cap                 | `viewer.entities.add(...)`                                                                                                           | 200 (`DEFAULT_MAX_ITEMS_PER_COLLECTION`); overridable via `SceneCollectionCapOptions.maxItemsPerCollection`                                                                                                                                                                                     | Throws `EntityCapExceededError` before forwarding to the real `add`.                                                                                                        |
+| Collection cap             | `scene.primitives`, `scene.groundPrimitives`, `scene.postProcessStages`, `imageryLayers`, and `dataSources` additions                | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Throws `CollectionCapExceededError`.                                                                                                                                        |
+| Data-source entity cap     | Entity count inside an item passed to `viewer.dataSources.add(...)`                                                                  | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Rejects one oversized data source before forwarding it.                                                                                                                     |
+| Blocked property allowlist | Every `__hostGetSync__` / `__hostSetSync__` / `__hostApplySync__` / `__hostConstructSync__` call, via `assertSandboxPropertyAllowed` | blocks any `_`-prefixed member, plus an explicit list (`destroy`, `document`, `window`, `canvas`, `container`, `contentWindow`, `contentDocument`, `ownerDocument`, `parentElement`, `defaultView`, `prototype`, `constructor`, `__proto__`, `caller`, `arguments`, `removeAll`, `isDestroyed`) | Throws _before_ the real property is ever read, written, or called — blocks DOM/lifecycle escape and bulk-removal footguns, on every handle, not just the initial `viewer`. |
+| Single async call cap      | `__hostCallAsync__`'s dispatcher                                                                                                     | 1 async factory call per script run                                                                                                                                                                                                                                                             | A 2nd async call in the same script is rejected outright (works around a known Asyncify crash) rather than risked.                                                          |
 
 Both layers fail the same way from the caller's perspective — a structured
 `{ success: false, error }` — so callers never need to distinguish "hit a resource limit" from "hit
@@ -353,16 +353,16 @@ Each module below owns one narrow slice of the host/guest marshaling design. Non
 an exhaustive manifest of Cesium's API surface — they lean on generic proxies and dynamic dispatch
 so the bound surface tracks real CesiumJS automatically as it evolves.
 
-| Module                               | Why it's needed                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sandbox-handles.ts`                 | Defines `SandboxHandles`, the core JSON marshaling boundary: tags real class instances (`Entity`, `Viewer`, ...) as opaque handle ids, transparently passes through JSON-safe value types (`Cartesian3`, `Color`, ...), and rejects unrecognized handle ids the guest might try to forge.                                                     |
-| `guarded-viewer-proxy.ts`            | Defines `createProxiedViewer` and the shared `createGuardedProxy` factory: wraps the real `Viewer` (and nested `camera`/`scene`/`entities`/`dataSources`) so cap checks and the blocked-property allowlist apply, while every other real Cesium API call still passes through transparently.                                                  |
-| `guest-prelude-host-bridge.ts`       | Builds the guest-side `__remoteProxy__`: the recursive `Proxy` that turns any handle id into something guest code can read/write/call/construct, dispatching each operation to the matching `__host*Sync__` function above.                                                                                                                   |
-| `guest-prelude-static-fallback.ts`   | Upgrades the guest's `Cesium` namespace object into a `Proxy` that falls back to the _real_ static `Cesium` module (through the same remote-proxy bridge) for any class not reimplemented as a pure guest-side value type — avoids hand-maintaining an ever-growing allowlist of static classes (`Rectangle`, `PinBuilder`, `Material`, ...). |
-| `guest-prelude-value-types.ts`       | Reimplements the handful of most commonly generated, pure/side-effect-free CesiumJS value types (`Cartesian2`/`Cartesian3`, `Color`, `Cartographic`, `HeadingPitchRange`/`HeadingPitchRoll`, `NearFarScalar`) directly in guest JS, so common math (`Cartesian3.fromDegrees`, `Color.fromCssColorString`) never needs a host round trip.      |
-| `cesium-async-factories.ts`          | The fixed allowlist of genuinely async real `Cesium.*` factories (imagery/terrain providers, 3D Tiles, GeoJSON, glTF models) dispatched through `__hostCallAsync__`, kept separate from the sync bridge because of the Asyncify one-call-per-script constraint.                                                                               |
-| `function-source.ts`                 | Provides `extractFunctionBody`, letting the guest-prelude "body" functions above be written as real, type-checked TypeScript functions with their source text extracted for injection into the guest script — instead of hand-written, unchecked template-literal strings.                                                                    |
-| `execution-guards.ts` (package root) | Client-side defense-in-depth caps (`assertEntityCapNotExceeded`, `assertCollectionCapNotExceeded`) — independent of both the sandbox's own process isolation and the backend's static verification of the generated snippet.                                                                                                                  |
+| Module                               | Why it's needed                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sandbox-handles.ts`                 | Defines `SandboxHandles`, the core JSON marshaling boundary: tags real class instances (`Entity`, `Viewer`, ...) as opaque handle ids, transparently passes through JSON-safe value types (`Cartesian3`, `Color`, ...), and rejects unrecognized handle ids the guest might try to forge.                                                |
+| `guarded-viewer-proxy.ts`            | Defines `createProxiedViewer` and the shared `createGuardedProxy` factory: wraps the real `Viewer` (and nested `camera`/`scene`/`entities`/`dataSources`) so cap checks and the blocked-property allowlist apply, while every other real Cesium API call still passes through transparently.                                             |
+| `guest-prelude-host-bridge.ts`       | Builds the guest-side `__remoteProxy__`: the recursive `Proxy` that turns any handle id into something guest code can read/write/call/construct, dispatching each operation to the matching `__host*Sync__` function above.                                                                                                              |
+| `guest-prelude-static-fallback.ts`   | Upgrades the guest's `Cesium` namespace object into a `Proxy` that falls back to a curated allowlist of non-network static Cesium exports through the same remote-proxy bridge. Network-capable exports such as `Resource` remain unavailable.                                                                                           |
+| `guest-prelude-value-types.ts`       | Reimplements the handful of most commonly generated, pure/side-effect-free CesiumJS value types (`Cartesian2`/`Cartesian3`, `Color`, `Cartographic`, `HeadingPitchRange`/`HeadingPitchRoll`, `NearFarScalar`) directly in guest JS, so common math (`Cartesian3.fromDegrees`, `Color.fromCssColorString`) never needs a host round trip. |
+| `cesium-async-factories.ts`          | The fixed allowlist of genuinely async real `Cesium.*` factories (imagery/terrain providers, 3D Tiles, GeoJSON, glTF models) dispatched through `__hostCallAsync__`, kept separate from the sync bridge because of the Asyncify one-call-per-script constraint.                                                                          |
+| `function-source.ts`                 | Provides `extractFunctionBody`, letting the guest-prelude "body" functions above be written as real, type-checked TypeScript functions with their source text extracted for injection into the guest script — instead of hand-written, unchecked template-literal strings.                                                               |
+| `execution-guards.ts` (package root) | Client-side defense-in-depth caps (`assertEntityCapNotExceeded`, `assertCollectionCapNotExceeded`) — independent of both the sandbox's own process isolation and the backend's static verification of the generated snippet.                                                                                                             |
 
 ## Usage
 
@@ -371,6 +371,22 @@ import { runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
 
 const result = await runCesiumCodeInSandbox({ code: verifiedSnippet, viewer });
 ```
+
+Set `maxItemsPerCollection` to override the ceiling applied independently to each guarded
+collection for one run:
+
+```ts
+const result = await runCesiumCodeInSandbox({
+  code: verifiedSnippet,
+  viewer,
+  maxItemsPerCollection: 50,
+});
+```
+
+Guest-native `Number`, `String`, and `Boolean` constructor references are supported as Cesium
+constructor arguments. Other guest functions are rejected explicitly: callbacks cannot safely
+outlive the disposable guest VM. Generic host methods that return Promises are also rejected;
+only named async factory bindings are awaited across the host boundary.
 
 Callers that need to bound how often the sandbox itself is invoked (e.g. this app's `ChatPanel`)
 should pair this with their own call rate limiter — this package no longer ships one, since it has
@@ -431,7 +447,7 @@ For production use, the trade-off typically favors keeping the sandbox.
 | `SandboxHandles`                                                                                               | Host/guest JSON marshaling: opaque handles for class instances, transparent tagging for value types.                                                    |
 | `createProxiedViewer`                                                                                          | Wraps a live `Viewer` with collection caps and a guard policy that blocks lifecycle, DOM, private, and bulk-removal properties.                         |
 | `buildCesiumHostBridgeGuestPrelude`, `buildCesiumAsyncFactoryGuestPrelude`, `buildCesiumValueTypeGuestPrelude` | The generic remote-proxy bridge and guest-side prelude generators — see `src/bindings/`.                                                                |
-| `assertEntityCapNotExceeded`, `DEFAULT_MAX_ENTITIES`, `EntityCapOptions`, `EntityCapExceededError`             | Caps how many entities one sandboxed session may add. `EntityCapOptions.maxEntities` is optional and falls back to `DEFAULT_MAX_ENTITIES` when omitted. |
+| `assertEntityCapNotExceeded`, `DEFAULT_MAX_ITEMS_PER_COLLECTION`, `SceneCollectionCapOptions`, `EntityCapExceededError` | Configures the ceiling applied independently to guarded scene collections. `maxItemsPerCollection` falls back to `DEFAULT_MAX_ITEMS_PER_COLLECTION`. |
 
 ## Why this isn't part of `@cesium-ai/tools-cesium` or `@cesium-ai/codegen-cesium`
 

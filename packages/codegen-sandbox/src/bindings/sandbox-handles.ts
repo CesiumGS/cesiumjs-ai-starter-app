@@ -49,6 +49,15 @@ export const VALUE_TYPE_MARK = "__cesiumType__";
  */
 export const UNDEFINED_MARK = "__cesiumUndefined__";
 
+/** Marker key identifying a small allowlist of guest-native scalar constructors. */
+export const NATIVE_CONSTRUCTOR_MARK = "__cesiumNativeConstructor__";
+
+const NATIVE_CONSTRUCTORS: Record<string, Function> = {
+  Boolean,
+  Number,
+  String,
+};
+
 /** Hard cap on live handles a single sandboxed run may accumulate (bounds unbounded retention). */
 const MAX_HANDLES = 500;
 
@@ -227,6 +236,12 @@ export class SandboxHandles {
       }
       if (VALUE_TYPE_MARK in record) return this.reviveValueType(record);
       if (UNDEFINED_MARK in record) return undefined;
+      if (NATIVE_CONSTRUCTOR_MARK in record) {
+        const name = record[NATIVE_CONSTRUCTOR_MARK] as string;
+        const constructor = NATIVE_CONSTRUCTORS[name];
+        if (!constructor) throw new Error(`Unsupported native constructor "${name}"`);
+        return constructor;
+      }
       return Object.fromEntries(Object.entries(record).map(([key, v]) => [key, this.unwrap(v)]));
     }
     return value;

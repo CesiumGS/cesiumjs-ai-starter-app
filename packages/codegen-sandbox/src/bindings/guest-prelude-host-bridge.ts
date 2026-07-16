@@ -4,34 +4,35 @@
  * host-side handle (e.g. the proxied `viewer`) without the host needing to pre-declare every
  * reachable symbol ahead of time. Every property access, assignment, call, and constructor
  * invocation is dispatched dynamically, by handle id, via four host bridge functions the caller
- * (`cesium-code-sandbox.ts`) must register before evaluating this prelude: `__hostGetSync__(handleId,
+ * (`host-bridge.ts`) must register before evaluating this prelude: `__hostGetSync__(handleId,
  * prop)`, `__hostSetSync__(handleId, prop, valueJson)`, `__hostApplySync__(handleId, argsJson)`,
  * and `__hostConstructSync__(handleId, argsJson)`.
  *
- * This deliberately never touches QuickJS's Asyncify bridge: every real CesiumJS `Viewer` call
- * this proxies is either already synchronous, or (like `camera.flyTo`/`dataSources.add`) resolves
- * once the operation *starts* rather than *completes* — a fire-and-forget style real production
- * code doesn't block on. To make that safe, remote-proxy objects deliberately never look like a
- * native `Promise` to the guest engine (their `then` property always resolves to `undefined`), so
- * `await`-ing one is a synchronous no-op instead of attempting to synchronously drive a real
- * host-side `Promise` to completion (which isn't possible without Asyncify). Only the small, fixed
- * set of genuinely async `Cesium.*` factories (see `buildCesiumAsyncFactoryGuestPrelude`) go
- * through the real Asyncify bridge.
+ * This deliberately never touches QuickJS's Asyncify bridge. Remote-proxy objects do not appear
+ * thenable, and the host rejects any Promise returned by this synchronous path instead of
+ * launching unobserved work. Only the fixed async factory allowlist (see
+ * `buildCesiumAsyncFactoryGuestPrelude`) may cross the Asyncify bridge.
  */
 import { extractFunctionBody } from "./function-source.js";
-import { HANDLE_MARK, UNDEFINED_MARK, VALUE_TYPE_MARK } from "./sandbox-handles.js";
+import {
+  HANDLE_MARK,
+  NATIVE_CONSTRUCTOR_MARK,
+  UNDEFINED_MARK,
+  VALUE_TYPE_MARK,
+} from "./sandbox-handles.js";
 
 // Ambient shims for guest-only globals `guestHostBridgeBody` references: `__handleMark__`/
 // `__valueTypeMark__` are injected as `const` declarations ahead of the extracted body (see
 // `buildCesiumHostBridgeGuestPrelude` below), `__CesiumCoreBundle__` is declared by
 // `guest-prelude-value-types.ts`'s prelude (evaluated first), and the four `__host*Sync__`
-// functions are registered host-side by `cesium-code-sandbox.ts` before this prelude runs. None
+// functions are registered host-side by `host-bridge.ts` before this prelude runs. None
 // of these `declare`s emit any JS or appear in the extracted text — they exist purely so this
 // file's guest-side logic can be written as a real, type-checked function instead of an opaque
 // template-literal string.
 declare const __handleMark__: string;
 declare const __valueTypeMark__: string;
 declare const __undefinedMark__: string;
+declare const __nativeConstructorMark__: string;
 declare const __CesiumCoreBundle__: {
   Cartesian2: new (...args: never[]) => any;
   Cartesian3: new (...args: never[]) => any;
@@ -71,6 +72,16 @@ function guestHostBridgeBody(): void {
       const out: Record<string, unknown> = {};
       out[__handleMark__] = value.__handleId__;
       return out;
+    }
+    if (typeof value === "function") {
+      if (value === Number || value === String || value === Boolean) {
+        const out: Record<string, unknown> = {};
+        out[__nativeConstructorMark__] = value.name;
+        return out;
+      }
+      throw new Error(
+        "Guest callbacks cannot cross the Cesium sandbox boundary because the guest VM is disposed after execution.",
+      );
     }
     if (Array.isArray(value)) return value.map(__marshalArg__);
     if (value !== null && typeof value === "object") {
@@ -219,6 +230,7 @@ export function buildCesiumHostBridgeGuestPrelude(): string {
     `const __handleMark__ = ${JSON.stringify(HANDLE_MARK)};`,
     `const __valueTypeMark__ = ${JSON.stringify(VALUE_TYPE_MARK)};`,
     `const __undefinedMark__ = ${JSON.stringify(UNDEFINED_MARK)};`,
+    `const __nativeConstructorMark__ = ${JSON.stringify(NATIVE_CONSTRUCTOR_MARK)};`,
     extractFunctionBody(guestHostBridgeBody),
   ].join("\n");
 }
