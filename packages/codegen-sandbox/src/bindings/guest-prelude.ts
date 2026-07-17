@@ -7,36 +7,7 @@ import { buildCesiumStaticFallbackGuestPrelude } from "./guest-prelude-static-fa
 import { buildCesiumValueTypeGuestPrelude } from "./guest-prelude-value-types.js";
 import { buildViewerAsyncMethodGuestPrelude } from "./guest-prelude-viewer-async.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
-
-const SAFE_STATIC_CESIUM_EXPORTS = new Set([
-  "Appearance",
-  "BoundingSphere",
-  "CustomShader",
-  "Ellipsoid",
-  "GeoJsonPrimitive",
-  "HeadingPitchRange",
-  "ImageryLayer",
-  "Ion",
-  "JulianDate",
-  "Material",
-  "MaterialAppearance",
-  "Matrix4",
-  "ModelAnimationLoop",
-  "ParticleSystem",
-  "PinBuilder",
-  "PolygonGeometry",
-  "Primitive",
-  "Rectangle",
-  "RectangleGeometry",
-  "SampledPositionProperty",
-  "SampledProperty",
-  "SceneMode",
-  "ScreenSpaceEventType",
-  "Sun",
-  "SunLight",
-  "Transforms",
-  "WebMapServiceImageryProvider",
-]);
+import { SAFE_STATIC_CESIUM_EXPORTS } from "./capabilities-registry.js";
 
 const SAFE_CESIUM_NAMESPACE = Object.freeze(
   Object.fromEntries(
@@ -53,9 +24,7 @@ export function buildCesiumGuestPrelude(
   handles: SandboxHandles,
   maxItemsPerCollection?: number,
 ): string {
-  const viewerHandleId = handles.wrapRoot(
-    createProxiedViewer(viewer, { maxItemsPerCollection }),
-  );
+  const viewerHandleId = handles.wrapRoot(createProxiedViewer(viewer, { maxItemsPerCollection }));
   const staticCesiumHandleId = handles.wrapRoot(SAFE_CESIUM_NAMESPACE);
 
   return [

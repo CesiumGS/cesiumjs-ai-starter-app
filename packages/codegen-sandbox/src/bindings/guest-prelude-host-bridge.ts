@@ -4,14 +4,17 @@
  * host-side handle (e.g. the proxied `viewer`) without the host needing to pre-declare every
  * reachable symbol ahead of time. Every property access, assignment, call, and constructor
  * invocation is dispatched dynamically, by handle id, via four host bridge functions the caller
- * (`host-bridge.ts`) must register before evaluating this prelude: `__hostGetSync__(handleId,
- * prop)`, `__hostSetSync__(handleId, prop, valueJson)`, `__hostApplySync__(handleId, argsJson)`,
- * and `__hostConstructSync__(handleId, argsJson)`.
+ * (`host-bridge.ts`) must register before evaluating this prelude: `__cesiumSandboxHostGetSync__`
+ * (`handleId, prop`), `__cesiumSandboxHostSetSync__` (`handleId, prop, valueJson`),
+ * `__cesiumSandboxHostApplySync__` (`handleId, argsJson`), and `__cesiumSandboxHostConstructSync__`
+ * (`handleId, argsJson`) — the `__cesiumSandbox`-prefixed names are this package's own globals, not
+ * anything QuickJS itself defines.
  *
- * This deliberately never touches QuickJS's Asyncify bridge. Remote-proxy objects do not appear
- * thenable, and the host rejects any Promise returned by this synchronous path instead of
- * launching unobserved work. Only the fixed async factory allowlist (see
- * `buildCesiumAsyncFactoryGuestPrelude`) may cross the Asyncify bridge.
+ * Property access and synchronous calls do not touch QuickJS's Asyncify bridge. When a call
+ * returns a host Promise, `__cesiumSandboxHostApplySync__` itself returns a genuine QuickJS
+ * promise (bridged host-side via `ctx.newPromise()`, not Asyncify) that resolves to the same
+ * JSON envelope a synchronous call would have returned directly — the `apply` trap below awaits
+ * it transparently either way.
  */
 import { extractFunctionBody } from "./function-source.js";
 import {
@@ -24,8 +27,9 @@ import {
 // Ambient shims for guest-only globals `guestHostBridgeBody` references: `__handleMark__`/
 // `__valueTypeMark__` are injected as `const` declarations ahead of the extracted body (see
 // `buildCesiumHostBridgeGuestPrelude` below), `__CesiumCoreBundle__` is declared by
-// `guest-prelude-value-types.ts`'s prelude (evaluated first), and the four `__host*Sync__`
-// functions are registered host-side by `host-bridge.ts` before this prelude runs. None
+// `guest-prelude-value-types.ts`'s prelude (evaluated first), and the four
+// `__cesiumSandboxHost*Sync__` functions are registered host-side by `host-bridge.ts` before this
+// prelude runs. None
 // of these `declare`s emit any JS or appear in the extracted text — they exist purely so this
 // file's guest-side logic can be written as a real, type-checked function instead of an opaque
 // template-literal string.
@@ -42,10 +46,17 @@ declare const __CesiumCoreBundle__: {
   HeadingPitchRoll: new (...args: never[]) => any;
   NearFarScalar: new (...args: never[]) => any;
 };
-declare function __hostGetSync__(handleId: string, prop: string): string;
-declare function __hostSetSync__(handleId: string, prop: string, valueJson: string): string;
-declare function __hostApplySync__(handleId: string, argsJson: string): string;
-declare function __hostConstructSync__(handleId: string, argsJson: string): string;
+declare function __cesiumSandboxHostGetSync__(handleId: string, prop: string): string;
+declare function __cesiumSandboxHostSetSync__(
+  handleId: string,
+  prop: string,
+  valueJson: string,
+): string;
+declare function __cesiumSandboxHostApplySync__(
+  handleId: string,
+  argsJson: string,
+): string | Promise<string>;
+declare function __cesiumSandboxHostConstructSync__(handleId: string, argsJson: string): string;
 
 /**
  * Never invoked — exists only so `extractFunctionBody` can recover its exact source text (see
@@ -173,8 +184,8 @@ function guestHostBridgeBody(): void {
   }
 
   // Wraps a host-side handle id in a callable Proxy: reading a property does an immediate,
-  // synchronous host round trip (via __hostGetSync__), and calling it does the same via
-  // __hostApplySync__. The underlying target is a plain function so the Proxy itself is
+  // synchronous host round trip (via __cesiumSandboxHostGetSync__), and calling it does the same
+  // via __cesiumSandboxHostApplySync__. The underlying target is a plain function so the Proxy itself is
   // callable — required for method-shaped handles (e.g. `viewer.camera.flyTo`) — while property
   // reads on it (e.g. `viewer.camera`, `entity.position`) work identically through the same `get`
   // trap.
@@ -184,10 +195,8 @@ function guestHostBridgeBody(): void {
       get(_target, prop) {
         if (prop === __remoteProxyMarker__) return true;
         if (prop === "__handleId__") return handleId;
-        // Never appear "thenable": these handles never represent a real Promise the guest engine
-        // should chase — see the doc comment above.
-        if (prop === "then" || typeof prop === "symbol") return undefined;
-        const envelope = JSON.parse(__hostGetSync__(handleId, String(prop)));
+        if (typeof prop === "symbol") return undefined;
+        const envelope = JSON.parse(__cesiumSandboxHostGetSync__(handleId, String(prop)));
         if (!envelope.ok) throw new Error(envelope.error);
         return __reviveRemoteValue__(envelope.value);
       },
@@ -200,24 +209,37 @@ function guestHostBridgeBody(): void {
       set(_target, prop, value) {
         const marshaled = __marshalArg__(value);
         const envelope = JSON.parse(
-          __hostSetSync__(handleId, String(prop), JSON.stringify(marshaled)),
+          __cesiumSandboxHostSetSync__(handleId, String(prop), JSON.stringify(marshaled)),
         );
         if (!envelope.ok) throw new Error(envelope.error);
         return true;
       },
       apply(_target, _thisArg, args) {
         const marshaled = args.map(__marshalArg__);
-        const envelope = JSON.parse(__hostApplySync__(handleId, JSON.stringify(marshaled)));
+        const raw = __cesiumSandboxHostApplySync__(handleId, JSON.stringify(marshaled));
+        // A Promise-returning host call bridges back as a genuine QuickJS promise (see
+        // `registerHostApply` in `host-bridge.ts`) rather than a JSON string — awaiting/`.then`-ing
+        // it here works exactly like awaiting the result of any other async call.
+        if (raw !== null && typeof raw === "object" && typeof (raw as { then?: unknown }).then === "function") {
+          return (raw as Promise<string>).then((json) => {
+            const envelope = JSON.parse(json);
+            if (!envelope.ok) throw new Error(envelope.error);
+            return __reviveRemoteValue__(envelope.value);
+          });
+        }
+        const envelope = JSON.parse(raw as string);
         if (!envelope.ok) throw new Error(envelope.error);
         return __reviveRemoteValue__(envelope.value);
       },
       // Supports `new Cesium.SomeClass(...)` for real CesiumJS classes reached through the
       // static namespace fallback (see `buildCesiumStaticFallbackGuestPrelude`) — e.g. `new
       // Cesium.PinBuilder()`, `new Cesium.WebMapServiceImageryProvider({...})`. Routes through
-      // `__hostConstructSync__`, which does a real `Reflect.construct` host-side.
+      // `__cesiumSandboxHostConstructSync__`, which does a real `Reflect.construct` host-side.
       construct(_target, args) {
         const marshaled = args.map(__marshalArg__);
-        const envelope = JSON.parse(__hostConstructSync__(handleId, JSON.stringify(marshaled)));
+        const envelope = JSON.parse(
+          __cesiumSandboxHostConstructSync__(handleId, JSON.stringify(marshaled)),
+        );
         if (!envelope.ok) throw new Error(envelope.error);
         return __reviveRemoteValue__(envelope.value) as object;
       },

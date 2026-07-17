@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  ArcGISTiledElevationTerrainProvider,
   Cartesian3,
   Cesium3DTileset,
   Cesium3DTileStyle,
@@ -7,8 +8,11 @@ import {
   createOsmBuildingsAsync,
   createWorldImageryAsync,
   createWorldTerrainAsync,
-  GeoJsonDataSource,
 } from "cesium";
+import {
+  CESIUM_DYNAMIC_PROMISE_RUNTIME_COVERAGE,
+  CESIUM_DYNAMIC_PROMISE_RUNTIME_GAPS,
+} from "./bindings/capabilities-registry.js";
 import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
 
 /**
@@ -66,6 +70,14 @@ vi.mock("cesium", async (importOriginal) => {
         options,
       })),
     },
+    ArcGISTiledElevationTerrainProvider: {
+      ...actual.ArcGISTiledElevationTerrainProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "terrainProvider",
+        url,
+        options,
+      })),
+    },
     GeoJsonDataSource: {
       ...actual.GeoJsonDataSource,
       load: vi.fn(async (data: unknown, options?: unknown) => ({
@@ -89,9 +101,51 @@ class FakeGlobe {
   terrainProvider: unknown;
 }
 
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `ArcGISTiledElevationTerrainProvider` instance — the kind
+// of live object `Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(...)` resolves to. Its
+// `requestTileGeometry` is a genuinely Promise-returning instance method with no named async
+// binding, so calling it on an already-reachable handle (`viewer.terrainProvider`) exercises the
+// generic dynamic Promise bridge exactly like `DataSourceCollection.add`/`Scene.
+// sampleHeightMostDetailed` below.
+class FakeArcGISTiledElevationTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+}
+
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `ArcGisMapServerImageryProvider` instance reached via
+// `viewer.imageryLayers.get(index).imageryProvider` — `requestImage`/`pickFeatures` are genuinely
+// Promise-returning instance methods with no named async binding (real Cesium's fromUrl/
+// fromBasemapType construct the provider, but the provider's own instance methods are only ever
+// reached afterward), so calling them on an already-reachable handle exercises the generic
+// dynamic Promise bridge exactly like `ArcGISTiledElevationTerrainProvider.requestTileGeometry`.
+class FakeArcGisMapServerImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
 function fakeViewer() {
   const entitiesById = new Map<string, unknown>();
   let nextId = 0;
+  // Created once per `fakeViewer()` call (not inside `get`'s callback) so every call to
+  // `imageryLayers.get(0)` \u2014 both from generated code and from a test's later assertion \u2014
+  // resolves to the SAME fake layer/provider instance, matching the existing `terrainProvider`
+  // pattern above.
+  const arcGisImageryLayer = { imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown };
 
   return {
     destroy: vi.fn(),
@@ -122,15 +176,19 @@ function fakeViewer() {
       suspendEvents: vi.fn(),
       resumeEvents: vi.fn(),
     },
-    zoomTo: vi.fn(),
-    flyTo: vi.fn(),
+    zoomTo: vi.fn(async (_target: unknown, _offset?: unknown) => true),
+    flyTo: vi.fn(async (_target: unknown, _options?: unknown) => true),
     imageryLayers: {
       length: 0,
       addImageryProvider: vi.fn((provider: unknown) => ({ provider })),
       remove: vi.fn(),
       removeAll: vi.fn(),
+      get: vi.fn((_index: number) => arcGisImageryLayer),
     },
     scene: {
+      clampToHeightMostDetailed: vi.fn(async (positions: unknown[]) => positions),
+      pickAsync: vi.fn(async (position: unknown) => ({ kind: "pick", position })),
+      sampleHeightMostDetailed: vi.fn(async (positions: unknown[]) => positions),
       primitives: {
         length: 0,
         add: vi.fn((primitive: unknown) => primitive),
@@ -146,15 +204,77 @@ function fakeViewer() {
       },
       globe: new FakeGlobe(),
     },
-    terrainProvider: undefined as unknown,
+    terrainProvider: new FakeArcGISTiledElevationTerrainProvider() as unknown,
     dataSources: {
       length: 0,
-      add: vi.fn(() => Promise.resolve()),
+      add: vi.fn(async (dataSource: unknown) => dataSource),
       remove: vi.fn(),
       removeAll: vi.fn(),
     },
   };
 }
+
+const dynamicPromiseCases = [
+  {
+    path: "DataSourceCollection.add",
+    code: `return await viewer.dataSources.add({ id: "source", entities: { values: [] } });`,
+    expected: { id: "source", entities: { values: [] } },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.dataSources.add,
+  },
+  {
+    path: "Scene.sampleHeightMostDetailed",
+    code: `return await viewer.scene.sampleHeightMostDetailed([{ longitude: 1, latitude: 2 }]);`,
+    expected: [{ longitude: 1, latitude: 2 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      viewer.scene.sampleHeightMostDetailed,
+  },
+  {
+    path: "ArcGISTiledElevationTerrainProvider.requestTileGeometry",
+    code: `return await viewer.terrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.terrainProvider as FakeArcGISTiledElevationTerrainProvider).requestTileGeometry,
+  },
+  {
+    path: "ArcGisMapServerImageryProvider.requestImage",
+    code: `
+      const layer = viewer.imageryLayers.get(0);
+      return await layer.imageryProvider.requestImage(2, 3, 5);
+    `,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(0) as { imageryProvider: FakeArcGisMapServerImageryProvider })
+        .imageryProvider.requestImage,
+  },
+  {
+    path: "ArcGisMapServerImageryProvider.pickFeatures",
+    code: `
+      const layer = viewer.imageryLayers.get(0);
+      return await layer.imageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);
+    `,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(0) as { imageryProvider: FakeArcGisMapServerImageryProvider })
+        .imageryProvider.pickFeatures,
+  },
+  {
+    path: "Viewer.flyTo",
+    code: `return await viewer.flyTo({});`,
+    expected: true,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.flyTo,
+  },
+  {
+    path: "Viewer.zoomTo",
+    code: `return await viewer.zoomTo({});`,
+    expected: true,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.zoomTo,
+  },
+] as const;
+
+const dynamicPromiseGapPaths = [
+  "Scene.clampToHeightMostDetailed",
+  "Scene.pickAsync",
+] as const;
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -331,7 +451,7 @@ describe("runCesiumCodeInSandbox", () => {
   });
 
   test.each(["zoomTo", "flyTo"] as const)(
-    "routes Promise-returning viewer.%s through the async host bridge instead of rejecting it",
+    "routes Promise-returning viewer.%s through the generic dynamic Promise bridge",
     async (method) => {
       const viewer = fakeViewer();
       viewer[method].mockResolvedValueOnce(true);
@@ -343,27 +463,33 @@ describe("runCesiumCodeInSandbox", () => {
 
       expect(outcome).toEqual({ success: true, result: true });
       expect(viewer[method]).toHaveBeenCalledTimes(1);
-      expect(viewer[method]).toHaveBeenCalledWith({}, undefined);
+      expect(viewer[method]).toHaveBeenCalledWith({});
     },
   );
 
-  test("rejects a second async CesiumJS call in the same script even when it's viewer.flyTo/zoomTo", async () => {
+  // `viewer.flyTo`/`zoomTo` used to be routed through QuickJS's Asyncify bridge, which imposed a
+  // "one async call per script" guard and reproducibly crashed the interpreter (a native
+  // `Assertion failed: p->ref_count == 0, at free_zero_refcount` abort) the moment a second
+  // Asyncify-backed call actually executed in the same script. Now that they flow through the
+  // same generic, `ctx.newPromise()`-based dynamic Promise bridge as every other Promise-returning
+  // viewer method, that restriction (and the crash) no longer applies to them.
+  test("allows both viewer.flyTo and viewer.zoomTo in the same script", async () => {
     const viewer = fakeViewer();
     viewer.flyTo.mockResolvedValueOnce(true);
+    viewer.zoomTo.mockResolvedValueOnce(true);
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
-        await viewer.flyTo({});
-        await viewer.zoomTo({});
-        return "unreachable";
+        const flew = await viewer.flyTo({});
+        const zoomed = await viewer.zoomTo({});
+        return flew && zoomed;
       `,
     });
 
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toMatch(/only one async cesiumjs call/i);
+    expect(outcome).toEqual({ success: true, result: true });
     expect(viewer.flyTo).toHaveBeenCalledTimes(1);
-    expect(viewer.zoomTo).not.toHaveBeenCalled();
+    expect(viewer.zoomTo).toHaveBeenCalledTimes(1);
   });
 
   test("computes Cartesian3 vector math and Cesium.Math helpers entirely in-guest", async () => {
@@ -491,6 +617,29 @@ describe("runCesiumCodeInSandbox", () => {
     expect((viewer.scene.globe.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
+  test("loads an ArcGIS tiled elevation terrain provider by URL and assigns it via viewer.terrainProvider = ...", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const terrainProvider = await Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
+          "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
+          { token: "test-token" }
+        );
+        viewer.terrainProvider = terrainProvider;
+        return "done";
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: "done" });
+    expect(ArcGISTiledElevationTerrainProvider.fromUrl).toHaveBeenCalledWith(
+      "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
+      { token: "test-token" },
+    );
+    expect((viewer.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
+  });
+
   // Each `runCesiumCodeInSandbox` call is a separate script/interpreter, so switching the terrain
   // provider (a second, genuinely async CesiumJS action) in its own run doesn't hit the
   // one-async-call-per-script guard — that guard is scoped to a single generated script, not
@@ -512,25 +661,51 @@ describe("runCesiumCodeInSandbox", () => {
     expect((viewer.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
-  test("rejects Promise-returning collection methods that lack an explicit async binding", async () => {
+  test("runtime coverage manifest exactly matches the dynamic Promise cases", () => {
+    expect(dynamicPromiseCases.map(({ path }) => path).sort()).toEqual(
+      [...CESIUM_DYNAMIC_PROMISE_RUNTIME_COVERAGE].sort(),
+    );
+    expect([...dynamicPromiseGapPaths].sort()).toEqual(
+      [...CESIUM_DYNAMIC_PROMISE_RUNTIME_GAPS].sort(),
+    );
+  });
+
+  test.todo("dynamically bridges Scene.clampToHeightMostDetailed without an Asyncify hang");
+  test.todo("dynamically bridges Scene.pickAsync without an Asyncify hang");
+
+  test.each(dynamicPromiseCases)(
+    "dynamically bridges $path through an allowed host handle",
+    async ({ code, expected, getMock }) => {
+      const viewer = fakeViewer();
+
+      const outcome = await runCesiumCodeInSandbox({ viewer: viewer as never, code });
+
+      expect(outcome).toEqual({ success: true, result: expected });
+      expect(getMock(viewer)).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test.todo(
+    "returns a rejected dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
+  );
+
+  test("times out a stalled dynamically bridged Promise", async () => {
     const viewer = fakeViewer();
+    viewer.scene.pickAsync.mockImplementationOnce(() => new Promise(() => {}));
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      code: `
-        const dataSource = await Cesium.GeoJsonDataSource.load("https://example.com/data.geojson", { clampToGround: true });
-        await viewer.dataSources.add(dataSource);
-        return "done";
-      `,
+      timeoutMs: 50,
+      code: `return await viewer.scene.pickAsync({ x: 1, y: 2 });`,
     });
 
     expect(outcome.success).toBe(false);
-    expect(outcome.error).toMatch(/promise-returning cesium api/i);
-    expect(GeoJsonDataSource.load).toHaveBeenCalledWith("https://example.com/data.geojson", {
-      clampToGround: true,
-    });
-    expect(viewer.dataSources.add).not.toHaveBeenCalled();
+    expect(outcome.error).toMatch(/timed out|interrupted/i);
   });
+
+  test.todo(
+    "rejects a second dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
+  );
 
   test("does not expose network-capable Cesium.Resource through the static namespace", async () => {
     const viewer = fakeViewer();
@@ -627,5 +802,65 @@ describe("runCesiumCodeInSandbox", () => {
     expect(outcome.error).toMatch(/only one async cesiumjs call/i);
     expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
     expect(createWorldTerrainAsync).not.toHaveBeenCalled();
+  });
+
+  describe("logger option", () => {
+    function fakeLogger() {
+      return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    }
+
+    test("defaults to silent (no logger provided touches nothing)", async () => {
+      const viewer = fakeViewer();
+
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        code: `return viewer.entities.add({ id: "e1" });`,
+      });
+
+      expect(outcome.success).toBe(true);
+    });
+
+    test("reports run start/success and individual host-bridge get/set/apply/construct calls", async () => {
+      const viewer = fakeViewer();
+      const logger = fakeLogger();
+
+      // `viewer.scene.globe` is a real class instance (`FakeGlobe`) in the fixture, so assigning
+      // `.terrainProvider` on it actually crosses the guest/host `set` trap (unlike a plain
+      // object literal, which `SandboxHandles.isPlainData` flattens to an inert local copy).
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        logger,
+        code: `
+          const destination = await Cesium.Cartesian3.fromDegrees(0, 0, 0);
+          const entity = await viewer.entities.add({ position: destination });
+          viewer.scene.globe.terrainProvider = entity;
+          return "done";
+        `,
+      });
+
+      expect(outcome).toEqual({ success: true, result: "done" });
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^Starting sandbox run/));
+      expect(logger.debug).toHaveBeenCalledWith("Sandbox run completed successfully");
+      // At least one `get`/`apply`/`construct`/`set` host-bridge call must have been logged too.
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^get "/));
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^apply on handle/));
+      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^set "terrainProvider"/));
+    });
+
+    test("reports a failed run via logger.error and a blocked property via logger.warn", async () => {
+      const viewer = fakeViewer();
+      const logger = fakeLogger();
+
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        logger,
+        code: `return viewer.scene.canvas;`,
+      });
+
+      expect(outcome.success).toBe(false);
+      expect(logger.error).toHaveBeenCalledWith(expect.stringMatching(/^Sandbox run failed:/));
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringMatching(/^get "canvas".*not allowed/));
+    });
   });
 });

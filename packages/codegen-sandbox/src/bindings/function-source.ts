@@ -14,7 +14,7 @@
  * `Function.prototype.toString()` (guaranteed by spec to return the original source, not a
  * re-serialization) — the wrapper function itself is discarded, only its body text is used. Guest
  * globals the body references that don't exist in the TypeScript compilation context (e.g.
- * `__hostGetSync__`, `__CesiumCoreBundle__`) must be declared with `declare const`/`declare
+ * `__cesiumSandboxHostGetSync__`, `__CesiumCoreBundle__`) must be declared with `declare const`/`declare
  * function` at the top of the same file so the compiler can still check the body — those
  * declarations are erased at compile time and never appear in the extracted text.
  */

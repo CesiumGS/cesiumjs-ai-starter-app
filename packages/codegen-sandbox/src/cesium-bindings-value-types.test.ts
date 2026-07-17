@@ -1,4 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
+import {
+  ClassificationType,
+  Color,
+  HeightReference,
+  HorizontalOrigin,
+  LabelStyle,
+  ShadowMode,
+} from "cesium";
 import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
 
 /**
@@ -114,5 +122,103 @@ viewer.camera.setView({
     expect(polygon.polygon.hierarchy.length).toBe(4);
     expect(polygon.polygon.material.red).toBeCloseTo(1, 5);
     expect(polygon.polygon.material.alpha).toBeCloseTo(0.35, 5);
+  });
+});
+
+/**
+ * Coverage for the remaining value types/enums declared by `guestValueTypeBody`
+ * (`guest-prelude-value-types.ts`) that no other test in this package exercises through an actual
+ * sandbox run: `HorizontalOrigin`/`HeightReference`/`LabelStyle`/`ClassificationType`/`ShadowMode`
+ * enums, `HeadingPitchRoll`/`NearFarScalar` value types, and the bare top-level aliases
+ * (destructured off `Cesium` with no prefix, e.g. `const { Cartesian3 } = Cesium;`) including the
+ * conventional `CesiumMath` rename. `VerticalOrigin`, `Cartesian2`, `Color`, `Cartesian3`, and
+ * `Cesium.Math` (prefixed form) are already covered by the repro test above and
+ * `cesium-code-sandbox.codegen-cases.test.ts`; `HeadingPitchRange` is covered by
+ * `cesium-code-sandbox.test.ts`.
+ */
+describe("value-type/enum coverage not exercised elsewhere in this package", () => {
+  test("HorizontalOrigin/HeightReference/LabelStyle/ClassificationType/ShadowMode enum constants match the real CesiumJS values", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        return {
+          horizontalOrigin: Cesium.HorizontalOrigin.RIGHT,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+          labelStyle: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          classificationType: Cesium.ClassificationType.CESIUM_3D_TILE,
+          shadowMode: Cesium.ShadowMode.CAST_ONLY,
+        };
+      `,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      result: {
+        horizontalOrigin: HorizontalOrigin.RIGHT,
+        heightReference: HeightReference.CLAMP_TO_GROUND,
+        labelStyle: LabelStyle.FILL_AND_OUTLINE,
+        classificationType: ClassificationType.CESIUM_3D_TILE,
+        shadowMode: ShadowMode.CAST_ONLY,
+      },
+    });
+  });
+
+  test("constructs real HeadingPitchRoll and NearFarScalar instances that survive the round trip to the host", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const entity = await viewer.entities.add({
+          orientation: new Cesium.HeadingPitchRoll(Cesium.Math.toRadians(45), 0, 0),
+          billboard: {
+            scaleByDistance: new Cesium.NearFarScalar(1000, 1.0, 100000, 0.1),
+          },
+        });
+        return {
+          heading: entity.orientation.heading,
+          near: entity.billboard.scaleByDistance.near,
+          farValue: entity.billboard.scaleByDistance.farValue,
+        };
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const result = outcome.result as { heading: number; near: number; farValue: number };
+    expect(result.heading).toBeCloseTo(Math.PI / 4, 5);
+    expect(result.near).toBe(1000);
+    expect(result.farValue).toBe(0.1);
+  });
+
+  test("bare top-level aliases (destructured off Cesium with no prefix) resolve for value types, enums, and the CesiumMath rename", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const { Cartesian3, Color, LabelStyle } = Cesium;
+        const position = Cartesian3.fromDegrees(-1.5, 51.2, 0);
+        const entity = await viewer.entities.add({
+          position,
+          point: { color: Color.CYAN },
+          label: { text: "bare-alias", style: LabelStyle.OUTLINE },
+        });
+        return {
+          color: [entity.point.color.red, entity.point.color.green, entity.point.color.blue],
+          labelStyle: entity.label.style,
+          degrees: CesiumMath.toDegrees(Math.PI),
+        };
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    const result = outcome.result as { color: number[]; labelStyle: number; degrees: number };
+    expect(result.color[0]).toBeCloseTo(Color.CYAN.red, 5);
+    expect(result.color[1]).toBeCloseTo(Color.CYAN.green, 5);
+    expect(result.color[2]).toBeCloseTo(Color.CYAN.blue, 5);
+    expect(result.labelStyle).toBe(LabelStyle.OUTLINE);
+    expect(result.degrees).toBeCloseTo(180, 5);
   });
 });

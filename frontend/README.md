@@ -31,7 +31,7 @@ The frontend imports only schema-free pieces from these packages: tool **names**
 
 ## Environment
 
-Copy [`.env.example`](.env.example) to `.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` (get one free at [ion.cesium.com](https://ion.cesium.com)). It's baked into the client bundle at build time — intentionally client-visible, so scope it in the Ion console. Optionally set `VITE_API_BASE_URL` to point at a non-default backend (see `src/utils/config.ts`).
+Copy [`.env.example`](.env.example) to `.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` (get one free at [ion.cesium.com](https://ion.cesium.com)). It's baked into the client bundle at build time — intentionally client-visible, so scope it in the Ion console. Optionally set `VITE_API_BASE_URL` to point at a non-default backend, or `VITE_SANDBOX_LOG_LEVEL` (`debug`/`info`/`warn`/`error`/`silent`) to control the codegen sandbox's console logging — defaults to `debug` in dev builds, `silent` in production (see `src/utils/config.ts`).
 
 ## Scripts
 

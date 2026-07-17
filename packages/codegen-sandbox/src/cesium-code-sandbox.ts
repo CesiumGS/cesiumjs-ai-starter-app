@@ -11,6 +11,7 @@ import type { SceneCollectionCapOptions } from "./execution-guards.js";
 import { SandboxHandles } from "./cesium-bindings.js";
 import { buildCesiumGuestPrelude } from "./bindings/guest-prelude.js";
 import { registerHostBindings } from "./bindings/host-bridge.js";
+import { noopLogger, type SandboxLogger } from "./logger.js";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
@@ -35,6 +36,14 @@ export interface RunCesiumCodeOptions extends SceneCollectionCapOptions {
    * same way QuickJS's own out-of-memory handling normally would.
    */
   memoryLimitBytes?: number;
+  /**
+   * Logger used to report sandbox lifecycle events (run start/success/failure) and individual
+   * host-bridge calls (property get/set, function apply/construct, async factory calls) crossing
+   * the guest/host boundary. Defaults to a no-op logger — logging is entirely opt-in; pass
+   * {@link createConsoleLogger} or {@link createSandboxLogger} (or your own {@link SandboxLogger})
+   * to enable it.
+   */
+  logger?: SandboxLogger;
 }
 
 /** The live QuickJS async interpreter context, as returned by `newAsyncContext()`. */
@@ -73,12 +82,17 @@ export async function runCesiumCodeInSandbox({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   memoryLimitBytes = DEFAULT_MEMORY_LIMIT_BYTES,
   maxItemsPerCollection,
+  logger = noopLogger,
 }: RunCesiumCodeOptions): Promise<SandboxResult> {
   // `newAsyncContext()` itself can reject (e.g. the interpreter's WASM binary failing to load/
   // instantiate) — that must resolve to this function's documented `{ success:false, error }`
   // shape like every other failure here, not escape as an unhandled rejection. `vm` therefore
   // starts undefined and is only assigned (and only disposed in `finally`) once creation succeeds.
   let vm: QuickJSAsyncContext | undefined;
+
+  logger.debug(
+    `Starting sandbox run (codeLength=${code.length}, timeoutMs=${timeoutMs}, memoryLimitBytes=${memoryLimitBytes})`,
+  );
 
   try {
     const ctx = await newAsyncContext();
@@ -88,16 +102,19 @@ export async function runCesiumCodeInSandbox({
     ctx.runtime.setInterruptHandler(shouldInterruptAfterDeadline(deadline));
     ctx.runtime.setMemoryLimit(memoryLimitBytes);
 
-    registerHostBindings(ctx, handles, { deadline, viewer });
+    registerHostBindings(ctx, handles, { deadline, logger });
 
     const prelude = buildCesiumGuestPrelude(viewer, handles, maxItemsPerCollection);
     const wrapped = `${prelude}\n(async () => {\n${code}\n})();`;
 
     const result = await evaluateWrappedCode(ctx, wrapped);
 
+    logger.debug("Sandbox run completed successfully");
     return { success: true, result };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error(`Sandbox run failed: ${message}`);
+    return { success: false, error: message };
   } finally {
     vm?.dispose();
   }

@@ -17,13 +17,14 @@
   ],
   "scripts": {
     "generate:cesium-bundle": "node scripts/generate-cesium-core-bundle.mjs",
-    "build": "npm run generate:cesium-bundle && tsc",
+    "validate:cesium-compat": "node scripts/validate-cesium-compat.mjs",
+    "build": "npm run validate:cesium-compat && npm run generate:cesium-bundle && tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "typecheck:test": "tsc -p tsconfig.typecheck.json",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "cesium": "^1.127.0",
+    "cesium": "1.142.0",
     "quickjs-emscripten": "^0.32.0"
   },
   "devDependencies": {

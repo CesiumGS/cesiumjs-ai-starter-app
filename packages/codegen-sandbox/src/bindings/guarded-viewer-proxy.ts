@@ -12,12 +12,13 @@
  *   viewer.scene.setTerrainProvider(...)    → synthetic method (real API is property-only)
  *   everything else                    → transparent forward to the real API
  *
- * `viewer.flyTo`/`viewer.zoomTo` are notably absent from this proxy's own interception list:
- * they're genuinely Promise-returning, so they're instead intercepted one layer up, guest-side,
- * by `guest-prelude-viewer-async.ts` — routed through QuickJS's Asyncify bridge rather than this
- * proxy's plain synchronous forwarding. This proxy still transparently forwards them (they simply
- * behave like any other real `Viewer` method here), but generated code never actually reaches
- * this layer for those two names.
+ * `viewer.flyTo`/`viewer.zoomTo` are notably absent from this proxy's own interception list too:
+ * they're genuinely Promise-returning, but the generic remote-proxy bridge (`registerHostApply` in
+ * `host-bridge.ts`) already bridges any Promise-returning call result back to the guest via a real
+ * `ctx.newPromise()`, so no special-casing is needed here — they're just forwarded transparently
+ * like every other real `Viewer` method. (An earlier design routed them guest-side through
+ * QuickJS's Asyncify mechanism instead — that reproducibly crashed the interpreter with a native
+ * `free_zero_refcount` assertion failure; removed in favor of this already-safe generic path.)
  *
  * `createGuardedProxy` is the single generic `get`-trap factory every wrapper below builds on;
  * each wrapper only declares its own exceptions to "forward everything transparently" via a
@@ -32,35 +33,13 @@ import {
   type SceneCollectionCapOptions,
 } from "../execution-guards.js";
 import { PROXY_MARKER } from "./sandbox-handles.js";
+import { BLOCKED_SANDBOX_PROPERTIES } from "./capabilities-registry.js";
 
 /**
  * Host properties that must never cross the guest boundary. This applies to every opaque host
  * handle, not only the initial Viewer proxy: otherwise a guest could reach a DOM or lifecycle
  * object through a nested Cesium object that was returned from an allowed call.
  */
-const BLOCKED_SANDBOX_PROPERTIES = new Set([
-  "__proto__",
-  "arguments",
-  "caller",
-  "canvas",
-  "constructor",
-  "container",
-  "contentDocument",
-  "contentWindow",
-  "creditContainer",
-  "creditViewport",
-  "defaultView",
-  "destroy",
-  "document",
-  "element",
-  "isDestroyed",
-  "ownerDocument",
-  "parentElement",
-  "prototype",
-  "removeAll",
-  "window",
-]);
-
 /** Rejects host properties that would escape the Cesium capability boundary or mutate prior state. */
 export function assertSandboxPropertyAllowed(property: string): void {
   if (property.startsWith("_") || BLOCKED_SANDBOX_PROPERTIES.has(property)) {
@@ -272,9 +251,6 @@ function createProxiedDataSources(dataSources: object, maxCount: number): unknow
           if (entityCount !== undefined) {
             assertCollectionCapNotExceeded(entityCount, "Data source entity", { maxCount });
           }
-          throw new Error(
-            'Promise-returning Cesium API "viewer.dataSources.add" requires an explicitly supported async sandbox binding.',
-          );
         }),
     },
   });

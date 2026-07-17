@@ -16,7 +16,8 @@
  * object of non-network Cesium exports, registered host-side as a single root handle
  * (`guest-prelude.ts`'s `staticCesiumHandleId`) — the same generic, dynamically-dispatched
  * mechanism already used for the live `viewer`. The existing `assertSandboxPropertyAllowed` guard (run by
- * every `__hostGetSync__`/`__hostApplySync__`/`__hostConstructSync__` call, regardless of which
+ * every `__cesiumSandboxHostGetSync__`/`__cesiumSandboxHostApplySync__`/
+ * `__cesiumSandboxHostConstructSync__` call, regardless of which
  * handle it targets) still applies, so e.g. `Cesium.Material._materialCache` (a private,
  * underscore-prefixed internal) remains blocked exactly as it would on the `viewer` itself.
  *

@@ -1,5 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+  ArcGisBaseMapType,
+  ArcGisMapServerImageryProvider,
   Cartesian3,
   CesiumTerrainProvider,
   Color,
@@ -57,9 +59,37 @@ class FakeScreenSpaceEventHandler {
   getInputAction = vi.fn();
 }
 
+/**
+ * A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+ * `FakeGlobe`) standing in for a real `ArcGisMapServerImageryProvider` instance reached via
+ * `viewer.imageryLayers.get(index).imageryProvider` — `requestImage`/`pickFeatures` are genuinely
+ * Promise-returning instance methods with no named async binding of their own, so calling them on
+ * an already-reachable handle (seeded directly on the fake `Viewer`, not obtained via
+ * `fromUrl`/`fromBasemapType` in the SAME generated script — that would consume the one allowed
+ * async CesiumJS call per script before ever reaching these) exercises the generic dynamic Promise
+ * bridge instead.
+ */
+class FakeArcGisMapServerImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
 function fakeViewer() {
   const entitiesById = new Map<string, unknown>();
   let nextId = 0;
+  // Created once per `fakeViewer()` call (not inside a per-call callback) so every call to
+  // `imageryLayers.get(0)` — both from generated code and from a test's later assertion —
+  // resolves to the SAME fake layer/provider instance.
+  const arcGisImageryLayer = { imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown };
 
   return {
     camera: {
@@ -68,7 +98,7 @@ function fakeViewer() {
       flyToBoundingSphere: vi.fn(),
       positionCartographic: { latitude: 0.8527, longitude: 0.041, height: 1000 },
     },
-    flyTo: vi.fn(async () => true),
+    flyTo: vi.fn(async (_entity: unknown, _options?: unknown) => true),
     entities: {
       get values() {
         return Array.from(entitiesById.values());
@@ -82,6 +112,7 @@ function fakeViewer() {
     },
     imageryLayers: {
       addImageryProvider: vi.fn((provider: unknown) => ({ provider })),
+      get: vi.fn((_index: number) => arcGisImageryLayer),
     },
     scene: {
       primitives: {
@@ -107,6 +138,23 @@ vi.mock("cesium", async (importOriginal) => {
       fromIonAssetId: vi.fn(async (assetId: unknown) => ({
         kind: "terrainProvider",
         assetId,
+      })),
+    },
+    // Unlike `CesiumTerrainProvider` above (mocked via a plain-object spread), the async
+    // `ArcGisMapServerImageryProvider.fromUrl`/`.fromBasemapType` factories are also reached
+    // through Asyncify-bound guest bindings — mocking them the same way is safe since they're
+    // only ever called directly host-side, never crossing the guest boundary as a raw value.
+    ArcGisMapServerImageryProvider: {
+      ...actual.ArcGisMapServerImageryProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "arcGisImageryProvider",
+        url,
+        options,
+      })),
+      fromBasemapType: vi.fn(async (style: unknown, options?: unknown) => ({
+        kind: "arcGisImageryProvider",
+        style,
+        options,
       })),
     },
   };
@@ -246,6 +294,95 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledTimes(1);
     const passedProvider = viewer.imageryLayers.addImageryProvider.mock.calls[0][0];
     expect(passedProvider).toBeInstanceOf(WebMapServiceImageryProvider);
+  });
+
+  test("cesiumjs-imagery: adds a default ArcGIS basemap layer via ArcGisMapServerImageryProvider.fromBasemapType", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const provider = await Cesium.ArcGisMapServerImageryProvider.fromBasemapType(
+          Cesium.ArcGisBaseMapType.SATELLITE,
+        );
+        const layer = await viewer.imageryLayers.addImageryProvider(provider);
+        return layer !== null;
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: true });
+    expect(ArcGisMapServerImageryProvider.fromBasemapType).toHaveBeenCalledWith(
+      ArcGisBaseMapType.SATELLITE,
+    );
+    expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledTimes(1);
+    const passedProvider = viewer.imageryLayers.addImageryProvider.mock.calls[0][0] as {
+      kind: string;
+    };
+    expect(passedProvider.kind).toBe("arcGisImageryProvider");
+  });
+
+  test("cesiumjs-imagery: constructs an ArcGIS MapServer imagery provider directly from a URL via ArcGisMapServerImageryProvider.fromUrl", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const provider = await Cesium.ArcGisMapServerImageryProvider.fromUrl(
+          "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+        );
+        const layer = await viewer.imageryLayers.addImageryProvider(provider);
+        return layer !== null;
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: true });
+    expect(ArcGisMapServerImageryProvider.fromUrl).toHaveBeenCalledWith(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+      undefined,
+    );
+    expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledTimes(1);
+  });
+
+  test("cesiumjs-imagery: requests a single tile image via ArcGisMapServerImageryProvider.requestImage (generic dynamic Promise bridge, no dedicated async binding)", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const layer = viewer.imageryLayers.get(0);
+        return await layer.imageryProvider.requestImage(2, 3, 5);
+      `,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      result: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    });
+    const layer = viewer.imageryLayers.get(0) as {
+      imageryProvider: { requestImage: (...args: unknown[]) => unknown };
+    };
+    expect(layer.imageryProvider.requestImage).toHaveBeenCalledWith(2, 3, 5);
+  });
+
+  test("cesiumjs-imagery: picks features at a clicked tile via ArcGisMapServerImageryProvider.pickFeatures (generic dynamic Promise bridge)", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const layer = viewer.imageryLayers.get(0);
+        return await layer.imageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);
+      `,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      result: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    });
+    const layer = viewer.imageryLayers.get(0) as {
+      imageryProvider: { pickFeatures: (...args: unknown[]) => unknown };
+    };
+    expect(layer.imageryProvider.pickFeatures).toHaveBeenCalledWith(2, 3, 5, 12.5, 41.9);
   });
 
   test("cesiumjs-primitives: builds a real GeoJsonPrimitive from inline GeoJSON and adds it to scene.primitives", async () => {

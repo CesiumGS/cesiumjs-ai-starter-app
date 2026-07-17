@@ -14,7 +14,7 @@
 //
 // Run via `npm run generate:cesium-bundle -w @cesium-ai/codegen-sandbox` (also wired into `build`).
 import { build } from "esbuild";
-import { writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { format, resolveConfig } from "prettier";
@@ -22,17 +22,16 @@ import { format, resolveConfig } from "prettier";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "../src/bindings/generated");
 const outFile = path.join(outDir, "cesium-core-bundle.ts");
+const capabilities = JSON.parse(
+  await readFile(path.join(__dirname, "../src/bindings/cesium-capabilities.json"), "utf8"),
+);
 
-const entryContents = `
-export { default as Cartesian2 } from "@cesium/engine/Source/Core/Cartesian2.js";
-export { default as Cartesian3 } from "@cesium/engine/Source/Core/Cartesian3.js";
-export { default as Cartographic } from "@cesium/engine/Source/Core/Cartographic.js";
-export { default as Color } from "@cesium/engine/Source/Core/Color.js";
-export { default as HeadingPitchRange } from "@cesium/engine/Source/Core/HeadingPitchRange.js";
-export { default as HeadingPitchRoll } from "@cesium/engine/Source/Core/HeadingPitchRoll.js";
-export { default as NearFarScalar } from "@cesium/engine/Source/Core/NearFarScalar.js";
-export { default as CesiumMath } from "@cesium/engine/Source/Core/Math.js";
-`;
+const entryContents = [
+  ...capabilities.valueTypes.map(
+    (name) => `export { default as ${name} } from "@cesium/engine/Source/Core/${name}.js";`,
+  ),
+  'export { default as CesiumMath } from "@cesium/engine/Source/Core/Math.js";',
+].join("\n");
 
 const result = await build({
   stdin: {

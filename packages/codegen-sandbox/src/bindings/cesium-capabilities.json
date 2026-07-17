@@ -1,0 +1,114 @@
+{
+  "reviewedCesiumVersion": "1.142.0",
+  "staticExports": [
+    "Appearance",
+    "ArcGISTiledElevationTerrainProvider",
+    "ArcGisBaseMapType",
+    "ArcGisMapServerImageryProvider",
+    "BoundingSphere",
+    "Cesium3DTileset",
+    "CesiumTerrainProvider",
+    "CustomShader",
+    "Ellipsoid",
+    "GeoJsonDataSource",
+    "GeoJsonPrimitive",
+    "HeadingPitchRange",
+    "ImageryLayer",
+    "Ion",
+    "JulianDate",
+    "Material",
+    "MaterialAppearance",
+    "Matrix4",
+    "Model",
+    "ModelAnimationLoop",
+    "ParticleSystem",
+    "PinBuilder",
+    "PolygonGeometry",
+    "Primitive",
+    "Rectangle",
+    "RectangleGeometry",
+    "SampledPositionProperty",
+    "SampledProperty",
+    "SceneMode",
+    "ScreenSpaceEventType",
+    "Sun",
+    "SunLight",
+    "Transforms",
+    "WebMapServiceImageryProvider"
+  ],
+  "asyncBindings": [
+    { "hostName": "createWorldImageryAsync", "cesiumPath": "createWorldImageryAsync" },
+    { "hostName": "createOsmBuildingsAsync", "cesiumPath": "createOsmBuildingsAsync" },
+    { "hostName": "createWorldTerrainAsync", "cesiumPath": "createWorldTerrainAsync" },
+    { "hostName": "createWorldBathymetryAsync", "cesiumPath": "createWorldBathymetryAsync" },
+    { "hostName": "cesium3DTilesetFromUrl", "cesiumPath": "Cesium3DTileset.fromUrl" },
+    {
+      "hostName": "cesium3DTilesetFromIonAssetId",
+      "cesiumPath": "Cesium3DTileset.fromIonAssetId"
+    },
+    {
+      "hostName": "cesiumTerrainProviderFromIonAssetId",
+      "cesiumPath": "CesiumTerrainProvider.fromIonAssetId"
+    },
+    {
+      "hostName": "arcGisTiledElevationTerrainProviderFromUrl",
+      "cesiumPath": "ArcGISTiledElevationTerrainProvider.fromUrl"
+    },
+    {
+      "hostName": "arcGisMapServerImageryProviderFromUrl",
+      "cesiumPath": "ArcGisMapServerImageryProvider.fromUrl"
+    },
+    { "hostName": "geoJsonDataSourceLoad", "cesiumPath": "GeoJsonDataSource.load" },
+    { "hostName": "modelFromGltfAsync", "cesiumPath": "Model.fromGltfAsync" }
+  ],
+  "dynamicPromiseRuntimeCoverage": [
+    "ArcGISTiledElevationTerrainProvider.requestTileGeometry",
+    "ArcGisMapServerImageryProvider.requestImage",
+    "ArcGisMapServerImageryProvider.pickFeatures",
+    "DataSourceCollection.add",
+    "Scene.sampleHeightMostDetailed",
+    "Viewer.flyTo",
+    "Viewer.zoomTo"
+  ],
+  "dynamicPromiseRuntimeGaps": [
+    "Scene.clampToHeightMostDetailed",
+    "Scene.pickAsync"
+  ],
+  "valueTypes": [
+    "Cartesian2",
+    "Cartesian3",
+    "Cartographic",
+    "Color",
+    "HeadingPitchRange",
+    "HeadingPitchRoll",
+    "NearFarScalar"
+  ],
+  "blockedProperties": [
+    "__proto__",
+    "arguments",
+    "caller",
+    "canvas",
+    "constructor",
+    "container",
+    "contentDocument",
+    "contentWindow",
+    "creditContainer",
+    "creditViewport",
+    "defaultView",
+    "destroy",
+    "document",
+    "element",
+    "isDestroyed",
+    "ownerDocument",
+    "parentElement",
+    "prototype",
+    "removeAll",
+    "window"
+  ],
+  "unsupportedCapabilities": [
+    "Guest callbacks cannot cross the host boundary or outlive the disposable VM.",
+    "Only one Asyncify-backed call is allowed per generated script.",
+    "Promise-returning APIs are dynamically bridged when reached through an allowed host handle.",
+    "DOM and lifecycle properties in blockedProperties are unavailable."
+  ]
+}

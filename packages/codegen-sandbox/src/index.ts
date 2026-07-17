@@ -33,3 +33,12 @@ export {
   EntityCapExceededError,
   type SceneCollectionCapOptions,
 } from "./execution-guards.js";
+
+export {
+  createConsoleLogger,
+  createSandboxLogger,
+  noopLogger,
+  type LogLevel,
+  type SandboxLogger,
+  type SandboxLoggerOptions,
+} from "./logger.js";

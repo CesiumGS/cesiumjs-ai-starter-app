@@ -1,7 +1,16 @@
 import { z } from "zod";
 import type { Viewer } from "cesium";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-import { runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
+import { createConsoleLogger, runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
+import { config } from "../utils/config";
+
+/**
+ * Console-backed sandbox logger, level configured via `config.sandboxLogLevel` (env
+ * `VITE_SANDBOX_LOG_LEVEL`, defaults to `debug` in dev / `silent` in production builds — see
+ * `utils/config.ts`). Shared across every `executeApprovedCesiumCode` call rather than created
+ * per-call since it's stateless and its level never changes at runtime.
+ */
+const sandboxLogger = createConsoleLogger(config.sandboxLogLevel);
 
 /**
  * The `executeCesiumCode` tool's server-resolved output shape — this app's
@@ -94,7 +103,7 @@ export async function executeApprovedCesiumCode(
   viewer: Viewer,
   code: string,
 ): Promise<string | null> {
-  const outcome = await runCesiumCodeInSandbox({ viewer, code });
+  const outcome = await runCesiumCodeInSandbox({ viewer, code, logger: sandboxLogger });
   if (!outcome.success) {
     return `Code execution failed: ${outcome.error ?? "Unknown sandbox error"}`;
   }
