@@ -214,5 +214,6 @@
     "DOM and lifecycle properties in blockedProperties are unavailable.",
     "`Resource.*` static methods (fetch/fetchJson/post/put/patch/delete/...) are explicitly blocked, not merely untested: `Resource` is intentionally excluded from staticExports because network access, including mutating HTTP verbs, is banned outright rather than restricted to a domain allowlist. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.",
     "`IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked, not merely untested: `IonResource` extends `Resource` and fetches arbitrary (potentially credentialed) Ion asset content over the network, the same SSRF/data-exfiltration concern as `Resource` itself, so it is intentionally excluded from staticExports for the same reason. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`."
-  ]
+  ],
+  "networkBlockedPromiseOwners": ["IonResource", "Resource"]
 }

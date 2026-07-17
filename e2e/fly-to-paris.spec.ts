@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expandToolCard } from "./helpers/tool-card";
 
 // Native <input> inside the chat input wrapper (MUI wraps it in an outer div).
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
@@ -54,13 +55,14 @@ test.describe("flyTo tool — end-to-end against the live backend", () => {
     // 2. The model calls the `flyTo` tool — its card appears in the transcript.
     await expect(page.getByText(/\[tool\]\s*flyTo/)).toBeVisible({ timeout: 90_000 });
 
-    // 3. The tool was driven with Paris coordinates (model-resolved lat/lon).
-    //    The only <pre> blocks in the app are tool args / results, so filtering
-    //    by "latitude" uniquely targets this tool call's argument block.
-    const argsBlock = page
-      .locator("pre")
-      .filter({ hasText: /latitude/ })
-      .first();
+    // Force the tool card open — `MessageItem.tsx`'s `ToolCard` auto-collapses once resolved if
+    // its combined args/result text exceeds a length threshold, which would otherwise hide the
+    // <pre> blocks below from Playwright's visibility checks (see `expandToolCard`'s doc comment).
+    const toolCard = await expandToolCard(page, "flyTo");
+
+    // 3. The tool was driven with Paris coordinates (model-resolved lat/lon). Args are still
+    //    rendered as real JSON (`JSON.stringify(invocation.args)`), unlike the result below.
+    const argsBlock = toolCard.locator('pre[class*="toolArgs"]');
     await expect(argsBlock).toBeVisible({ timeout: 10_000 });
 
     const args = JSON.parse((await argsBlock.textContent()) ?? "{}");
@@ -70,16 +72,15 @@ test.describe("flyTo tool — end-to-end against the live backend", () => {
     expect(args.longitude).toBeGreaterThan(1.5);
     expect(args.longitude).toBeLessThan(3.5);
 
-    // 4. The browser ran the tool against the live Viewer and posted the result
-    //    back: { success: true }. The result <pre> renders only once the camera
-    //    flight completes, so this confirms the end-to-end round trip.
-    const resultBlock = page
-      .locator("pre")
-      .filter({ hasText: /success/ })
-      .first();
+    // 4. The browser ran the tool against the live Viewer and posted the result back:
+    //    `{ success: true }`. `formatToolPayload` (MessageItem.tsx) renders non-string fields as
+    //    plain `key: value` text (not JSON), so this reads the boolean directly instead of
+    //    `JSON.parse`-ing the <pre> text. The result <pre> only appears once the camera flight
+    //    completes, so this confirms the end-to-end round trip.
+    const resultBlock = toolCard.locator('pre[class*="toolResult"]');
     await expect(resultBlock).toBeVisible({ timeout: 20_000 });
 
-    const result = JSON.parse((await resultBlock.textContent()) ?? "{}");
-    expect(result.success).toBe(true);
+    const resultText = (await resultBlock.textContent()) ?? "";
+    expect(resultText).toMatch(/(?:^|\n)success:\s*true/);
   });
 });
