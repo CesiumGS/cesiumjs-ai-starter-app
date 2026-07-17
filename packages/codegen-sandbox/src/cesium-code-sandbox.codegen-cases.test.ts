@@ -63,11 +63,10 @@ class FakeScreenSpaceEventHandler {
  * A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
  * `FakeGlobe`) standing in for a real `ArcGisMapServerImageryProvider` instance reached via
  * `viewer.imageryLayers.get(index).imageryProvider` — `requestImage`/`pickFeatures` are genuinely
- * Promise-returning instance methods with no named async binding of their own, so calling them on
- * an already-reachable handle (seeded directly on the fake `Viewer`, not obtained via
- * `fromUrl`/`fromBasemapType` in the SAME generated script — that would consume the one allowed
- * async CesiumJS call per script before ever reaching these) exercises the generic dynamic Promise
- * bridge instead.
+ * Promise-returning instance methods, so calling them on an already-reachable handle (seeded
+ * directly on the fake `Viewer`, not obtained via `fromUrl`/`fromBasemapType` in the same
+ * generated script) exercises the generic dynamic Promise bridge in a realistic object-graph
+ * shape rather than immediately after construction.
  */
 class FakeArcGisMapServerImageryProvider {
   requestImage = vi.fn(async (x: number, y: number, level: number) => ({
@@ -140,10 +139,10 @@ vi.mock("cesium", async (importOriginal) => {
         assetId,
       })),
     },
-    // Unlike `CesiumTerrainProvider` above (mocked via a plain-object spread), the async
-    // `ArcGisMapServerImageryProvider.fromUrl`/`.fromBasemapType` factories are also reached
-    // through Asyncify-bound guest bindings — mocking them the same way is safe since they're
-    // only ever called directly host-side, never crossing the guest boundary as a raw value.
+    // The `ArcGisMapServerImageryProvider.fromUrl`/`.fromBasemapType` factories are reached
+    // through the generic dynamic Promise bridge, same as `CesiumTerrainProvider` above — mocking
+    // them the same way is safe since they're only ever called directly host-side, never crossing
+    // the guest boundary as a raw value.
     ArcGisMapServerImageryProvider: {
       ...actual.ArcGisMapServerImageryProvider,
       fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
@@ -338,7 +337,6 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(outcome).toEqual({ success: true, result: true });
     expect(ArcGisMapServerImageryProvider.fromUrl).toHaveBeenCalledWith(
       "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
-      undefined,
     );
     expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledTimes(1);
   });
@@ -468,7 +466,7 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(CesiumTerrainProvider.fromIonAssetId).toHaveBeenCalledWith(1, undefined);
+    expect(CesiumTerrainProvider.fromIonAssetId).toHaveBeenCalledWith(1);
     expect((viewer.scene.globe.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
@@ -844,8 +842,11 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(passedOptions.duration).toBe(2);
   });
 
-  test("cesiumjs-terrain-environment: only one async CesiumJS factory call is allowed per generated script", async () => {
+  test("cesiumjs-terrain-environment: allows two sequential CesiumTerrainProvider.fromIonAssetId calls in the same script", async () => {
     const viewer = fakeViewer();
+    // This file has no `afterEach(() => vi.clearAllMocks())` (unlike `cesium-code-sandbox.test.ts`),
+    // so mock call counts accumulate across every test in this file — assert against a captured
+    // baseline rather than an absolute count.
     const callsBefore = vi.mocked(CesiumTerrainProvider.fromIonAssetId).mock.calls.length;
 
     const outcome = await runCesiumCodeInSandbox({
@@ -853,14 +854,11 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
       code: `
         const first = await Cesium.CesiumTerrainProvider.fromIonAssetId(1);
         const second = await Cesium.CesiumTerrainProvider.fromIonAssetId(2);
-        return "unreachable";
+        return [first.assetId, second.assetId];
       `,
     });
 
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toMatch(/only one async cesiumjs call/i);
-    // Only the first `fromIonAssetId` call actually reaches the mock — the second is rejected by
-    // the async-bridge's own call-count guard before ever dispatching to the real factory.
-    expect(vi.mocked(CesiumTerrainProvider.fromIonAssetId).mock.calls.length).toBe(callsBefore + 1);
+    expect(outcome).toEqual({ success: true, result: [1, 2] });
+    expect(vi.mocked(CesiumTerrainProvider.fromIonAssetId).mock.calls.length).toBe(callsBefore + 2);
   });
 });

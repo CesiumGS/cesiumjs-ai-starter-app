@@ -2,7 +2,7 @@
  * Shared helper for authoring guest-side (QuickJS-evaluated) JS as real, type-checked TypeScript
  * functions instead of template-literal strings.
  *
- * Every `guest-prelude-*.ts`/`cesium-async-factories.ts` builder needs to produce plain JS *source
+ * Every `guest-prelude-*.ts` builder needs to produce plain JS *source
  * text* — it's concatenated with the other builders' output and evaluated as one script inside the
  * QuickJS guest (see `cesium-code-sandbox.ts`), never executed directly in the host. Writing that
  * text as a template literal works, but loses real syntax highlighting/formatting and — since

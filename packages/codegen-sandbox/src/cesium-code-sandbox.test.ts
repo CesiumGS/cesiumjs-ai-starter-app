@@ -1,13 +1,40 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   ArcGISTiledElevationTerrainProvider,
+  ArcGisMapServerImageryProvider,
+  BingMapsImageryProvider,
   Cartesian3,
+  Cesium3DTilesTerrainProvider,
+  Cesium3DTilesVoxelProvider,
   Cesium3DTileset,
   Cesium3DTileStyle,
   CesiumTerrainProvider,
+  createGooglePhotorealistic3DTileset,
   createOsmBuildingsAsync,
+  createWorldBathymetryAsync,
   createWorldImageryAsync,
   createWorldTerrainAsync,
+  CzmlDataSource,
+  exportKml,
+  GeoJsonDataSource,
+  GeoJsonPrimitive,
+  Google2DImageryProvider,
+  GoogleEarthEnterpriseMapsProvider,
+  GoogleEarthEnterpriseMetadata,
+  GoogleStreetViewCubeMapPanoramaProvider,
+  GpxDataSource,
+  I3SDataProvider,
+  ImageryProvider,
+  IonImageryProvider,
+  ITwinData,
+  KmlDataSource,
+  Material,
+  Model,
+  sampleTerrain,
+  sampleTerrainMostDetailed,
+  SingleTileImageryProvider,
+  TileMapServiceImageryProvider,
+  VRTheWorldTerrainProvider,
 } from "cesium";
 import {
   CESIUM_DYNAMIC_PROMISE_RUNTIME_COVERAGE,
@@ -61,12 +88,24 @@ vi.mock("cesium", async (importOriginal) => {
         assetId,
         options,
       })),
+      // `loadJson` is a *static* method (not an instance method), so this exercises the
+      // static-namespace fallback + generic dynamic Promise bridge, same as `fromUrl`/
+      // `fromIonAssetId` above.
+      loadJson: vi.fn(async (tilesetUrl: unknown) => ({ kind: "tilesetJson", tilesetUrl })),
     },
     CesiumTerrainProvider: {
       ...actual.CesiumTerrainProvider,
       fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
         kind: "terrainProvider",
         assetId,
+        options,
+      })),
+      // `fromUrl` is a "declaration-only" dynamic Promise candidate per `CESIUM_COMPATIBILITY.md`,
+      // reached only through the generic static-namespace fallback + dynamic Promise bridge (same
+      // mechanism as `FakeCesiumTerrainProvider`'s instance methods below).
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "terrainProvider",
+        url,
         options,
       })),
     },
@@ -90,15 +129,253 @@ vi.mock("cesium", async (importOriginal) => {
       ...actual.Model,
       fromGltfAsync: vi.fn(async (options?: unknown) => ({ kind: "model", options })),
     },
+    Cesium3DTilesVoxelProvider: {
+      ...actual.Cesium3DTilesVoxelProvider,
+      // "Declaration-only" dynamic Promise candidate per `CESIUM_COMPATIBILITY.md`, reached only
+      // through the generic static-namespace fallback + dynamic Promise bridge.
+      fromUrl: vi.fn(async (url: unknown) => ({ kind: "voxelProvider", url })),
+    },
+    Cesium3DTilesTerrainProvider: {
+      ...actual.Cesium3DTilesTerrainProvider,
+      // Both static factories are "declaration-only" dynamic Promise candidates per
+      // `CESIUM_COMPATIBILITY.md`, reached only through the generic static-namespace fallback +
+      // dynamic Promise bridge.
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "cesium3DTilesTerrainProvider",
+        url,
+        options,
+      })),
+      fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
+        kind: "cesium3DTilesTerrainProvider",
+        assetId,
+        options,
+      })),
+    },
+    ImageryProvider: {
+      ...actual.ImageryProvider,
+      // `loadImage` is a static factory, so this exercises the static-namespace fallback +
+      // generic dynamic Promise bridge. The `imageryProvider` argument is intentionally left out
+      // of the resolved value (unlike the `url`) to avoid round-tripping a live class-instance
+      // handle back through the bridge, matching every other mock below.
+      loadImage: vi.fn(async (_imageryProvider: unknown, url: unknown) => ({
+        kind: "imageryImage",
+        url,
+      })),
+    },
+    IonImageryProvider: {
+      ...actual.IonImageryProvider,
+      // "Declaration-only" dynamic Promise candidate per `CESIUM_COMPATIBILITY.md` (same pattern as
+      // `Cesium3DTilesVoxelProvider.fromUrl` above).
+      fromAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
+        kind: "ionImageryProvider",
+        assetId,
+        options,
+      })),
+    },
+    // The classes below only need their *static* factories mocked here — each one's
+    // Promise-returning *instance* methods (e.g. `requestImage`/`pickFeatures`/`geocode`) are
+    // exercised separately via an independent `Fake*` class hung off the synthetic
+    // `viewer.testHandles` object in `fakeViewer()` below, not through this module mock at all
+    // (mirroring `ArcGisMapServerImageryProvider`: its `pickFeatures`/`requestImage` are already
+    // tested that way above, entirely decoupled from its static factories mocked below).
+    ArcGisMapServerImageryProvider: {
+      ...actual.ArcGisMapServerImageryProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "arcGisMapServerImageryProvider",
+        url,
+        options,
+      })),
+      fromBasemapType: vi.fn(async (style: unknown, options?: unknown) => ({
+        kind: "arcGisMapServerImageryProvider",
+        style,
+        options,
+      })),
+    },
+    Material: {
+      ...actual.Material,
+      fromTypeAsync: vi.fn(async (type: unknown, options?: unknown) => ({
+        kind: "material",
+        type,
+        options,
+      })),
+    },
+    GeoJsonPrimitive: {
+      ...actual.GeoJsonPrimitive,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "geoJsonPrimitive",
+        url,
+        options,
+      })),
+    },
+    GoogleEarthEnterpriseMetadata: {
+      ...actual.GoogleEarthEnterpriseMetadata,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "googleEarthEnterpriseMetadata",
+        url,
+        options,
+      })),
+    },
+    GoogleStreetViewCubeMapPanoramaProvider: {
+      ...actual.GoogleStreetViewCubeMapPanoramaProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "googleStreetViewCubeMapPanoramaProvider",
+        url,
+        options,
+      })),
+    },
+    TileMapServiceImageryProvider: {
+      ...actual.TileMapServiceImageryProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "tileMapServiceImageryProvider",
+        url,
+        options,
+      })),
+    },
+    CzmlDataSource: {
+      ...actual.CzmlDataSource,
+      load: vi.fn(async (data: unknown, options?: unknown) => ({
+        kind: "dataSource",
+        data,
+        options,
+      })),
+    },
+    GpxDataSource: {
+      ...actual.GpxDataSource,
+      load: vi.fn(async (data: unknown, options?: unknown) => ({
+        kind: "dataSource",
+        data,
+        options,
+      })),
+    },
+    KmlDataSource: {
+      ...actual.KmlDataSource,
+      load: vi.fn(async (data: unknown, options?: unknown) => ({
+        kind: "dataSource",
+        data,
+        options,
+      })),
+    },
+    BingMapsImageryProvider: {
+      ...actual.BingMapsImageryProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "bingMapsImageryProvider",
+        url,
+        options,
+      })),
+    },
+    Google2DImageryProvider: {
+      ...actual.Google2DImageryProvider,
+      fromIonAssetId: vi.fn(async (assetId: unknown, options?: unknown) => ({
+        kind: "google2DImageryProvider",
+        assetId,
+        options,
+      })),
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "google2DImageryProvider",
+        url,
+        options,
+      })),
+    },
+    GoogleEarthEnterpriseMapsProvider: {
+      ...actual.GoogleEarthEnterpriseMapsProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "googleEarthEnterpriseMapsProvider",
+        url,
+        options,
+      })),
+    },
+    SingleTileImageryProvider: {
+      ...actual.SingleTileImageryProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "singleTileImageryProvider",
+        url,
+        options,
+      })),
+    },
+    VRTheWorldTerrainProvider: {
+      ...actual.VRTheWorldTerrainProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "vrTheWorldTerrainProvider",
+        url,
+        options,
+      })),
+    },
+    I3SDataProvider: {
+      ...actual.I3SDataProvider,
+      fromUrl: vi.fn(async (url: unknown, options?: unknown) => ({
+        kind: "i3sDataProvider",
+        url,
+        options,
+      })),
+    },
+    ITwinData: {
+      ...actual.ITwinData,
+      createDataSourceForRealityDataId: vi.fn(async (options?: unknown) => ({
+        kind: "iTwinDataSource",
+        options,
+      })),
+      createTilesetForRealityDataId: vi.fn(async (options?: unknown) => ({
+        kind: "iTwinTileset",
+        options,
+      })),
+      createTilesetFromIModelId: vi.fn(async (options?: unknown) => ({
+        kind: "iTwinTileset",
+        options,
+      })),
+      loadGeospatialFeatures: vi.fn(async (options?: unknown) => ({
+        kind: "iTwinGeospatialFeatures",
+        options,
+      })),
+    },
+    // Bare top-level functions (not class static members) — each needs its own name in
+    // `staticExports` (like a class name) so the guest-side static namespace fallback proxy
+    // (`guest-prelude-static-fallback.ts`) exposes `Cesium.<name>`, reached the same way as
+    // `createWorldImageryAsync`/`createOsmBuildingsAsync` above.
+    exportKml: vi.fn(async (options?: unknown) => ({ kind: "kmlExport", options })),
+    sampleTerrain: vi.fn(async (terrainProvider: unknown, level: unknown, positions: unknown) => ({
+      kind: "sampledPositions",
+      terrainProvider,
+      level,
+      positions,
+    })),
+    sampleTerrainMostDetailed: vi.fn(async (terrainProvider: unknown, positions: unknown) => ({
+      kind: "sampledPositions",
+      terrainProvider,
+      positions,
+    })),
+    createGooglePhotorealistic3DTileset: vi.fn(async (apiOptions?: unknown) => ({
+      kind: "tileset",
+      apiOptions,
+    })),
   };
 });
+
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `CesiumTerrainProvider` instance — the kind of live object
+// `Cesium.CesiumTerrainProvider.fromUrl(...)`/`.fromIonAssetId(...)` resolve to.
+// `requestTileGeometry`/`loadTileDataAvailability` are genuinely Promise-returning instance
+// methods with no named async binding, so calling them on an already-reachable handle
+// (`viewer.scene.globe.terrainProvider`) exercises the generic dynamic Promise bridge exactly
+// like `ArcGISTiledElevationTerrainProvider.requestTileGeometry` below.
+class FakeCesiumTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+  // Mirrors the real API's `Promise<void>` return type.
+  loadTileDataAvailability = vi.fn(async (_x: number, _y: number, _level: number) => undefined);
+}
 
 // A minimal class (not a plain `{}` object literal) standing in for real Cesium's `Globe` class
 // instance — `SandboxHandles.isPlainData` distinguishes a real class instance (opaque handle,
 // correctly proxied for property assignment) from inert plain JSON data (flattened to a
 // snapshot), and every real CesiumJS class instance has a non-`Object.prototype` prototype.
+// `terrainProvider` defaults to a `FakeCesiumTerrainProvider` so its dynamic-bridge instance
+// methods are reachable without every test needing to assign one first.
 class FakeGlobe {
-  terrainProvider: unknown;
+  terrainProvider: unknown = new FakeCesiumTerrainProvider();
 }
 
 // A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
@@ -138,6 +415,454 @@ class FakeArcGisMapServerImageryProvider {
   );
 }
 
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a generic `ImageryProvider` base-class instance reached via
+// `viewer.imageryLayers.get(1).imageryProvider` — a second, distinct imagery layer slot from
+// `FakeArcGisMapServerImageryProvider`'s (index 0), since `ImageryProvider.pickFeatures`/
+// `requestImage` are separate declaration paths in `CESIUM_COMPATIBILITY.md` from the
+// concrete-provider overrides already covered above. Also used as the `imageryProvider` argument
+// for the static `ImageryProvider.loadImage(imageryProvider, url)` factory.
+class FakeImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `IonImageryProvider` instance reached via
+// `viewer.imageryLayers.get(2).imageryProvider` — a third, distinct imagery layer slot, since
+// `IonImageryProvider.pickFeatures`/`requestImage` are their own declaration paths in
+// `CESIUM_COMPATIBILITY.md`, reached only after `IonImageryProvider.fromAssetId` above
+// constructs the provider.
+class FakeIonImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+// A minimal class standing in for a real `IonGeocoderService` instance. Unlike the imagery/
+// terrain fakes above, there's no public `Viewer` property that exposes a raw geocoder service
+// instance (the real `viewer.geocoder` is a `GeocoderViewModel` wrapper, not the service itself),
+// so `fakeViewer()` attaches this directly as `viewer.geocoderService` — a synthetic but
+// convenient reachable handle for exercising `geocode`, a genuinely Promise-returning instance
+// method with no named async binding.
+class FakeIonGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `Cesium3DTilesVoxelProvider` instance reached via
+// `viewer.scene.primitives.get(index).provider` — the same object graph real generated code uses
+// (`new VoxelPrimitive({ provider })`, then `scene.primitives.add(...)`). `requestData` is a
+// genuinely Promise-returning instance method with no named async binding, so calling it on an
+// already-reachable handle exercises the generic dynamic Promise bridge exactly like
+// `CesiumTerrainProvider.requestTileGeometry` above.
+class FakeCesium3DTilesVoxelProvider {
+  requestData = vi.fn(
+    async (options?: { tileLevel?: number; tileX?: number; tileY?: number; tileZ?: number }) => ({
+      kind: "voxelContent",
+      ...options,
+    }),
+  );
+}
+
+// A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
+// `FakeGlobe`) standing in for a real `Cesium3DTilesTerrainProvider` instance reached via
+// `viewer.scene.terrainProvider` — a real, settable property distinct from
+// `viewer.scene.globe.terrainProvider` (already `FakeCesiumTerrainProvider`'s slot) and
+// `viewer.terrainProvider` (already `FakeArcGISTiledElevationTerrainProvider`'s slot).
+// `requestTileGeometry`/`loadTileDataAvailability` are genuinely Promise-returning instance
+// methods with no named async binding, so calling them on this already-reachable handle
+// exercises the generic dynamic Promise bridge exactly like `CesiumTerrainProvider` above.
+class FakeCesium3DTilesTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "cesium3DTilesTerrainData",
+    x,
+    y,
+    level,
+  }));
+  // Mirrors the real API's `Promise<void>` return type.
+  loadTileDataAvailability = vi.fn(async (_x: number, _y: number, _level: number) => undefined);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The `Fake*` classes below back `viewer.testHandles` (see `fakeViewer()`), a synthetic grab-bag
+// of reachable instances for real CesiumJS classes that have no natural Viewer/Scene property to
+// hang off of (unlike `scene.globe.terrainProvider`, `imageryLayers.get(index)`, ...) — the same
+// "synthetic but convenient reachable handle" precedent as `viewer.geocoderService` above.
+// Each real class here does have a *public* constructor (verified against `Cesium.d.ts`), so an
+// alternative would be constructing it directly in guest code (`new Cesium.X(...)`), but that
+// would require the "cesium" module mock's `X` export to be a real, shared-identity class rather
+// than the plain object-literal static-factory overrides used above (and below, for the several
+// of these classes that also have a mocked static factory) — keeping instance construction here,
+// entirely test-side, avoids that split and matches how `FakeArcGisMapServerImageryProvider`
+// above is already fully decoupled from `ArcGisMapServerImageryProvider`'s own `fromUrl` mock.
+// ---------------------------------------------------------------------------------------------
+
+class FakeAzure2DImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeBingMapsImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeGoogle2DImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeGoogleEarthEnterpriseImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeGoogleEarthEnterpriseMapsProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeGridImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeMapboxImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+class FakeMapboxStyleImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+class FakeSingleTileImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeTileCoordinatesImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeUrlTemplateImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+class FakeWebMapServiceImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+class FakeWebMapTileServiceImageryProvider {
+  requestImage = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+  pickFeatures = vi.fn(
+    async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+      { kind: "featureInfo", x, y, level, longitude, latitude },
+    ],
+  );
+}
+
+class FakeVRTheWorldTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+  loadTileDataAvailability = vi.fn(async (_x: number, _y: number, _level: number) => undefined);
+}
+
+class FakeEllipsoidTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+}
+
+class FakeCustomHeightmapTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+  loadTileDataAvailability = vi.fn(async (_x: number, _y: number, _level: number) => undefined);
+}
+
+class FakeGoogleEarthEnterpriseTerrainProvider {
+  requestTileGeometry = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "terrainData",
+    x,
+    y,
+    level,
+  }));
+}
+
+// `upsample` is a `TerrainData` subclass instance method (real signature:
+// `Promise<TerrainData> | undefined`) normally reached from a prior `requestTileGeometry` call's
+// resolved value — but each class below is instead reached directly via its own `testHandles`
+// slot for a deterministic, self-contained test double, matching every other class on this page.
+class FakeCesium3DTilesTerrainData {
+  upsample = vi.fn(
+    async (
+      _tilingScheme: unknown,
+      thisX: number,
+      thisY: number,
+      thisLevel: number,
+      descendantX: number,
+      descendantY: number,
+      descendantLevel: number,
+    ) => ({
+      kind: "cesium3DTilesTerrainData",
+      thisX,
+      thisY,
+      thisLevel,
+      descendantX,
+      descendantY,
+      descendantLevel,
+    }),
+  );
+}
+
+class FakeGoogleEarthEnterpriseTerrainData {
+  upsample = vi.fn(
+    async (
+      _tilingScheme: unknown,
+      thisX: number,
+      thisY: number,
+      thisLevel: number,
+      descendantX: number,
+      descendantY: number,
+      descendantLevel: number,
+    ) => ({
+      kind: "googleEarthEnterpriseTerrainData",
+      thisX,
+      thisY,
+      thisLevel,
+      descendantX,
+      descendantY,
+      descendantLevel,
+    }),
+  );
+}
+
+class FakeHeightmapTerrainData {
+  upsample = vi.fn(
+    async (
+      _tilingScheme: unknown,
+      thisX: number,
+      thisY: number,
+      thisLevel: number,
+      descendantX: number,
+      descendantY: number,
+      descendantLevel: number,
+    ) => ({
+      kind: "heightmapTerrainData",
+      thisX,
+      thisY,
+      thisLevel,
+      descendantX,
+      descendantY,
+      descendantLevel,
+    }),
+  );
+}
+
+class FakeQuantizedMeshTerrainData {
+  upsample = vi.fn(
+    async (
+      _tilingScheme: unknown,
+      thisX: number,
+      thisY: number,
+      thisLevel: number,
+      descendantX: number,
+      descendantY: number,
+      descendantLevel: number,
+    ) => ({
+      kind: "quantizedMeshTerrainData",
+      thisX,
+      thisY,
+      thisLevel,
+      descendantX,
+      descendantY,
+      descendantLevel,
+    }),
+  );
+}
+
+// Geocoder services besides `IonGeocoderService` (already covered above via the synthetic
+// `viewer.geocoderService` handle) — each real class has a public constructor, but for the same
+// reason as the imagery/terrain fakes above, its `geocode` mock lives on an independent
+// `testHandles` instance rather than a `new Cesium.X(...)` constructed inside the guest script.
+class FakeBingMapsGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+class FakeCartographicGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+class FakeGoogleGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+class FakeOpenCageGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+class FakePeliasGeocoderService {
+  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+}
+
+// `I3SDataProvider.fromUrl` is mocked separately above (module-level static factory); this fake
+// backs `filterByAttributes`, a genuinely Promise-returning instance method with no named async
+// binding.
+class FakeI3SDataProvider {
+  filterByAttributes = vi.fn(async (_filters?: unknown) => undefined);
+}
+
+class FakeI3SField {
+  load = vi.fn(async () => undefined);
+}
+
+class FakeI3SLayer {
+  filterByAttributes = vi.fn(async (_filters?: unknown) => undefined);
+}
+
+class FakeI3SNode {
+  loadField = vi.fn(async (_name: string) => undefined);
+  loadFields = vi.fn(async () => undefined);
+}
+
+// `PinBuilder` is already in `staticExports` (real class currently passes through unmocked), but
+// its `fromMakiIconId`/`fromUrl` instance methods would otherwise issue real network requests for
+// Maki icon/image assets, so this fake stands in for a constructed `new Cesium.PinBuilder()`.
+class FakePinBuilder {
+  fromMakiIconId = vi.fn(async (id: string, color?: unknown) => ({ kind: "pinCanvas", id, color }));
+  fromUrl = vi.fn(async (url: unknown, color?: unknown, size?: unknown) => ({
+    kind: "pinCanvas",
+    url,
+    color,
+    size,
+  }));
+}
+
+class FakeTimeDynamicImagery {
+  getFromCache = vi.fn(async (x: number, y: number, level: number) => ({
+    kind: "imageryTile",
+    x,
+    y,
+    level,
+  }));
+}
+
+// `CzmlDataSource.load`/`GeoJsonDataSource.process` are mocked/covered separately above; these
+// back the sibling instance method with no named async binding on each class.
+class FakeCzmlDataSourceInstance {
+  process = vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options }));
+}
+
+class FakeGeoJsonDataSourceInstance {
+  process = vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options }));
+}
+
 function fakeViewer() {
   const entitiesById = new Map<string, unknown>();
   let nextId = 0;
@@ -146,8 +871,61 @@ function fakeViewer() {
   // resolves to the SAME fake layer/provider instance, matching the existing `terrainProvider`
   // pattern above.
   const arcGisImageryLayer = { imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown };
+  // Distinct imagery layer slots (indexes 1 and 2) for the generic `ImageryProvider` base-class
+  // and `IonImageryProvider` fakes, kept separate from `arcGisImageryLayer` (index 0) above.
+  const genericImageryLayer = { imageryProvider: new FakeImageryProvider() as unknown };
+  const ionImageryLayer = { imageryProvider: new FakeIonImageryProvider() as unknown };
+  // Same reasoning, for `scene.primitives.get(0).provider` — stands in for a real `VoxelPrimitive`
+  // holding a `Cesium3DTilesVoxelProvider`.
+  const voxelPrimitive = { provider: new FakeCesium3DTilesVoxelProvider() as unknown };
 
   return {
+    // A synthetic, non-real-API grab-bag of reachable instances for classes with no natural
+    // Viewer/Scene property to attach to — the same precedent as `geocoderService` below, just
+    // consolidated into one place since there are so many of them (see the `Fake*` classes'
+    // shared doc comment above `fakeViewer()`).
+    testHandles: {
+      azure2DImageryProvider: new FakeAzure2DImageryProvider() as unknown,
+      bingMapsImageryProvider: new FakeBingMapsImageryProvider() as unknown,
+      google2DImageryProvider: new FakeGoogle2DImageryProvider() as unknown,
+      googleEarthEnterpriseImageryProvider: new FakeGoogleEarthEnterpriseImageryProvider() as unknown,
+      googleEarthEnterpriseMapsProvider: new FakeGoogleEarthEnterpriseMapsProvider() as unknown,
+      gridImageryProvider: new FakeGridImageryProvider() as unknown,
+      mapboxImageryProvider: new FakeMapboxImageryProvider() as unknown,
+      mapboxStyleImageryProvider: new FakeMapboxStyleImageryProvider() as unknown,
+      singleTileImageryProvider: new FakeSingleTileImageryProvider() as unknown,
+      tileCoordinatesImageryProvider: new FakeTileCoordinatesImageryProvider() as unknown,
+      urlTemplateImageryProvider: new FakeUrlTemplateImageryProvider() as unknown,
+      webMapServiceImageryProvider: new FakeWebMapServiceImageryProvider() as unknown,
+      webMapTileServiceImageryProvider: new FakeWebMapTileServiceImageryProvider() as unknown,
+      vrTheWorldTerrainProvider: new FakeVRTheWorldTerrainProvider() as unknown,
+      ellipsoidTerrainProvider: new FakeEllipsoidTerrainProvider() as unknown,
+      customHeightmapTerrainProvider: new FakeCustomHeightmapTerrainProvider() as unknown,
+      googleEarthEnterpriseTerrainProvider: new FakeGoogleEarthEnterpriseTerrainProvider() as unknown,
+      cesium3DTilesTerrainData: new FakeCesium3DTilesTerrainData() as unknown,
+      googleEarthEnterpriseTerrainData: new FakeGoogleEarthEnterpriseTerrainData() as unknown,
+      heightmapTerrainData: new FakeHeightmapTerrainData() as unknown,
+      quantizedMeshTerrainData: new FakeQuantizedMeshTerrainData() as unknown,
+      bingMapsGeocoderService: new FakeBingMapsGeocoderService() as unknown,
+      cartographicGeocoderService: new FakeCartographicGeocoderService() as unknown,
+      googleGeocoderService: new FakeGoogleGeocoderService() as unknown,
+      openCageGeocoderService: new FakeOpenCageGeocoderService() as unknown,
+      peliasGeocoderService: new FakePeliasGeocoderService() as unknown,
+      i3sDataProvider: new FakeI3SDataProvider() as unknown,
+      i3sField: new FakeI3SField() as unknown,
+      i3sLayer: new FakeI3SLayer() as unknown,
+      i3sNode: new FakeI3SNode() as unknown,
+      pinBuilder: new FakePinBuilder() as unknown,
+      timeDynamicImagery: new FakeTimeDynamicImagery() as unknown,
+      czmlDataSource: new FakeCzmlDataSourceInstance() as unknown,
+      geoJsonDataSource: new FakeGeoJsonDataSourceInstance() as unknown,
+    },
+    // A real `Viewer` property (`viewer.cesiumWidget`); `flyTo`/`zoomTo` are genuinely
+    // Promise-returning instance methods with no named async binding.
+    cesiumWidget: {
+      flyTo: vi.fn(async (_target: unknown, _options?: unknown) => true),
+      zoomTo: vi.fn(async (_target: unknown, _offset?: unknown) => true),
+    },
     destroy: vi.fn(),
     camera: {
       flyTo: vi.fn((_opts: { destination: Cartesian3 }) => {}),
@@ -183,8 +961,19 @@ function fakeViewer() {
       addImageryProvider: vi.fn((provider: unknown) => ({ provider })),
       remove: vi.fn(),
       removeAll: vi.fn(),
-      get: vi.fn((_index: number) => arcGisImageryLayer),
+      get: vi.fn(
+        (index: number) =>
+          [arcGisImageryLayer, genericImageryLayer, ionImageryLayer][index] ?? arcGisImageryLayer,
+      ),
+      // A genuinely Promise-returning method directly on the collection itself (not a per-layer
+      // `imageryProvider`), with no named async binding.
+      pickImageryLayerFeatures: vi.fn(
+        async (x: number, y: number, level: number, longitude: number, latitude: number) => [
+          { kind: "featureInfo", x, y, level, longitude, latitude },
+        ],
+      ),
     },
+    geocoderService: new FakeIonGeocoderService() as unknown,
     scene: {
       clampToHeightMostDetailed: vi.fn(async (positions: unknown[]) => positions),
       pickAsync: vi.fn(async (position: unknown) => ({ kind: "pick", position })),
@@ -193,6 +982,7 @@ function fakeViewer() {
         length: 0,
         add: vi.fn((primitive: unknown) => primitive),
         remove: vi.fn(),
+        get: vi.fn((_index: number) => voxelPrimitive),
       },
       groundPrimitives: {
         length: 0,
@@ -203,6 +993,7 @@ function fakeViewer() {
         add: vi.fn((stage: unknown) => stage),
       },
       globe: new FakeGlobe(),
+      terrainProvider: new FakeCesium3DTilesTerrainProvider() as unknown,
     },
     terrainProvider: new FakeArcGISTiledElevationTerrainProvider() as unknown,
     dataSources: {
@@ -220,6 +1011,83 @@ const dynamicPromiseCases = [
     code: `return await viewer.dataSources.add({ id: "source", entities: { values: [] } });`,
     expected: { id: "source", entities: { values: [] } },
     getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.dataSources.add,
+  },
+  {
+    path: "ImageryProvider.loadImage",
+    // No named async binding exists for this static factory, so this exercises the
+    // static-namespace fallback + generic dynamic Promise bridge instead.
+    code: `
+      const provider = viewer.imageryLayers.get(1).imageryProvider;
+      return await Cesium.ImageryProvider.loadImage(provider, "https://example.com/tile.png");
+    `,
+    expected: { kind: "imageryImage", url: "https://example.com/tile.png" },
+    getMock: () => ImageryProvider.loadImage,
+  },
+  {
+    path: "ImageryProvider.pickFeatures",
+    // Reached via imagery layer index 1 (`FakeImageryProvider`), distinct from
+    // `ArcGisMapServerImageryProvider.pickFeatures`'s index-0 slot above.
+    code: `
+      const layer = viewer.imageryLayers.get(1);
+      return await layer.imageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);
+    `,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(1) as { imageryProvider: FakeImageryProvider }).imageryProvider
+        .pickFeatures,
+  },
+  {
+    path: "ImageryProvider.requestImage",
+    code: `
+      const layer = viewer.imageryLayers.get(1);
+      return await layer.imageryProvider.requestImage(2, 3, 5);
+    `,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(1) as { imageryProvider: FakeImageryProvider }).imageryProvider
+        .requestImage,
+  },
+  {
+    path: "IonGeocoderService.geocode",
+    // Reached via the synthetic `viewer.geocoderService` handle (see `FakeIonGeocoderService`
+    // above) rather than constructing `new Cesium.IonGeocoderService(...)` in the script itself,
+    // so the pre-existing mock instance stays reachable for the post-run assertion below.
+    code: `return await viewer.geocoderService.geocode("Paris");`,
+    expected: [{ kind: "geocodeResult", query: "Paris", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.geocoderService as FakeIonGeocoderService).geocode,
+  },
+  {
+    path: "IonImageryProvider.fromAssetId",
+    // No named async binding exists for this static factory, so this exercises the
+    // static-namespace fallback + generic dynamic Promise bridge instead.
+    code: `return await Cesium.IonImageryProvider.fromAssetId(3812);`,
+    expected: { kind: "ionImageryProvider", assetId: 3812, options: undefined },
+    getMock: () => IonImageryProvider.fromAssetId,
+  },
+  {
+    path: "IonImageryProvider.pickFeatures",
+    // Reached via imagery layer index 2 (`FakeIonImageryProvider`), distinct from the
+    // `ArcGisMapServerImageryProvider`/generic `ImageryProvider` slots above.
+    code: `
+      const layer = viewer.imageryLayers.get(2);
+      return await layer.imageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);
+    `,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(2) as { imageryProvider: FakeIonImageryProvider }).imageryProvider
+        .pickFeatures,
+  },
+  {
+    path: "IonImageryProvider.requestImage",
+    code: `
+      const layer = viewer.imageryLayers.get(2);
+      return await layer.imageryProvider.requestImage(2, 3, 5);
+    `,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.imageryLayers.get(2) as { imageryProvider: FakeIonImageryProvider }).imageryProvider
+        .requestImage,
   },
   {
     path: "Scene.sampleHeightMostDetailed",
@@ -269,11 +1137,723 @@ const dynamicPromiseCases = [
     expected: true,
     getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.zoomTo,
   },
+  {
+    path: "CesiumTerrainProvider.requestTileGeometry",
+    code: `return await viewer.scene.globe.terrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.scene.globe.terrainProvider as FakeCesiumTerrainProvider).requestTileGeometry,
+  },
+  {
+    path: "CesiumTerrainProvider.loadTileDataAvailability",
+    code: `return await viewer.scene.globe.terrainProvider.loadTileDataAvailability(0, 0, 5);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.scene.globe.terrainProvider as FakeCesiumTerrainProvider).loadTileDataAvailability,
+  },
+  {
+    path: "CesiumTerrainProvider.fromUrl",
+    // This exercises the static-namespace fallback + generic dynamic Promise bridge, same as
+    // `fromIonAssetId` above.
+    code: `return await Cesium.CesiumTerrainProvider.fromUrl("https://example.com/terrain");`,
+    expected: { kind: "terrainProvider", url: "https://example.com/terrain" },
+    getMock: () => CesiumTerrainProvider.fromUrl,
+  },
+  {
+    path: "Cesium3DTilesVoxelProvider.fromUrl",
+    // No named async binding exists for this static factory, so this exercises the
+    // static-namespace fallback + generic dynamic Promise bridge instead.
+    code: `return await Cesium.Cesium3DTilesVoxelProvider.fromUrl("https://example.com/voxel/tileset.json");`,
+    expected: { kind: "voxelProvider", url: "https://example.com/voxel/tileset.json" },
+    getMock: () => Cesium3DTilesVoxelProvider.fromUrl,
+  },
+  {
+    path: "Cesium3DTilesVoxelProvider.requestData",
+    // Reached via `scene.primitives.get(index).provider`, mirroring the real
+    // `new VoxelPrimitive({ provider }); scene.primitives.add(...)` object graph, rather than
+    // through `fromUrl` above, for a deterministic, self-contained test double.
+    code: `
+      const primitive = viewer.scene.primitives.get(0);
+      return await primitive.provider.requestData({ tileLevel: 0, tileX: 1, tileY: 2, tileZ: 3 });
+    `,
+    expected: { kind: "voxelContent", tileLevel: 0, tileX: 1, tileY: 2, tileZ: 3 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.scene.primitives.get(0) as { provider: FakeCesium3DTilesVoxelProvider }).provider
+        .requestData,
+  },
+  {
+    path: "Cesium3DTilesTerrainProvider.fromUrl",
+    // No named async binding exists for this static factory, so this exercises the
+    // static-namespace fallback + generic dynamic Promise bridge instead.
+    code: `return await Cesium.Cesium3DTilesTerrainProvider.fromUrl("https://example.com/3d-tiles-terrain");`,
+    expected: {
+      kind: "cesium3DTilesTerrainProvider",
+      url: "https://example.com/3d-tiles-terrain",
+      options: undefined,
+    },
+    getMock: () => Cesium3DTilesTerrainProvider.fromUrl,
+  },
+  {
+    path: "Cesium3DTilesTerrainProvider.fromIonAssetId",
+    // This exercises the static-namespace fallback + generic dynamic Promise bridge, same as
+    // `CesiumTerrainProvider.fromIonAssetId` above.
+    code: `return await Cesium.Cesium3DTilesTerrainProvider.fromIonAssetId(2732686);`,
+    expected: { kind: "cesium3DTilesTerrainProvider", assetId: 2732686, options: undefined },
+    getMock: () => Cesium3DTilesTerrainProvider.fromIonAssetId,
+  },
+  {
+    path: "Cesium3DTilesTerrainProvider.requestTileGeometry",
+    // Reached via `scene.terrainProvider`, a real, settable property distinct from
+    // `scene.globe.terrainProvider` (already `CesiumTerrainProvider`'s slot).
+    code: `return await viewer.scene.terrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "cesium3DTilesTerrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.scene.terrainProvider as FakeCesium3DTilesTerrainProvider).requestTileGeometry,
+  },
+  {
+    path: "Cesium3DTilesTerrainProvider.loadTileDataAvailability",
+    code: `return await viewer.scene.terrainProvider.loadTileDataAvailability(0, 0, 5);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.scene.terrainProvider as FakeCesium3DTilesTerrainProvider)
+        .loadTileDataAvailability,
+  },
+  // ---------------------------------------------------------------------------------------------
+  // The cases below round out coverage for every remaining "Declaration-Only Dynamic Promise
+  // Candidate" in `CESIUM_COMPATIBILITY.md` that can be exercised with a deterministic double —
+  // static factories via the module mock above, instance methods via `viewer.testHandles` (see
+  // its doc comment) or a real Viewer property (`cesiumWidget`, `imageryLayers`). Excluded:
+  // `Resource.*`/`IonResource.*` (deliberately blocked, see the security-regression tests below),
+  // abstract-only declarations with no instantiable concrete owner (`GeocoderService.geocode`,
+  // `TerrainData.upsample`, `TerrainProvider.loadTileDataAvailability`/`.requestTileGeometry`,
+  // `VoxelProvider.requestData` — already exercised through their concrete subclasses above), and
+  // genuinely wasm/worker-backed APIs with no deterministic-double equivalent (see the
+  // `test.todo`s further below).
+  // ---------------------------------------------------------------------------------------------
+  {
+    path: "ArcGisMapServerImageryProvider.fromBasemapType",
+    code: `return await Cesium.ArcGisMapServerImageryProvider.fromBasemapType("SATELLITE", {});`,
+    expected: { kind: "arcGisMapServerImageryProvider", style: "SATELLITE", options: {} },
+    getMock: () => ArcGisMapServerImageryProvider.fromBasemapType,
+  },
+  {
+    path: "Cesium3DTileset.loadJson",
+    code: `return await Cesium.Cesium3DTileset.loadJson("https://example.com/tileset.json");`,
+    expected: { kind: "tilesetJson", tilesetUrl: "https://example.com/tileset.json" },
+    getMock: () => Cesium3DTileset.loadJson,
+  },
+  {
+    path: "Material.fromTypeAsync",
+    code: `return await Cesium.Material.fromTypeAsync("Water", {});`,
+    expected: { kind: "material", type: "Water", options: {} },
+    getMock: () => Material.fromTypeAsync,
+  },
+  {
+    path: "GeoJsonPrimitive.fromUrl",
+    code: `return await Cesium.GeoJsonPrimitive.fromUrl("https://example.com/data.geojson");`,
+    expected: { kind: "geoJsonPrimitive", url: "https://example.com/data.geojson", options: undefined },
+    getMock: () => GeoJsonPrimitive.fromUrl,
+  },
+  {
+    path: "GoogleEarthEnterpriseMetadata.fromUrl",
+    code: `return await Cesium.GoogleEarthEnterpriseMetadata.fromUrl("https://example.com/gee");`,
+    expected: {
+      kind: "googleEarthEnterpriseMetadata",
+      url: "https://example.com/gee",
+      options: undefined,
+    },
+    getMock: () => GoogleEarthEnterpriseMetadata.fromUrl,
+  },
+  {
+    path: "GoogleStreetViewCubeMapPanoramaProvider.fromUrl",
+    code: `return await Cesium.GoogleStreetViewCubeMapPanoramaProvider.fromUrl("https://example.com/pano");`,
+    expected: {
+      kind: "googleStreetViewCubeMapPanoramaProvider",
+      url: "https://example.com/pano",
+      options: undefined,
+    },
+    getMock: () => GoogleStreetViewCubeMapPanoramaProvider.fromUrl,
+  },
+  {
+    path: "TileMapServiceImageryProvider.fromUrl",
+    code: `return await Cesium.TileMapServiceImageryProvider.fromUrl("https://example.com/tms");`,
+    expected: {
+      kind: "tileMapServiceImageryProvider",
+      url: "https://example.com/tms",
+      options: undefined,
+    },
+    getMock: () => TileMapServiceImageryProvider.fromUrl,
+  },
+  {
+    path: "CzmlDataSource.load",
+    code: `return await Cesium.CzmlDataSource.load("https://example.com/data.czml");`,
+    expected: { kind: "dataSource", data: "https://example.com/data.czml", options: undefined },
+    getMock: () => CzmlDataSource.load,
+  },
+  {
+    path: "CzmlDataSource.process",
+    code: `return await viewer.testHandles.czmlDataSource.process({ id: "doc" }, {});`,
+    expected: { kind: "dataSource", data: { id: "doc" }, options: {} },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.czmlDataSource as FakeCzmlDataSourceInstance).process,
+  },
+  {
+    path: "GpxDataSource.load",
+    code: `return await Cesium.GpxDataSource.load("https://example.com/track.gpx");`,
+    expected: { kind: "dataSource", data: "https://example.com/track.gpx", options: undefined },
+    getMock: () => GpxDataSource.load,
+  },
+  {
+    path: "KmlDataSource.load",
+    code: `return await Cesium.KmlDataSource.load("https://example.com/data.kml");`,
+    expected: { kind: "dataSource", data: "https://example.com/data.kml", options: undefined },
+    getMock: () => KmlDataSource.load,
+  },
+  {
+    path: "GeoJsonDataSource.process",
+    code: `return await viewer.testHandles.geoJsonDataSource.process({ type: "FeatureCollection" }, {});`,
+    expected: { kind: "dataSource", data: { type: "FeatureCollection" }, options: {} },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.geoJsonDataSource as FakeGeoJsonDataSourceInstance).process,
+  },
+  {
+    path: "BingMapsImageryProvider.fromUrl",
+    code: `return await Cesium.BingMapsImageryProvider.fromUrl("https://example.com/bing", {});`,
+    expected: { kind: "bingMapsImageryProvider", url: "https://example.com/bing", options: {} },
+    getMock: () => BingMapsImageryProvider.fromUrl,
+  },
+  {
+    path: "BingMapsImageryProvider.requestImage",
+    code: `return await viewer.testHandles.bingMapsImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.bingMapsImageryProvider as FakeBingMapsImageryProvider).requestImage,
+  },
+  {
+    path: "Google2DImageryProvider.fromIonAssetId",
+    code: `return await Cesium.Google2DImageryProvider.fromIonAssetId(4021, {});`,
+    expected: { kind: "google2DImageryProvider", assetId: 4021, options: {} },
+    getMock: () => Google2DImageryProvider.fromIonAssetId,
+  },
+  {
+    path: "Google2DImageryProvider.fromUrl",
+    code: `return await Cesium.Google2DImageryProvider.fromUrl("https://example.com/google2d", {});`,
+    expected: { kind: "google2DImageryProvider", url: "https://example.com/google2d", options: {} },
+    getMock: () => Google2DImageryProvider.fromUrl,
+  },
+  {
+    path: "Google2DImageryProvider.requestImage",
+    code: `return await viewer.testHandles.google2DImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.google2DImageryProvider as FakeGoogle2DImageryProvider).requestImage,
+  },
+  {
+    path: "GoogleEarthEnterpriseImageryProvider.requestImage",
+    code: `return await viewer.testHandles.googleEarthEnterpriseImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.googleEarthEnterpriseImageryProvider as FakeGoogleEarthEnterpriseImageryProvider)
+        .requestImage,
+  },
+  {
+    path: "GoogleEarthEnterpriseMapsProvider.fromUrl",
+    code: `return await Cesium.GoogleEarthEnterpriseMapsProvider.fromUrl("https://example.com/gee-maps", {});`,
+    expected: {
+      kind: "googleEarthEnterpriseMapsProvider",
+      url: "https://example.com/gee-maps",
+      options: {},
+    },
+    getMock: () => GoogleEarthEnterpriseMapsProvider.fromUrl,
+  },
+  {
+    path: "GoogleEarthEnterpriseMapsProvider.requestImage",
+    code: `return await viewer.testHandles.googleEarthEnterpriseMapsProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.googleEarthEnterpriseMapsProvider as FakeGoogleEarthEnterpriseMapsProvider)
+        .requestImage,
+  },
+  {
+    path: "GridImageryProvider.requestImage",
+    code: `return await viewer.testHandles.gridImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.gridImageryProvider as FakeGridImageryProvider).requestImage,
+  },
+  {
+    path: "MapboxImageryProvider.requestImage",
+    code: `return await viewer.testHandles.mapboxImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.mapboxImageryProvider as FakeMapboxImageryProvider).requestImage,
+  },
+  {
+    path: "MapboxImageryProvider.pickFeatures",
+    code: `return await viewer.testHandles.mapboxImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.mapboxImageryProvider as FakeMapboxImageryProvider).pickFeatures,
+  },
+  {
+    path: "MapboxStyleImageryProvider.requestImage",
+    code: `return await viewer.testHandles.mapboxStyleImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider).requestImage,
+  },
+  {
+    path: "MapboxStyleImageryProvider.pickFeatures",
+    code: `return await viewer.testHandles.mapboxStyleImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider).pickFeatures,
+  },
+  {
+    path: "SingleTileImageryProvider.fromUrl",
+    code: `return await Cesium.SingleTileImageryProvider.fromUrl("https://example.com/single-tile.png", {});`,
+    expected: {
+      kind: "singleTileImageryProvider",
+      url: "https://example.com/single-tile.png",
+      options: {},
+    },
+    getMock: () => SingleTileImageryProvider.fromUrl,
+  },
+  {
+    path: "SingleTileImageryProvider.requestImage",
+    code: `return await viewer.testHandles.singleTileImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.singleTileImageryProvider as FakeSingleTileImageryProvider).requestImage,
+  },
+  {
+    path: "TileCoordinatesImageryProvider.requestImage",
+    code: `return await viewer.testHandles.tileCoordinatesImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.tileCoordinatesImageryProvider as FakeTileCoordinatesImageryProvider)
+        .requestImage,
+  },
+  {
+    path: "UrlTemplateImageryProvider.requestImage",
+    code: `return await viewer.testHandles.urlTemplateImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider).requestImage,
+  },
+  {
+    path: "UrlTemplateImageryProvider.pickFeatures",
+    code: `return await viewer.testHandles.urlTemplateImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider).pickFeatures,
+  },
+  {
+    path: "WebMapServiceImageryProvider.requestImage",
+    code: `return await viewer.testHandles.webMapServiceImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.webMapServiceImageryProvider as FakeWebMapServiceImageryProvider)
+        .requestImage,
+  },
+  {
+    path: "WebMapServiceImageryProvider.pickFeatures",
+    code: `return await viewer.testHandles.webMapServiceImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.webMapServiceImageryProvider as FakeWebMapServiceImageryProvider)
+        .pickFeatures,
+  },
+  {
+    path: "WebMapTileServiceImageryProvider.requestImage",
+    code: `return await viewer.testHandles.webMapTileServiceImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.webMapTileServiceImageryProvider as FakeWebMapTileServiceImageryProvider)
+        .requestImage,
+  },
+  {
+    path: "WebMapTileServiceImageryProvider.pickFeatures",
+    code: `return await viewer.testHandles.webMapTileServiceImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.webMapTileServiceImageryProvider as FakeWebMapTileServiceImageryProvider)
+        .pickFeatures,
+  },
+  {
+    path: "Azure2DImageryProvider.requestImage",
+    code: `return await viewer.testHandles.azure2DImageryProvider.requestImage(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.azure2DImageryProvider as FakeAzure2DImageryProvider).requestImage,
+  },
+  {
+    path: "VRTheWorldTerrainProvider.fromUrl",
+    code: `return await Cesium.VRTheWorldTerrainProvider.fromUrl("https://example.com/vr-terrain", {});`,
+    expected: {
+      kind: "vrTheWorldTerrainProvider",
+      url: "https://example.com/vr-terrain",
+      options: {},
+    },
+    getMock: () => VRTheWorldTerrainProvider.fromUrl,
+  },
+  {
+    path: "VRTheWorldTerrainProvider.requestTileGeometry",
+    code: `return await viewer.testHandles.vrTheWorldTerrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.vrTheWorldTerrainProvider as FakeVRTheWorldTerrainProvider)
+        .requestTileGeometry,
+  },
+  {
+    path: "VRTheWorldTerrainProvider.loadTileDataAvailability",
+    code: `return await viewer.testHandles.vrTheWorldTerrainProvider.loadTileDataAvailability(0, 0, 5);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.vrTheWorldTerrainProvider as FakeVRTheWorldTerrainProvider)
+        .loadTileDataAvailability,
+  },
+  {
+    path: "EllipsoidTerrainProvider.requestTileGeometry",
+    code: `return await viewer.testHandles.ellipsoidTerrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.ellipsoidTerrainProvider as FakeEllipsoidTerrainProvider)
+        .requestTileGeometry,
+  },
+  {
+    path: "CustomHeightmapTerrainProvider.requestTileGeometry",
+    code: `return await viewer.testHandles.customHeightmapTerrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.customHeightmapTerrainProvider as FakeCustomHeightmapTerrainProvider)
+        .requestTileGeometry,
+  },
+  {
+    path: "CustomHeightmapTerrainProvider.loadTileDataAvailability",
+    code: `return await viewer.testHandles.customHeightmapTerrainProvider.loadTileDataAvailability(0, 0, 5);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.customHeightmapTerrainProvider as FakeCustomHeightmapTerrainProvider)
+        .loadTileDataAvailability,
+  },
+  {
+    path: "GoogleEarthEnterpriseTerrainProvider.requestTileGeometry",
+    code: `return await viewer.testHandles.googleEarthEnterpriseTerrainProvider.requestTileGeometry(0, 0, 5);`,
+    expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.googleEarthEnterpriseTerrainProvider as FakeGoogleEarthEnterpriseTerrainProvider)
+        .requestTileGeometry,
+  },
+  {
+    path: "Cesium3DTilesTerrainData.upsample",
+    code: `return await viewer.testHandles.cesium3DTilesTerrainData.upsample(undefined, 0, 0, 5, 0, 0, 6);`,
+    expected: {
+      kind: "cesium3DTilesTerrainData",
+      thisX: 0,
+      thisY: 0,
+      thisLevel: 5,
+      descendantX: 0,
+      descendantY: 0,
+      descendantLevel: 6,
+    },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.cesium3DTilesTerrainData as FakeCesium3DTilesTerrainData).upsample,
+  },
+  {
+    path: "GoogleEarthEnterpriseTerrainData.upsample",
+    code: `return await viewer.testHandles.googleEarthEnterpriseTerrainData.upsample(undefined, 0, 0, 5, 0, 0, 6);`,
+    expected: {
+      kind: "googleEarthEnterpriseTerrainData",
+      thisX: 0,
+      thisY: 0,
+      thisLevel: 5,
+      descendantX: 0,
+      descendantY: 0,
+      descendantLevel: 6,
+    },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.googleEarthEnterpriseTerrainData as FakeGoogleEarthEnterpriseTerrainData)
+        .upsample,
+  },
+  {
+    path: "HeightmapTerrainData.upsample",
+    code: `return await viewer.testHandles.heightmapTerrainData.upsample(undefined, 0, 0, 5, 0, 0, 6);`,
+    expected: {
+      kind: "heightmapTerrainData",
+      thisX: 0,
+      thisY: 0,
+      thisLevel: 5,
+      descendantX: 0,
+      descendantY: 0,
+      descendantLevel: 6,
+    },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.heightmapTerrainData as FakeHeightmapTerrainData).upsample,
+  },
+  {
+    path: "QuantizedMeshTerrainData.upsample",
+    code: `return await viewer.testHandles.quantizedMeshTerrainData.upsample(undefined, 0, 0, 5, 0, 0, 6);`,
+    expected: {
+      kind: "quantizedMeshTerrainData",
+      thisX: 0,
+      thisY: 0,
+      thisLevel: 5,
+      descendantX: 0,
+      descendantY: 0,
+      descendantLevel: 6,
+    },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.quantizedMeshTerrainData as FakeQuantizedMeshTerrainData).upsample,
+  },
+  {
+    path: "BingMapsGeocoderService.geocode",
+    code: `return await viewer.testHandles.bingMapsGeocoderService.geocode("Paris");`,
+    expected: [{ kind: "geocodeResult", query: "Paris", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.bingMapsGeocoderService as FakeBingMapsGeocoderService).geocode,
+  },
+  {
+    path: "CartographicGeocoderService.geocode",
+    code: `return await viewer.testHandles.cartographicGeocoderService.geocode("1.0, 2.0");`,
+    expected: [{ kind: "geocodeResult", query: "1.0, 2.0", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.cartographicGeocoderService as FakeCartographicGeocoderService).geocode,
+  },
+  {
+    path: "GoogleGeocoderService.geocode",
+    code: `return await viewer.testHandles.googleGeocoderService.geocode("Paris");`,
+    expected: [{ kind: "geocodeResult", query: "Paris", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.googleGeocoderService as FakeGoogleGeocoderService).geocode,
+  },
+  {
+    path: "OpenCageGeocoderService.geocode",
+    code: `return await viewer.testHandles.openCageGeocoderService.geocode("Paris");`,
+    expected: [{ kind: "geocodeResult", query: "Paris", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.openCageGeocoderService as FakeOpenCageGeocoderService).geocode,
+  },
+  {
+    path: "PeliasGeocoderService.geocode",
+    code: `return await viewer.testHandles.peliasGeocoderService.geocode("Paris");`,
+    expected: [{ kind: "geocodeResult", query: "Paris", type: undefined }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.peliasGeocoderService as FakePeliasGeocoderService).geocode,
+  },
+  {
+    path: "I3SDataProvider.fromUrl",
+    code: `return await Cesium.I3SDataProvider.fromUrl("https://example.com/i3s", {});`,
+    expected: { kind: "i3sDataProvider", url: "https://example.com/i3s", options: {} },
+    getMock: () => I3SDataProvider.fromUrl,
+  },
+  {
+    path: "I3SDataProvider.filterByAttributes",
+    code: `return await viewer.testHandles.i3sDataProvider.filterByAttributes([{ name: "class" }]);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.i3sDataProvider as FakeI3SDataProvider).filterByAttributes,
+  },
+  {
+    path: "I3SField.load",
+    code: `return await viewer.testHandles.i3sField.load();`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.i3sField as FakeI3SField).load,
+  },
+  {
+    path: "I3SLayer.filterByAttributes",
+    code: `return await viewer.testHandles.i3sLayer.filterByAttributes([{ name: "class" }]);`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.i3sLayer as FakeI3SLayer).filterByAttributes,
+  },
+  {
+    path: "I3SNode.loadField",
+    code: `return await viewer.testHandles.i3sNode.loadField("class");`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.i3sNode as FakeI3SNode).loadField,
+  },
+  {
+    path: "I3SNode.loadFields",
+    code: `return await viewer.testHandles.i3sNode.loadFields();`,
+    expected: null,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.i3sNode as FakeI3SNode).loadFields,
+  },
+  {
+    path: "ITwinData.createDataSourceForRealityDataId",
+    code: `return await Cesium.ITwinData.createDataSourceForRealityDataId({ realityDataId: "rd-1", iTwinId: "it-1" });`,
+    expected: { kind: "iTwinDataSource", options: { realityDataId: "rd-1", iTwinId: "it-1" } },
+    getMock: () => ITwinData.createDataSourceForRealityDataId,
+  },
+  {
+    path: "ITwinData.createTilesetForRealityDataId",
+    code: `return await Cesium.ITwinData.createTilesetForRealityDataId({ realityDataId: "rd-1", iTwinId: "it-1" });`,
+    expected: { kind: "iTwinTileset", options: { realityDataId: "rd-1", iTwinId: "it-1" } },
+    getMock: () => ITwinData.createTilesetForRealityDataId,
+  },
+  {
+    path: "ITwinData.createTilesetFromIModelId",
+    code: `return await Cesium.ITwinData.createTilesetFromIModelId({ iModelId: "im-1" });`,
+    expected: { kind: "iTwinTileset", options: { iModelId: "im-1" } },
+    getMock: () => ITwinData.createTilesetFromIModelId,
+  },
+  {
+    path: "ITwinData.loadGeospatialFeatures",
+    code: `return await Cesium.ITwinData.loadGeospatialFeatures({ iTwinId: "it-1", collectionId: "coll-1" });`,
+    expected: { kind: "iTwinGeospatialFeatures", options: { iTwinId: "it-1", collectionId: "coll-1" } },
+    getMock: () => ITwinData.loadGeospatialFeatures,
+  },
+  {
+    path: "ImageryLayerCollection.pickImageryLayerFeatures",
+    code: `return await viewer.imageryLayers.pickImageryLayerFeatures(2, 3, 5, 12.5, 41.9);`,
+    expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.imageryLayers.pickImageryLayerFeatures,
+  },
+  {
+    path: "CesiumWidget.flyTo",
+    code: `return await viewer.cesiumWidget.flyTo({});`,
+    expected: true,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.cesiumWidget.flyTo,
+  },
+  {
+    path: "CesiumWidget.zoomTo",
+    code: `return await viewer.cesiumWidget.zoomTo({});`,
+    expected: true,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.cesiumWidget.zoomTo,
+  },
+  {
+    path: "PinBuilder.fromMakiIconId",
+    code: `return await viewer.testHandles.pinBuilder.fromMakiIconId("bus", "#ff0000");`,
+    expected: { kind: "pinCanvas", id: "bus", color: "#ff0000" },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.pinBuilder as FakePinBuilder).fromMakiIconId,
+  },
+  {
+    path: "PinBuilder.fromUrl",
+    code: `return await viewer.testHandles.pinBuilder.fromUrl("https://example.com/pin.png", "#ff0000", 32);`,
+    expected: { kind: "pinCanvas", url: "https://example.com/pin.png", color: "#ff0000", size: 32 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.pinBuilder as FakePinBuilder).fromUrl,
+  },
+  {
+    path: "TimeDynamicImagery.getFromCache",
+    code: `return await viewer.testHandles.timeDynamicImagery.getFromCache(2, 3, 5);`,
+    expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      (viewer.testHandles.timeDynamicImagery as FakeTimeDynamicImagery).getFromCache,
+  },
+  {
+    path: "exportKml",
+    code: `return await Cesium.exportKml({ modelCallback: undefined });`,
+    expected: { kind: "kmlExport", options: { modelCallback: undefined } },
+    getMock: () => exportKml,
+  },
+  {
+    path: "sampleTerrain",
+    code: `return await Cesium.sampleTerrain({}, 5, [{ longitude: 1, latitude: 2 }]);`,
+    expected: {
+      kind: "sampledPositions",
+      terrainProvider: {},
+      level: 5,
+      positions: [{ longitude: 1, latitude: 2 }],
+    },
+    getMock: () => sampleTerrain,
+  },
+  {
+    path: "sampleTerrainMostDetailed",
+    code: `return await Cesium.sampleTerrainMostDetailed({}, [{ longitude: 1, latitude: 2 }]);`,
+    expected: {
+      kind: "sampledPositions",
+      terrainProvider: {},
+      positions: [{ longitude: 1, latitude: 2 }],
+    },
+    getMock: () => sampleTerrainMostDetailed,
+  },
+  {
+    path: "createGooglePhotorealistic3DTileset",
+    code: `return await Cesium.createGooglePhotorealistic3DTileset({ key: "test-key" });`,
+    expected: { kind: "tileset", apiOptions: { key: "test-key" } },
+    getMock: () => createGooglePhotorealistic3DTileset,
+  },
+  {
+    path: "createWorldImageryAsync",
+    code: `return await Cesium.createWorldImageryAsync({ style: "AERIAL" });`,
+    expected: { kind: "imageryProvider", options: { style: "AERIAL" } },
+    getMock: () => createWorldImageryAsync,
+  },
+  {
+    path: "createOsmBuildingsAsync",
+    code: `return await Cesium.createOsmBuildingsAsync({ style: undefined });`,
+    expected: { kind: "osmBuildingsTileset", options: { style: undefined } },
+    getMock: () => createOsmBuildingsAsync,
+  },
+  {
+    path: "createWorldTerrainAsync",
+    code: `return await Cesium.createWorldTerrainAsync({ requestVertexNormals: true });`,
+    expected: { kind: "terrainProvider", options: { requestVertexNormals: true } },
+    getMock: () => createWorldTerrainAsync,
+  },
+  {
+    path: "createWorldBathymetryAsync",
+    code: `return await Cesium.createWorldBathymetryAsync({ requestVertexNormals: true });`,
+    expected: { kind: "bathymetryProvider", options: { requestVertexNormals: true } },
+    getMock: () => createWorldBathymetryAsync,
+  },
+  {
+    path: "Cesium3DTileset.fromUrl",
+    code: `return await Cesium.Cesium3DTileset.fromUrl("https://example.com/tileset.json", {});`,
+    expected: { kind: "tileset", url: "https://example.com/tileset.json", options: {} },
+    getMock: () => Cesium3DTileset.fromUrl,
+  },
+  {
+    path: "Cesium3DTileset.fromIonAssetId",
+    code: `return await Cesium.Cesium3DTileset.fromIonAssetId(2464651, {});`,
+    expected: { kind: "tileset", assetId: 2464651, options: {} },
+    getMock: () => Cesium3DTileset.fromIonAssetId,
+  },
+  {
+    path: "CesiumTerrainProvider.fromIonAssetId",
+    code: `return await Cesium.CesiumTerrainProvider.fromIonAssetId(1, {});`,
+    expected: { kind: "terrainProvider", assetId: 1, options: {} },
+    getMock: () => CesiumTerrainProvider.fromIonAssetId,
+  },
+  {
+    path: "ArcGISTiledElevationTerrainProvider.fromUrl",
+    code: `return await Cesium.ArcGISTiledElevationTerrainProvider.fromUrl("https://example.com/terrain", {});`,
+    expected: { kind: "terrainProvider", url: "https://example.com/terrain", options: {} },
+    getMock: () => ArcGISTiledElevationTerrainProvider.fromUrl,
+  },
+  {
+    path: "ArcGisMapServerImageryProvider.fromUrl",
+    code: `return await Cesium.ArcGisMapServerImageryProvider.fromUrl("https://example.com/arcgis", {});`,
+    expected: { kind: "arcGisMapServerImageryProvider", url: "https://example.com/arcgis", options: {} },
+    getMock: () => ArcGisMapServerImageryProvider.fromUrl,
+  },
+  {
+    path: "GeoJsonDataSource.load",
+    code: `return await Cesium.GeoJsonDataSource.load("https://example.com/data.geojson", {});`,
+    expected: { kind: "dataSource", data: "https://example.com/data.geojson", options: {} },
+    getMock: () => GeoJsonDataSource.load,
+  },
+  {
+    path: "Model.fromGltfAsync",
+    code: `return await Cesium.Model.fromGltfAsync({ url: "https://example.com/model.glb" });`,
+    expected: { kind: "model", options: { url: "https://example.com/model.glb" } },
+    getMock: () => Model.fromGltfAsync,
+  },
 ] as const;
 
 const dynamicPromiseGapPaths = [
+  "GroundPolylinePrimitive.initializeTerrainHeights",
+  "GroundPrimitive.initializeTerrainHeights",
   "Scene.clampToHeightMostDetailed",
   "Scene.pickAsync",
+  "TaskProcessor.initWebAssemblyModule",
+  "TaskProcessor.scheduleTask",
+  "Transforms.preloadIcrfFixed",
 ] as const;
 
 afterEach(() => {
@@ -542,13 +2122,13 @@ describe("runCesiumCodeInSandbox", () => {
     expect(passedProvider.kind).toBe("imageryProvider");
   });
 
-  test("loads OSM buildings via the bare Cesium.createOsmBuildingsAsync alias and adds them to scene.primitives", async () => {
+  test("loads OSM buildings via Cesium.createOsmBuildingsAsync and adds them to scene.primitives", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
-        const tileset = await createOsmBuildingsAsync();
+        const tileset = await Cesium.createOsmBuildingsAsync();
         await viewer.scene.primitives.add(tileset);
         return "added";
       `,
@@ -572,10 +2152,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(Cesium3DTileset.fromUrl).toHaveBeenCalledWith(
-      "https://example.com/tileset.json",
-      undefined,
-    );
+    expect(Cesium3DTileset.fromUrl).toHaveBeenCalledWith("https://example.com/tileset.json");
     expect(viewer.scene.primitives.add).toHaveBeenCalledTimes(1);
   });
 
@@ -593,7 +2170,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(Cesium3DTileset.fromIonAssetId).toHaveBeenCalledWith(75343, undefined);
+    expect(Cesium3DTileset.fromIonAssetId).toHaveBeenCalledWith(75343);
     const addedTileset = viewer.scene.primitives.add.mock.calls[0][0] as { style: unknown };
     // Proves the guest's `tileset.style = ...` assignment actually reached the real object
     // (the `set` trap on the remote proxy), not just the guest's own inert local proxy target.
@@ -613,7 +2190,7 @@ describe("runCesiumCodeInSandbox", () => {
     });
 
     expect(outcome).toEqual({ success: true, result: "done" });
-    expect(CesiumTerrainProvider.fromIonAssetId).toHaveBeenCalledWith(1, undefined);
+    expect(CesiumTerrainProvider.fromIonAssetId).toHaveBeenCalledWith(1);
     expect((viewer.scene.globe.terrainProvider as { kind: string }).kind).toBe("terrainProvider");
   });
 
@@ -641,9 +2218,8 @@ describe("runCesiumCodeInSandbox", () => {
   });
 
   // Each `runCesiumCodeInSandbox` call is a separate script/interpreter, so switching the terrain
-  // provider (a second, genuinely async CesiumJS action) in its own run doesn't hit the
-  // one-async-call-per-script guard — that guard is scoped to a single generated script, not
-  // across separate sandboxed runs.
+  // provider (a second, genuinely async CesiumJS action) in its own run is unaffected by anything
+  // that happened in a prior run.
   test("switches the terrain provider via Cesium.createWorldTerrainAsync", async () => {
     const viewer = fakeViewer();
 
@@ -672,6 +2248,29 @@ describe("runCesiumCodeInSandbox", () => {
 
   test.todo("dynamically bridges Scene.clampToHeightMostDetailed without an Asyncify hang");
   test.todo("dynamically bridges Scene.pickAsync without an Asyncify hang");
+
+  // The five APIs below are genuinely backed by a real Web Worker and/or WebAssembly module
+  // (`TaskProcessor` spins up worker threads to run real wasm codecs; `GroundPrimitive`/
+  // `GroundPolylinePrimitive.initializeTerrainHeights` fetch and decode real approximate-terrain
+  // wasm assets; `Transforms.preloadIcrfFixed` fetches real IAU2006 XYS data files). None of them
+  // have a deterministic, dependency-free double the way every other case above does (a plain
+  // `vi.fn()` standing in for the whole call) — actually invoking them would require either a
+  // real wasm/worker environment (not available in this unit test's sandboxed jsdom/QuickJS
+  // setup) or additional test-only fixture assets, so they're tracked here rather than silently
+  // skipped, per the user's request to flag untestable declaration-only candidates explicitly.
+  test.todo(
+    "dynamically bridges TaskProcessor.initWebAssemblyModule (requires a real wasm module + worker)",
+  );
+  test.todo("dynamically bridges TaskProcessor.scheduleTask (requires a real worker thread)");
+  test.todo(
+    "dynamically bridges GroundPrimitive.initializeTerrainHeights (requires real wasm terrain-height assets)",
+  );
+  test.todo(
+    "dynamically bridges GroundPolylinePrimitive.initializeTerrainHeights (requires real wasm terrain-height assets)",
+  );
+  test.todo(
+    "dynamically bridges Transforms.preloadIcrfFixed (requires real IAU2006 XYS data file fetches)",
+  );
 
   test.each(dynamicPromiseCases)(
     "dynamically bridges $path through an allowed host handle",
@@ -707,12 +2306,63 @@ describe("runCesiumCodeInSandbox", () => {
     "rejects a second dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
   );
 
-  test("does not expose network-capable Cesium.Resource through the static namespace", async () => {
+  // `Resource` is deliberately absent from `SAFE_STATIC_CESIUM_EXPORTS` in
+  // `cesium-capabilities.json` — every one of its static methods below issues (or would issue)
+  // real HTTP requests, including mutating verbs (`post`/`put`/`patch`/`delete`), and every
+  // `Resource.*` path is tracked only as a "declaration-only" candidate in
+  // `CESIUM_COMPATIBILITY.md`, never as runtime-covered. Banning `fetch` and every network
+  // primitive outright (not just restricting it to a domain allowlist) is a deliberate security
+  // control (see `docs/Codegen-tool-security-attacks-vectors.md`), so these are regression tests
+  // proving each method stays unreachable rather than dynamic-bridge coverage tests.
+  test.each([
+    ["Resource.delete", `Cesium.Resource.delete({ url: "https://example.com/data.json" })`],
+    ["Resource.fetch", `Cesium.Resource.fetch({ url: "https://example.com/data.json" })`],
+    [
+      "Resource.fetchArrayBuffer",
+      `Cesium.Resource.fetchArrayBuffer({ url: "https://example.com/data.bin" })`,
+    ],
+    ["Resource.fetchBlob", `Cesium.Resource.fetchBlob({ url: "https://example.com/data.bin" })`],
+    [
+      "Resource.fetchImage",
+      `Cesium.Resource.fetchImage({ url: "https://example.com/image.png" })`,
+    ],
+    ["Resource.fetchJson", `Cesium.Resource.fetchJson({ url: "https://example.com/data.json" })`],
+    [
+      "Resource.fetchJsonp",
+      `Cesium.Resource.fetchJsonp({ url: "https://example.com/data.json" })`,
+    ],
+    ["Resource.fetchText", `Cesium.Resource.fetchText({ url: "https://example.com/data.txt" })`],
+    ["Resource.fetchXML", `Cesium.Resource.fetchXML({ url: "https://example.com/data.xml" })`],
+    ["Resource.head", `Cesium.Resource.head({ url: "https://example.com/data.json" })`],
+    ["Resource.options", `Cesium.Resource.options({ url: "https://example.com/data.json" })`],
+    [
+      "Resource.patch",
+      `Cesium.Resource.patch({ url: "https://example.com/data.json" }, { data: "{}" })`,
+    ],
+    [
+      "Resource.post",
+      `Cesium.Resource.post({ url: "https://example.com/data.json" }, { data: "{}" })`,
+    ],
+    [
+      "Resource.put",
+      `Cesium.Resource.put({ url: "https://example.com/data.json" }, { data: "{}" })`,
+    ],
+    // `IonResource` extends `Resource` and is likewise deliberately absent from
+    // `SAFE_STATIC_CESIUM_EXPORTS` — it fetches arbitrary Ion asset content (potentially
+    // credentialed, via Ion access tokens) over the network, the same SSRF/data-exfiltration
+    // concern as `Resource` itself, so it's excluded for the same reason rather than merely
+    // being untested.
+    [
+      "IonResource.fetchImage",
+      `Cesium.IonResource.fetchImage({ url: "https://example.com/image.png" })`,
+    ],
+    ["IonResource.fromAssetId", `Cesium.IonResource.fromAssetId(12345)`],
+  ])("does not expose network-capable %s through the static namespace", async (_path, code) => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
-      code: `return Cesium.Resource.fetchJson({ url: "https://example.com/data.json" });`,
+      code: `return ${code};`,
     });
 
     expect(outcome.success).toBe(false);
@@ -764,44 +2414,49 @@ describe("runCesiumCodeInSandbox", () => {
     expect(viewer.dataSources.add).not.toHaveBeenCalled();
   });
 
-  test("times out a stalled explicitly bound async factory", async () => {
+  test("times out a stalled dynamically bridged Cesium.* factory call", async () => {
     const viewer = fakeViewer();
-    vi.mocked(createWorldImageryAsync).mockImplementationOnce(
-      () =>
-        new Promise<never>((_resolve, reject) =>
-          setTimeout(() => reject(new Error("late factory failure")), 1500),
-        ),
-    );
+    // A plain `mockImplementationOnce` here would be unsafe: with such a short `timeoutMs`, the
+    // QuickJS interrupt can fire before the guest script ever reaches the
+    // `Cesium.createWorldImageryAsync()` call, leaving the queued "once" override unconsumed —
+    // `afterEach`'s `vi.clearAllMocks()` doesn't drain pending `mockImplementationOnce` queue
+    // entries, so it would silently leak into (and hang) the next test that calls this same mock.
+    // A scoped `mockImplementation` explicitly restored in `finally` has no such queue to leak.
+    const originalImpl = vi.mocked(createWorldImageryAsync).getMockImplementation();
+    vi.mocked(createWorldImageryAsync).mockImplementation(() => new Promise(() => {}));
 
-    const startedAt = Date.now();
-    const outcome = await runCesiumCodeInSandbox({
-      viewer: viewer as never,
-      timeoutMs: 1000,
-      code: `return await Cesium.createWorldImageryAsync();`,
-    });
+    try {
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        timeoutMs: 50,
+        code: `return await Cesium.createWorldImageryAsync();`,
+      });
 
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toMatch(/timed out|interrupted/i);
-    expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
-    expect(Date.now() - startedAt).toBeLessThan(1400);
+      expect(outcome.success).toBe(false);
+      expect(outcome.error).toMatch(/timed out|interrupted/i);
+    } finally {
+      vi.mocked(createWorldImageryAsync).mockImplementation(originalImpl!);
+    }
   });
 
-  test("rejects a second async CesiumJS call in the same script (Asyncify one-call-per-script guard)", async () => {
+  test("allows both Cesium.createWorldImageryAsync and Cesium.createWorldTerrainAsync in the same script", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
-        await Cesium.createWorldImageryAsync();
-        await Cesium.createWorldTerrainAsync();
-        return "unreachable";
+        const imagery = await Cesium.createWorldImageryAsync();
+        const terrain = await Cesium.createWorldTerrainAsync();
+        return { imagery: imagery.kind, terrain: terrain.kind };
       `,
     });
 
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toMatch(/only one async cesiumjs call/i);
+    expect(outcome).toEqual({
+      success: true,
+      result: { imagery: "imageryProvider", terrain: "terrainProvider" },
+    });
     expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
-    expect(createWorldTerrainAsync).not.toHaveBeenCalled();
+    expect(createWorldTerrainAsync).toHaveBeenCalledTimes(1);
   });
 
   describe("logger option", () => {

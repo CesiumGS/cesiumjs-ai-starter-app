@@ -20,11 +20,7 @@ export {
   SandboxHandles,
   createProxiedViewer,
   buildCesiumHostBridgeGuestPrelude,
-  buildCesiumAsyncFactoryGuestPrelude,
   buildCesiumValueTypeGuestPrelude,
-  CESIUM_ASYNC_FACTORY_NAMES,
-  DEFAULT_CESIUM_ASYNC_FACTORIES,
-  type CesiumAsyncFactories,
 } from "./cesium-bindings.js";
 
 export {

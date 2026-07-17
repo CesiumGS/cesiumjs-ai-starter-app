@@ -26,9 +26,9 @@
  * then reference them bare, so requiring the `Cesium.` prefix everywhere would reject otherwise
  * idiomatic generated code with a spurious "X is not defined" `ReferenceError`.
  *
- * Must be evaluated in the guest **before** `guest-prelude-host-bridge.ts`'s and
- * `cesium-async-factories.ts`'s output — it declares `Cesium` (and `__CesiumCoreBundle__`) itself,
- * which those attach the live `viewer`-bridge, async factories, and value-type tagging onto.
+ * Must be evaluated in the guest **before** `guest-prelude-host-bridge.ts`'s output — it declares
+ * `Cesium` (and `__CesiumCoreBundle__`) itself, which that attaches the live `viewer`-bridge and
+ * value-type tagging onto.
  */
 import { extractFunctionBody } from "./function-source.js";
 import { CESIUM_CORE_BUNDLE_SOURCE } from "./generated/cesium-core-bundle.js";

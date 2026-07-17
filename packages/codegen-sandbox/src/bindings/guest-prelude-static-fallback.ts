@@ -23,8 +23,7 @@
  *
  * Must be evaluated after `buildCesiumValueTypeGuestPrelude` (needs the `Cesium` binding to
  * reassign) and `buildCesiumHostBridgeGuestPrelude` (needs `__remoteProxy__`), and before
- * `buildCesiumAsyncFactoryGuestPrelude` (whose explicit `Cesium.X = ...` assignments must land on
- * the same underlying plain object this proxy still forwards property *writes* to by default).
+ * `buildViewerAsyncMethodGuestPrelude`.
  */
 import { extractFunctionBody } from "./function-source.js";
 

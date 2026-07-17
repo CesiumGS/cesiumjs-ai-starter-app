@@ -1,6 +1,5 @@
 import type { Viewer } from "cesium";
 import * as CesiumNamespace from "cesium";
-import { buildCesiumAsyncFactoryGuestPrelude } from "./cesium-async-factories.js";
 import { createProxiedViewer } from "./guarded-viewer-proxy.js";
 import { buildCesiumHostBridgeGuestPrelude } from "./guest-prelude-host-bridge.js";
 import { buildCesiumStaticFallbackGuestPrelude } from "./guest-prelude-static-fallback.js";
@@ -31,7 +30,6 @@ export function buildCesiumGuestPrelude(
     buildCesiumValueTypeGuestPrelude(),
     buildCesiumHostBridgeGuestPrelude(),
     buildCesiumStaticFallbackGuestPrelude(staticCesiumHandleId),
-    buildCesiumAsyncFactoryGuestPrelude(),
     buildViewerAsyncMethodGuestPrelude(viewerHandleId),
   ].join("\n");
 }

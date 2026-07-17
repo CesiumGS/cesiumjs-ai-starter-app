@@ -1,14 +1,6 @@
 import { describe, expect, test } from "vitest";
 import * as Cesium from "cesium";
-import {
-  CESIUM_ASYNC_BINDINGS,
-  CESIUM_VALUE_TYPE_NAMES,
-  SAFE_STATIC_CESIUM_EXPORTS,
-} from "./capabilities-registry.js";
-import {
-  CESIUM_ASYNC_FACTORY_NAMES,
-  DEFAULT_CESIUM_ASYNC_FACTORIES,
-} from "./cesium-async-factories.js";
+import { CESIUM_VALUE_TYPE_NAMES, SAFE_STATIC_CESIUM_EXPORTS } from "./capabilities-registry.js";
 import { buildCesiumValueTypeGuestPrelude } from "./guest-prelude-value-types.js";
 
 describe("Cesium capability registry", () => {
@@ -16,17 +8,6 @@ describe("Cesium capability registry", () => {
     for (const exportName of SAFE_STATIC_CESIUM_EXPORTS) {
       expect(Cesium, `Cesium.${exportName}`).toHaveProperty(exportName);
     }
-  });
-
-  test("async factory registry exactly matches non-Viewer manifest bindings", () => {
-    const manifestFactoryNames = CESIUM_ASYNC_BINDINGS.filter(
-      ({ cesiumPath }) => !cesiumPath.startsWith("Viewer."),
-    )
-      .map(({ hostName }) => hostName)
-      .sort();
-
-    expect([...CESIUM_ASYNC_FACTORY_NAMES].sort()).toEqual(manifestFactoryNames);
-    expect(Object.keys(DEFAULT_CESIUM_ASYNC_FACTORIES).sort()).toEqual(manifestFactoryNames);
   });
 
   test("every manifest value type is attached by the generated guest prelude", () => {

@@ -102,7 +102,7 @@ export async function runCesiumCodeInSandbox({
     ctx.runtime.setInterruptHandler(shouldInterruptAfterDeadline(deadline));
     ctx.runtime.setMemoryLimit(memoryLimitBytes);
 
-    registerHostBindings(ctx, handles, { deadline, logger });
+    registerHostBindings(ctx, handles, { logger });
 
     const prelude = buildCesiumGuestPrelude(viewer, handles, maxItemsPerCollection);
     const wrapped = `${prelude}\n(async () => {\n${code}\n})();`;

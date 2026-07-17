@@ -145,10 +145,24 @@
   gap: 0.25rem;
 }
 
-.toolLabel {
+.toolSummary {
+  cursor: pointer;
   font-size: 11px;
   font-weight: 600;
   color: var(--stratakit-color-text-info-base);
+  list-style: none;
+}
+
+.toolSummary::-webkit-details-marker {
+  display: none;
+}
+
+.toolSummary::before {
+  content: "▸ ";
+}
+
+.toolCard[open] > .toolSummary::before {
+  content: "▾ ";
 }
 
 .toolArgs,
@@ -158,14 +172,52 @@
   color: var(--stratakit-color-text-neutral-secondary);
   white-space: pre-wrap;
   word-break: break-word;
-  margin: 0;
+  margin: 0.25rem 0 0;
   line-height: 1.4;
+  max-height: 220px;
+  overflow: auto;
 }
 
 .toolResult {
   color: var(--stratakit-color-text-positive-base);
+  margin-top: 0.5rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+.codeBlock {
+  font-family: var(--stratakit-font-family-mono);
+  font-size: 11px;
+  color: var(--stratakit-color-text-positive-base);
+  white-space: pre;
+  word-break: normal;
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+  padding: 0.4rem;
+  padding-right: 2rem;
+  border-radius: 4px;
+  background: var(--stratakit-color-bg-elevation-overlay);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.codeBlockWrapper {
+  position: relative;
+  margin-top: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+.copyButton {
+  position: absolute !important;
+  top: 0.55rem;
+  right: 0.35rem;
+  padding: 0.2rem !important;
+}
+
+.copyButton svg {
+  width: 14px;
+  height: 14px;
 }
 
 .approvalActions {

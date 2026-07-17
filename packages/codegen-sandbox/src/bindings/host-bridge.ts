@@ -1,15 +1,12 @@
 import { newAsyncContext } from "quickjs-emscripten";
-import { DEFAULT_CESIUM_ASYNC_FACTORIES } from "./cesium-async-factories.js";
 import { assertSandboxPropertyAllowed } from "./guarded-viewer-proxy.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
 import { noopLogger, type SandboxLogger } from "../logger.js";
 
 type HostCallEnvelope = { ok: true; value: unknown } | { ok: false; error: string };
 type QuickJSAsyncContext = Awaited<ReturnType<typeof newAsyncContext>>;
-type AsyncBinding = (...args: unknown[]) => Promise<unknown>;
 
 export interface RegisterHostBindingsOptions {
-  deadline: number;
   /** Reports individual guest/host boundary crossings. Defaults to {@link noopLogger}. */
   logger?: SandboxLogger;
 }
@@ -96,16 +93,20 @@ function registerHostApply(ctx: QuickJSAsyncContext, handles: SandboxHandles, lo
       if (isPromiseLike(result)) {
         // Bridge the host Promise into a genuine QuickJS promise via `ctx.newPromise()` instead
         // of quickjs-emscripten's Asyncify mechanism. An earlier design retained the host promise
-        // and had the guest re-enter through the (Asyncify-backed) `__cesiumSandboxHostCallAsync__`
-        // bridge to consume it — but Asyncify only reliably suspends/resumes a single in-flight
-        // call driven by `evaluateWrappedCode`'s own `executePendingJobs()` pump; reusing it here
-        // reproducibly hung the guest script and, since the underlying WASM module/heap is shared
-        // across every `newAsyncContext()` in the process, could crash unrelated later test runs
-        // with a native `memory access out of bounds`/`p->ref_count == 0` abort. `newPromise()` +
+        // and had the guest re-enter through a dedicated Asyncify-backed bridge to consume it —
+        // but Asyncify only reliably suspends/resumes a single in-flight call driven by
+        // `evaluateWrappedCode`'s own `executePendingJobs()` pump; reusing it here reproducibly
+        // hung the guest script and, since the underlying WASM module/heap is shared across every
+        // `newAsyncContext()` in the process, could crash unrelated later test runs with a native
+        // `memory access out of bounds`/`p->ref_count == 0` abort. `newPromise()` +
         // `executePendingJobs()` is the same mechanism `evaluateWrappedCode` already uses to
         // settle the outer script promise, needs no Asyncify support, and — unlike the old
         // mechanism — supports any number of concurrent/sequential dynamic-Promise calls per
-        // script rather than just one.
+        // script rather than just one. This is now the *only* bridge for Promise-returning calls
+        // (see `cesium-async-factories.ts`'s removal): the small set of genuinely async,
+        // network/Ion-backed factories that used to be routed through the dedicated Asyncify
+        // bridge (`createWorldImageryAsync`, `Cesium3DTileset.fromUrl`, ...) now flow through
+        // here exactly like every other Promise-returning API.
         const deferred = ctx.newPromise();
         Promise.resolve(result).then(
           (value) => {
@@ -163,70 +164,6 @@ function registerHostConstruct(
   hostFunction.dispose();
 }
 
-function createAsyncBindings(): Map<string, AsyncBinding> {
-  return new Map<string, AsyncBinding>(
-    Object.entries(DEFAULT_CESIUM_ASYNC_FACTORIES) as [string, AsyncBinding][],
-  );
-}
-
-function registerHostCallAsync(
-  ctx: QuickJSAsyncContext,
-  handles: SandboxHandles,
-  { deadline, logger }: RegisterHostBindingsOptions & { logger: SandboxLogger },
-): void {
-  const bindings = createAsyncBindings();
-  let asyncCallCount = 0;
-
-  const hostFunction = ctx.newAsyncifiedFunction(
-    "__cesiumSandboxHostCallAsync__",
-    async (nameHandle, argsHandle) => {
-      const name = ctx.getString(nameHandle);
-      asyncCallCount += 1;
-      if (asyncCallCount > 1) {
-        logger.warn(`rejected 2nd async call "${name}" (only one async call allowed per script)`);
-        return toEnvelopeString(ctx, {
-          ok: false,
-          error:
-            "Only one async CesiumJS call (e.g. createWorldImageryAsync, GeoJsonDataSource.load) is allowed per generated script.",
-        });
-      }
-
-      const binding = bindings.get(name);
-      if (!binding) {
-        logger.warn(`unknown async CesiumJS factory "${name}"`);
-        return toEnvelopeString(ctx, {
-          ok: false,
-          error: `Unknown async CesiumJS factory "${name}"`,
-        });
-      }
-
-      try {
-        const args = (JSON.parse(ctx.getString(argsHandle)) as unknown[]).map((arg) =>
-          handles.unwrap(arg),
-        );
-        logger.debug(`async call "${name}" (${args.length} arg(s))`);
-        const remainingMs = Math.max(0, deadline - Date.now());
-        let timeoutId: ReturnType<typeof setTimeout> | undefined;
-        const timeout = new Promise<never>((_resolve, reject) => {
-          timeoutId = setTimeout(
-            () => reject(new Error("Cesium sandbox execution timed out.")),
-            remainingMs,
-          );
-        });
-        const value = await Promise.race([binding(...args), timeout]).finally(() => {
-          if (timeoutId !== undefined) clearTimeout(timeoutId);
-        });
-        return toEnvelopeString(ctx, { ok: true, value: handles.wrap(value ?? null) });
-      } catch (error) {
-        logger.warn(`async call "${name}" failed: ${errorMessage(error)}`);
-        return toEnvelopeString(ctx, { ok: false, error: errorMessage(error) });
-      }
-    },
-  );
-  ctx.setProp(ctx.global, "__cesiumSandboxHostCallAsync__", hostFunction);
-  hostFunction.dispose();
-}
-
 /** Registers the complete host API consumed by the guest-side binding preludes. */
 export function registerHostBindings(
   ctx: QuickJSAsyncContext,
@@ -238,5 +175,4 @@ export function registerHostBindings(
   registerHostSet(ctx, handles, logger);
   registerHostApply(ctx, handles, logger);
   registerHostConstruct(ctx, handles, logger);
-  registerHostCallAsync(ctx, handles, { ...options, logger });
 }
