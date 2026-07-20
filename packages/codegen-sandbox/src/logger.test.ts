@@ -17,7 +17,7 @@ describe("createConsoleLogger", () => {
     vi.restoreAllMocks();
   });
 
-  test("defaults to the \"warn\" level, suppressing debug/info but emitting warn/error", () => {
+  test('defaults to the "warn" level, suppressing debug/info but emitting warn/error', () => {
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -35,7 +35,7 @@ describe("createConsoleLogger", () => {
     expect(error).toHaveBeenCalledWith("[codegen-sandbox] an error message");
   });
 
-  test("\"debug\" level emits every method", () => {
+  test('"debug" level emits every method', () => {
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -53,7 +53,7 @@ describe("createConsoleLogger", () => {
     expect(error).toHaveBeenCalledWith("[codegen-sandbox] an error message");
   });
 
-  test("\"silent\" level suppresses every method, including error", () => {
+  test('"silent" level suppresses every method, including error', () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const logger = createConsoleLogger("silent");
@@ -81,7 +81,7 @@ describe("createSandboxLogger", () => {
     expect(createSandboxLogger({ enabled: false })).toBe(noopLogger);
   });
 
-  test("defaults to enabled with a \"warn\" threshold", () => {
+  test('defaults to enabled with a "warn" threshold', () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
 

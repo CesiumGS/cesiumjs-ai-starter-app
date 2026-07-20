@@ -31,6 +31,11 @@ const cesiumPackage = JSON.parse(
 );
 const declarationPath = path.join(cesiumPackageDir, "Source/Cesium.d.ts");
 const declarationText = await readFile(declarationPath, "utf8");
+const installedStaticExports = Object.keys(Cesium).sort();
+const blockedStaticExportSet = new Set(manifest.blockedStaticExports);
+const availableStaticExports = installedStaticExports.filter(
+  (exportName) => !blockedStaticExportSet.has(exportName),
+);
 
 function collectPromiseApis(sourceText) {
   const source = ts.createSourceFile(
@@ -77,13 +82,22 @@ if (cesiumPackage.version !== manifest.reviewedCesiumVersion) {
   );
 }
 
-for (const exportName of manifest.staticExports) {
-  if (!(exportName in Cesium)) errors.push(`Static export no longer exists: Cesium.${exportName}`);
+for (const exportName of manifest.blockedStaticExports) {
+  if (!(exportName in Cesium)) {
+    errors.push(`Blocked static export no longer exists: Cesium.${exportName}`);
+  }
 }
 
-for (const valueType of manifest.valueTypes) {
+for (const [valueType, fields] of Object.entries(manifest.valueTypes)) {
   if (typeof Cesium[valueType] !== "function") {
     errors.push(`Value type no longer exists or is not constructable: Cesium.${valueType}`);
+  }
+  if (
+    !Array.isArray(fields) ||
+    fields.length === 0 ||
+    fields.some((field) => typeof field !== "string")
+  ) {
+    errors.push(`Value type fields must be a non-empty string array: Cesium.${valueType}`);
   }
 }
 
@@ -91,9 +105,9 @@ for (const ownerName of manifest.networkBlockedPromiseOwners) {
   if (typeof Cesium[ownerName] !== "function") {
     errors.push(`Network-blocked Promise owner no longer exists: Cesium.${ownerName}`);
   }
-  if (manifest.staticExports.includes(ownerName)) {
+  if (!manifest.blockedStaticExports.includes(ownerName)) {
     errors.push(
-      `Network-blocked Promise owner is also an allowed static export, contradicting the network block: Cesium.${ownerName}`,
+      `Network-blocked Promise owner is not in blockedStaticExports: Cesium.${ownerName}`,
     );
   }
 }
@@ -189,14 +203,17 @@ just serialized straight back to the guest, with nothing version-specific that c
 Promise-returning result is the one shape that needs different, non-trivial handling instead (a
 real QuickJS promise bridged via \`ctx.newPromise()\` + \`executePendingJobs()\`, previously the
 source of real hangs/crashes under an earlier Asyncify-based design - see the "Known Dynamic
-Promise Test Gap" section below). This report therefore only inventories Promise-returning Cesium
-APIs discovered in \`Source/Cesium.d.ts\`, classifying each reachable path as runtime-tested, a
-known runtime gap, an abstract base-class stub, network-blocked by design, or untested/uncovered.
+Promise Test Gap" section below). Top-level Cesium module exports are available by default except
+for the reviewed denylist below. This report also inventories Promise-returning APIs discovered in
+\`Source/Cesium.d.ts\`, classifying each path as runtime-tested, a known runtime gap, an abstract
+base-class stub, network-blocked by design, or untested/uncovered.
 
 - Installed CesiumJS: **${cesiumPackage.version}**
 - Last reviewed CesiumJS: **${manifest.reviewedCesiumVersion}**
-- Allowed static exports: **${manifest.staticExports.length}**
-- Guest value types: **${manifest.valueTypes.length}**
+- Installed Cesium module exports: **${installedStaticExports.length}**
+- Static exports available by default: **${availableStaticExports.length}**
+- Blocked static exports: **${manifest.blockedStaticExports.length}**
+- Guest value types: **${Object.keys(manifest.valueTypes).length}**
 - Promise-returning declaration paths discovered: **${promiseApis.length}**
 - Promise-returning paths using the dynamic bridge: **${unboundPromiseApis.length}**
 - Dynamically bridged paths exercised by runtime tests: **${runtimeCoveredPromisePaths.length}**
@@ -208,6 +225,18 @@ known runtime gap, an abstract base-class stub, network-blocked by design, or un
 ## Unsupported By Design
 
 ${manifest.unsupportedCapabilities.map((item) => `- ${item}`).join("\n")}
+
+## Blocked Static Cesium Exports
+
+All installed top-level Cesium exports are reachable as \`Cesium.<name>\` inside the sandbox except
+these reviewed denylist entries. Nested property access remains subject to \`blockedProperties\`.
+Review newly installed Cesium versions before updating \`reviewedCesiumVersion\`, because new
+top-level exports become available automatically under this policy.
+
+${manifest.blockedStaticExports
+  .toSorted()
+  .map((exportName) => `- \`${exportName}\``)
+  .join("\n")}
 
 ## Runtime-Tested Dynamic Promise APIs
 
@@ -253,8 +282,8 @@ ${formatList(abstractStubPromiseApis, "None currently.")}
 
 ## Network-Blocked Dynamic Promise Candidates (Excluded By Design)
 
-These declaration paths belong to \`Resource\`/\`IonResource\` - already explicitly excluded from
-\`staticExports\` and unreachable in the sandbox for the reasons given under "Unsupported By
+These declaration paths belong to \`Resource\`/\`IonResource\` - explicitly included in
+\`blockedStaticExports\` and unreachable in the sandbox for the reasons given under "Unsupported By
 Design" above (unrestricted network access, including mutating HTTP verbs and credentialed Ion
 asset fetches). Listed here separately, distinct from genuine untested/uncovered candidates, so this
 inventory doesn't imply they are merely untested rather than deliberately blocked.
@@ -274,7 +303,8 @@ ${formatList(networkBlockedPromiseApis, "None currently.")}
 await writeFile(reportPath, report, "utf8");
 
 console.log(
-  `Cesium ${cesiumPackage.version}: ${manifest.staticExports.length} static exports, ` +
+  `Cesium ${cesiumPackage.version}: ${installedStaticExports.length} installed exports, ` +
+    `${availableStaticExports.length} available, ${manifest.blockedStaticExports.length} blocked; ` +
     `${unboundPromiseApis.length} Promise APIs use the dynamic bridge when reachable.`,
 );
 console.log(`Wrote ${path.relative(process.cwd(), reportPath)}`);

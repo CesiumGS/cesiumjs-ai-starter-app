@@ -1,5 +1,9 @@
-import { test, expect, type Page } from "@playwright/test";
-import { expandToolCard, readExecuteCesiumCodeResult } from "./helpers/tool-card";
+import { test, expect, type Locator, type Page } from "@playwright/test";
+import {
+  expandToolCard,
+  readExecuteCesiumCodeResult,
+  type ExecuteCesiumCodeResultInfo,
+} from "./helpers/tool-card";
 
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 
@@ -267,6 +271,51 @@ function trackPageErrors(page: Page): Error[] {
   return errors;
 }
 
+/**
+ * Approves the currently-pending `executeCesiumCode` tool call and reads its result — then, if
+ * that result has a runtime `executionError`, gives the model a bounded number of chances to
+ * self-correct: a runtime failure commonly triggers the model to immediately retry with a fixed
+ * snippet in the same turn, which itself pauses on a brand-new approval request. Without this,
+ * such a retry's Approve button is simply never clicked, so its (successful) corrected code never
+ * runs and `assertSomethingChanged` times out waiting for a Viewer change that already happened
+ * only in the model's un-approved retry.
+ */
+async function approveAndReadExecuteCesiumCodeResult(
+  page: Page,
+): Promise<{ toolCard: Locator; result: ExecuteCesiumCodeResultInfo }> {
+  const MAX_RETRIES = 2;
+
+  await page.getByRole("button", { name: "Approve" }).click();
+
+  let toolCard = await expandToolCard(page, "executeCesiumCode");
+  await expect(
+    toolCard
+      .locator('pre[class*="codeBlock"]')
+      .or(page.locator('[data-testid="generation-error-panel"]')),
+  ).toBeVisible({ timeout: 60_000 });
+  let result = await readExecuteCesiumCodeResult(toolCard);
+
+  for (let attempt = 0; attempt < MAX_RETRIES && result.executionError; attempt++) {
+    const retryApproveButton = page.getByRole("button", { name: "Approve" });
+    const retryRequested = await retryApproveButton
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!retryRequested) break;
+
+    await retryApproveButton.click();
+    toolCard = await expandToolCard(page, "executeCesiumCode");
+    await expect(
+      toolCard
+        .locator('pre[class*="codeBlock"]')
+        .or(page.locator('[data-testid="generation-error-panel"]')),
+    ).toBeVisible({ timeout: 60_000 });
+    result = await readExecuteCesiumCodeResult(toolCard);
+  }
+
+  return { toolCard, result };
+}
+
 test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skills domain", () => {
   for (const [domain, intent] of Object.entries(DOMAIN_INTENTS)) {
     test(`${domain}: a real intent is verified and executes cleanly`, async ({ page }) => {
@@ -302,19 +351,9 @@ test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skill
         timeout: 90_000,
       });
 
-      // Approve the intent — only now does the server run generation + AST verification.
-      await page.getByRole("button", { name: "Approve" }).click();
-
-      // Force the tool card open — `MessageItem.tsx`'s `ToolCard` auto-collapses once resolved if
-      // its combined args/result text exceeds a length threshold, which real generated code
-      // routinely does, hiding the result <pre>s below from Playwright's visibility checks.
-      const toolCard = await expandToolCard(page, "executeCesiumCode");
-
-      const codeBlock = toolCard.locator('pre[class*="codeBlock"]');
-      const resultInfoBlock = toolCard.locator('pre[class*="toolResult"]');
-      await expect(codeBlock.or(resultInfoBlock)).toBeVisible({ timeout: 60_000 });
-
-      const result = await readExecuteCesiumCodeResult(toolCard);
+      // Approve the intent (and any subsequent self-correction retry) — only now does the server
+      // run generation + AST verification.
+      const { toolCard, result } = await approveAndReadExecuteCesiumCodeResult(page);
 
       // Only expected outcome: generation succeeded and the code ran with no error surfaced.
       expect(result.error, `generation/verification failed: ${result.error}`).toBeUndefined();

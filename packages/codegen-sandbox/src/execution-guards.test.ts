@@ -15,9 +15,7 @@ describe("assertEntityCapNotExceeded", () => {
 
   test("does not throw when below the cap", () => {
     const viewer = mockViewer(5);
-    expect(() =>
-      assertEntityCapNotExceeded(viewer, { maxItemsPerCollection: 10 }),
-    ).not.toThrow();
+    expect(() => assertEntityCapNotExceeded(viewer, { maxItemsPerCollection: 10 })).not.toThrow();
   });
 
   test("throws EntityCapExceededError once the count reaches the cap", () => {

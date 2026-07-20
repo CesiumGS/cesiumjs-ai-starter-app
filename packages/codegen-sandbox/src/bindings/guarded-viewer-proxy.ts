@@ -111,6 +111,21 @@ function createGuardedProxy(target: object, spec: GuardedProxySpec): unknown {
       // symbol-keyed properties (e.g. `Symbol.iterator`) and plain data pass through untouched.
       return typeof real === "function" ? real.bind(t) : real;
     },
+    // Many real CesiumJS accessor properties (e.g. `Viewer.prototype.trackedEntity`'s setter
+    // internally does `this._cesiumWidget.trackedEntity = value`) run their setter logic against
+    // `this`. Without this trap, the Proxy's *default* set behavior invokes that setter with
+    // `receiver` = the guarded Proxy itself (since the host bridge's `Reflect.set(target, prop,
+    // value)` has no explicit receiver, which defaults to `target` = this Proxy) — so the
+    // setter's own internal `this._cesiumWidget` access re-enters this SAME Proxy's `get` trap
+    // and trips `assertSandboxPropertyAllowed` on a legitimate Cesium-internal underscore-prefixed
+    // property, even though the guest never asked to read it. Explicitly forwarding with
+    // `receiver = t` (the real underlying object, not the Proxy) makes the setter run with the
+    // correct real `this`, exactly mirroring how the `get` trap already `.bind()`s real methods
+    // to the real target instead of the Proxy.
+    set(t: object, prop: PropertyKey, value: unknown): boolean {
+      if (typeof prop === "string") assertSandboxPropertyAllowed(prop);
+      return Reflect.set(t, prop, value, t);
+    },
   });
 }
 

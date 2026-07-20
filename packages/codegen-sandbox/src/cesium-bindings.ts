@@ -14,7 +14,7 @@
  *   `Viewer` API.
  * - `bindings/host-bridge.ts` -- registers the host-side property, call, constructor, and async
  *   functions consumed by the guest-side bridge.
- * - `bindings/guest-prelude.ts` -- owns the static Cesium allowlist, root handles, and dependency
+ * - `bindings/guest-prelude.ts` -- applies the static Cesium denylist and owns root handles and dependency
  *   order for all guest-side binding preludes.
  * - `bindings/guest-prelude-host-bridge.ts` -- the guest-side `__remoteProxy__` bridge for
  *   synchronous host calls (property reads / method calls on opaque handles).

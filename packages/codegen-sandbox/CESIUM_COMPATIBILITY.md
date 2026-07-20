@@ -8,13 +8,16 @@ just serialized straight back to the guest, with nothing version-specific that c
 Promise-returning result is the one shape that needs different, non-trivial handling instead (a
 real QuickJS promise bridged via `ctx.newPromise()` + `executePendingJobs()`, previously the
 source of real hangs/crashes under an earlier Asyncify-based design - see the "Known Dynamic
-Promise Test Gap" section below). This report therefore only inventories Promise-returning Cesium
-APIs discovered in `Source/Cesium.d.ts`, classifying each reachable path as runtime-tested, a
-known runtime gap, an abstract base-class stub, network-blocked by design, or untested/uncovered.
+Promise Test Gap" section below). Top-level Cesium module exports are available by default except
+for the reviewed denylist below. This report also inventories Promise-returning APIs discovered in
+`Source/Cesium.d.ts`, classifying each path as runtime-tested, a known runtime gap, an abstract
+base-class stub, network-blocked by design, or untested/uncovered.
 
 - Installed CesiumJS: **1.142.0**
 - Last reviewed CesiumJS: **1.142.0**
-- Allowed static exports: **59**
+- Installed Cesium module exports: **1326**
+- Static exports available by default: **1289**
+- Blocked static exports: **37**
 - Guest value types: **7**
 - Promise-returning declaration paths discovered: **133**
 - Promise-returning paths using the dynamic bridge: **133**
@@ -29,8 +32,54 @@ known runtime gap, an abstract base-class stub, network-blocked by design, or un
 - Guest callbacks cannot cross the host boundary or outlive the disposable VM.
 - Promise-returning APIs are dynamically bridged when reached through an allowed host handle.
 - DOM and lifecycle properties in blockedProperties are unavailable.
-- `Resource.*` static methods (fetch/fetchJson/post/put/patch/delete/...) are explicitly blocked, not merely untested: `Resource` is intentionally excluded from staticExports because network access, including mutating HTTP verbs, is banned outright rather than restricted to a domain allowlist. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.
-- `IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked, not merely untested: `IonResource` extends `Resource` and fetches arbitrary (potentially credentialed) Ion asset content over the network, the same SSRF/data-exfiltration concern as `Resource` itself, so it is intentionally excluded from staticExports for the same reason. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.
+- Top-level Cesium exports are available by default except those in blockedStaticExports; every nested property access still passes through blockedProperties.
+- `Resource.*` static methods (fetch/fetchJson/post/put/patch/delete/...) are explicitly blocked because unrestricted network access, including mutating HTTP verbs, is banned outright rather than restricted to a domain allowlist. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.
+- `IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked: `IonResource` extends `Resource` and fetches arbitrary, potentially credentialed Ion asset content over the network.
+
+## Blocked Static Cesium Exports
+
+All installed top-level Cesium exports are reachable as `Cesium.<name>` inside the sandbox except
+these reviewed denylist entries. Nested property access remains subject to `blockedProperties`.
+Review newly installed Cesium versions before updating `reviewedCesiumVersion`, because new
+top-level exports become available automatically under this policy.
+
+- `Animation`
+- `BaseLayerPicker`
+- `Cesium3DTilesInspector`
+- `CesiumInspector`
+- `CesiumWidget`
+- `CreditDisplay`
+- `DebugInspector`
+- `DeviceOrientationCameraController`
+- `Fullscreen`
+- `FullscreenButton`
+- `Geocoder`
+- `HomeButton`
+- `InfoBox`
+- `IonResource`
+- `NavigationHelpButton`
+- `PerformanceDisplay`
+- `PerformanceWatchdog`
+- `ProjectionPicker`
+- `RequestScheduler`
+- `Resource`
+- `ResourceCache`
+- `ResourceLoader`
+- `SceneModePicker`
+- `SelectionIndicator`
+- `TaskProcessor`
+- `TerrainPicker`
+- `Timeline`
+- `TrustedServers`
+- `VRButton`
+- `Viewer`
+- `VoxelInspector`
+- `createTaskProcessorWorker`
+- `viewerCesium3DTilesInspectorMixin`
+- `viewerCesiumInspectorMixin`
+- `viewerDragDropMixin`
+- `viewerPerformanceWatchdogMixin`
+- `viewerVoxelInspectorMixin`
 
 ## Runtime-Tested Dynamic Promise APIs
 
@@ -190,8 +239,8 @@ above and is excluded from this section.
 
 ## Network-Blocked Dynamic Promise Candidates (Excluded By Design)
 
-These declaration paths belong to `Resource`/`IonResource` - already explicitly excluded from
-`staticExports` and unreachable in the sandbox for the reasons given under "Unsupported By
+These declaration paths belong to `Resource`/`IonResource` - explicitly included in
+`blockedStaticExports` and unreachable in the sandbox for the reasons given under "Unsupported By
 Design" above (unrestricted network access, including mutating HTTP verbs and credentialed Ion
 asset fetches). Listed here separately, distinct from genuine untested/uncovered candidates, so this
 inventory doesn't imply they are merely untested rather than deliberately blocked.

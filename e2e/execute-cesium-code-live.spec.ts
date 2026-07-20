@@ -63,9 +63,12 @@ test.describe("executeCesiumCode tool — end-to-end against the live backend", 
     // routinely does, hiding the result <pre>s below from Playwright's visibility checks.
     const toolCard = await expandToolCard(page, "executeCesiumCode");
 
+    // The result is either a `.codeBlock` (verified) or a `[data-testid="generation-error-panel"]`
+    // (rejected by AST verification/generation failure) — see `readExecuteCesiumCodeResult`'s doc
+    // comment for how each field is rendered.
     const codeBlock = toolCard.locator('pre[class*="codeBlock"]');
-    const resultInfoBlock = toolCard.locator('pre[class*="toolResult"]');
-    await expect(codeBlock.or(resultInfoBlock)).toBeVisible({ timeout: 60_000 });
+    const generationErrorPanel = page.locator('[data-testid="generation-error-panel"]');
+    await expect(codeBlock.or(generationErrorPanel)).toBeVisible({ timeout: 60_000 });
 
     const result = await readExecuteCesiumCodeResult(toolCard);
 

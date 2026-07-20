@@ -70,6 +70,15 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain(".get(index)");
   });
 
+  it("instructs the model to await async Cesium results and avoid callbacks that outlive the VM", () => {
+    const prompt = buildCodegenPrompt({ intent: "orbit around New York", skills: [cameraSkill] });
+
+    expect(prompt).toContain("await");
+    expect(prompt).toContain("createOsmBuildingsAsync");
+    expect(prompt).toContain("setTimeout");
+    expect(prompt).toContain("callbacks cannot outlive");
+  });
+
   describe("extraInstructions", () => {
     it("appends extraInstructions to the end of the prompt when provided", () => {
       const prompt = buildCodegenPrompt({

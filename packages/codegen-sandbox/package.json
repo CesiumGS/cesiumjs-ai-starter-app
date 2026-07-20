@@ -16,9 +16,10 @@
     "dist"
   ],
   "scripts": {
+    "generate:value-type-registry": "node scripts/generate-value-type-registry.mjs",
     "generate:cesium-bundle": "node scripts/generate-cesium-core-bundle.mjs",
     "validate:cesium-compat": "node scripts/validate-cesium-compat.mjs",
-    "build": "npm run validate:cesium-compat && npm run generate:cesium-bundle && tsc",
+    "build": "npm run validate:cesium-compat && npm run generate:value-type-registry && npm run generate:cesium-bundle && tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "typecheck:test": "tsc -p tsconfig.typecheck.json",
     "clean": "rimraf dist"

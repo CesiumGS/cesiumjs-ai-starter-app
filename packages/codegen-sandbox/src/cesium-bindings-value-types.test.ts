@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 import {
+  ArcType,
   ClassificationType,
   Color,
   HeightReference,
@@ -192,7 +193,7 @@ describe("value-type/enum coverage not exercised elsewhere in this package", () 
     expect(result.farValue).toBe(0.1);
   });
 
-  test("bare top-level aliases (destructured off Cesium with no prefix) resolve for value types, enums, and the CesiumMath rename", async () => {
+  test("bare top-level aliases resolve for value types, generated enums, and the CesiumMath rename", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
@@ -208,17 +209,24 @@ describe("value-type/enum coverage not exercised elsewhere in this package", () 
         return {
           color: [entity.point.color.red, entity.point.color.green, entity.point.color.blue],
           labelStyle: entity.label.style,
+          arcType: [Cesium.ArcType.GEODESIC, ArcType.RHUMB],
           degrees: CesiumMath.toDegrees(Math.PI),
         };
       `,
     });
 
     expect(outcome.success).toBe(true);
-    const result = outcome.result as { color: number[]; labelStyle: number; degrees: number };
+    const result = outcome.result as {
+      color: number[];
+      labelStyle: number;
+      arcType: number[];
+      degrees: number;
+    };
     expect(result.color[0]).toBeCloseTo(Color.CYAN.red, 5);
     expect(result.color[1]).toBeCloseTo(Color.CYAN.green, 5);
     expect(result.color[2]).toBeCloseTo(Color.CYAN.blue, 5);
     expect(result.labelStyle).toBe(LabelStyle.OUTLINE);
+    expect(result.arcType).toEqual([ArcType.GEODESIC, ArcType.RHUMB]);
     expect(result.degrees).toBeCloseTo(180, 5);
   });
 });

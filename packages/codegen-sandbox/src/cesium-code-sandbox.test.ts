@@ -328,7 +328,7 @@ vi.mock("cesium", async (importOriginal) => {
       })),
     },
     // Bare top-level functions (not class static members) — each needs its own name in
-    // `staticExports` (like a class name) so the guest-side static namespace fallback proxy
+    // a non-blocked top-level export (like a class name) so the static namespace fallback proxy
     // (`guest-prelude-static-fallback.ts`) exposes `Cesium.<name>`, reached the same way as
     // `createWorldImageryAsync`/`createOsmBuildingsAsync` above.
     exportKml: vi.fn(async (options?: unknown) => ({ kind: "kmlExport", options })),
@@ -463,7 +463,9 @@ class FakeIonImageryProvider {
 // convenient reachable handle for exercising `geocode`, a genuinely Promise-returning instance
 // method with no named async binding.
 class FakeIonGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 // A minimal class (not a plain `{}` object literal, for the same `isPlainData` reason as
@@ -792,23 +794,33 @@ class FakeQuantizedMeshTerrainData {
 // reason as the imagery/terrain fakes above, its `geocode` mock lives on an independent
 // `testHandles` instance rather than a `new Cesium.X(...)` constructed inside the guest script.
 class FakeBingMapsGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 class FakeCartographicGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 class FakeGoogleGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 class FakeOpenCageGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 class FakePeliasGeocoderService {
-  geocode = vi.fn(async (query: string, type?: unknown) => [{ kind: "geocodeResult", query, type }]);
+  geocode = vi.fn(async (query: string, type?: unknown) => [
+    { kind: "geocodeResult", query, type },
+  ]);
 }
 
 // `I3SDataProvider.fromUrl` is mocked separately above (module-level static factory); this fake
@@ -831,7 +843,7 @@ class FakeI3SNode {
   loadFields = vi.fn(async () => undefined);
 }
 
-// `PinBuilder` is already in `staticExports` (real class currently passes through unmocked), but
+// `PinBuilder` is not denylisted (the real class currently passes through unmocked), but
 // its `fromMakiIconId`/`fromUrl` instance methods would otherwise issue real network requests for
 // Maki icon/image assets, so this fake stands in for a constructed `new Cesium.PinBuilder()`.
 class FakePinBuilder {
@@ -856,11 +868,19 @@ class FakeTimeDynamicImagery {
 // `CzmlDataSource.load`/`GeoJsonDataSource.process` are mocked/covered separately above; these
 // back the sibling instance method with no named async binding on each class.
 class FakeCzmlDataSourceInstance {
-  process = vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options }));
+  process = vi.fn(async (data: unknown, options?: unknown) => ({
+    kind: "dataSource",
+    data,
+    options,
+  }));
 }
 
 class FakeGeoJsonDataSourceInstance {
-  process = vi.fn(async (data: unknown, options?: unknown) => ({ kind: "dataSource", data, options }));
+  process = vi.fn(async (data: unknown, options?: unknown) => ({
+    kind: "dataSource",
+    data,
+    options,
+  }));
 }
 
 function fakeViewer() {
@@ -870,7 +890,9 @@ function fakeViewer() {
   // `imageryLayers.get(0)` \u2014 both from generated code and from a test's later assertion \u2014
   // resolves to the SAME fake layer/provider instance, matching the existing `terrainProvider`
   // pattern above.
-  const arcGisImageryLayer = { imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown };
+  const arcGisImageryLayer = {
+    imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown,
+  };
   // Distinct imagery layer slots (indexes 1 and 2) for the generic `ImageryProvider` base-class
   // and `IonImageryProvider` fakes, kept separate from `arcGisImageryLayer` (index 0) above.
   const genericImageryLayer = { imageryProvider: new FakeImageryProvider() as unknown };
@@ -888,7 +910,8 @@ function fakeViewer() {
       azure2DImageryProvider: new FakeAzure2DImageryProvider() as unknown,
       bingMapsImageryProvider: new FakeBingMapsImageryProvider() as unknown,
       google2DImageryProvider: new FakeGoogle2DImageryProvider() as unknown,
-      googleEarthEnterpriseImageryProvider: new FakeGoogleEarthEnterpriseImageryProvider() as unknown,
+      googleEarthEnterpriseImageryProvider:
+        new FakeGoogleEarthEnterpriseImageryProvider() as unknown,
       googleEarthEnterpriseMapsProvider: new FakeGoogleEarthEnterpriseMapsProvider() as unknown,
       gridImageryProvider: new FakeGridImageryProvider() as unknown,
       mapboxImageryProvider: new FakeMapboxImageryProvider() as unknown,
@@ -901,7 +924,8 @@ function fakeViewer() {
       vrTheWorldTerrainProvider: new FakeVRTheWorldTerrainProvider() as unknown,
       ellipsoidTerrainProvider: new FakeEllipsoidTerrainProvider() as unknown,
       customHeightmapTerrainProvider: new FakeCustomHeightmapTerrainProvider() as unknown,
-      googleEarthEnterpriseTerrainProvider: new FakeGoogleEarthEnterpriseTerrainProvider() as unknown,
+      googleEarthEnterpriseTerrainProvider:
+        new FakeGoogleEarthEnterpriseTerrainProvider() as unknown,
       cesium3DTilesTerrainData: new FakeCesium3DTilesTerrainData() as unknown,
       googleEarthEnterpriseTerrainData: new FakeGoogleEarthEnterpriseTerrainData() as unknown,
       heightmapTerrainData: new FakeHeightmapTerrainData() as unknown,
@@ -925,6 +949,23 @@ function fakeViewer() {
     cesiumWidget: {
       flyTo: vi.fn(async (_target: unknown, _options?: unknown) => true),
       zoomTo: vi.fn(async (_target: unknown, _offset?: unknown) => true),
+    },
+    // The real, *private* `Viewer._cesiumWidget` (distinct from the public `cesiumWidget` above)
+    // that `Viewer.prototype.trackedEntity`'s real setter delegates to
+    // (`this._cesiumWidget.trackedEntity = value`) \u2014 needed so the `trackedEntity` accessor
+    // below reproduces the exact real-Cesium shape that trips the "no `set` trap" bug.
+    _cesiumWidget: {
+      trackedEntity: undefined as unknown,
+    },
+    // Mirrors real Cesium's `Viewer.prototype.trackedEntity` accessor, which internally reads/
+    // writes `this._cesiumWidget.trackedEntity` \u2014 see `createGuardedProxy`'s `set` trap doc
+    // comment in `guarded-viewer-proxy.ts` for why this specific shape used to throw "Cesium
+    // sandbox access to \"_cesiumWidget\" is not allowed."
+    get trackedEntity(): unknown {
+      return (this as { _cesiumWidget: { trackedEntity: unknown } })._cesiumWidget.trackedEntity;
+    },
+    set trackedEntity(value: unknown) {
+      (this as { _cesiumWidget: { trackedEntity: unknown } })._cesiumWidget.trackedEntity = value;
     },
     destroy: vi.fn(),
     camera: {
@@ -1093,8 +1134,7 @@ const dynamicPromiseCases = [
     path: "Scene.sampleHeightMostDetailed",
     code: `return await viewer.scene.sampleHeightMostDetailed([{ longitude: 1, latitude: 2 }]);`,
     expected: [{ longitude: 1, latitude: 2 }],
-    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      viewer.scene.sampleHeightMostDetailed,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.scene.sampleHeightMostDetailed,
   },
   {
     path: "ArcGISTiledElevationTerrainProvider.requestTileGeometry",
@@ -1215,8 +1255,7 @@ const dynamicPromiseCases = [
     code: `return await viewer.scene.terrainProvider.loadTileDataAvailability(0, 0, 5);`,
     expected: null,
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.scene.terrainProvider as FakeCesium3DTilesTerrainProvider)
-        .loadTileDataAvailability,
+      (viewer.scene.terrainProvider as FakeCesium3DTilesTerrainProvider).loadTileDataAvailability,
   },
   // ---------------------------------------------------------------------------------------------
   // The cases below round out coverage for every remaining "Declaration-Only Dynamic Promise
@@ -1251,7 +1290,11 @@ const dynamicPromiseCases = [
   {
     path: "GeoJsonPrimitive.fromUrl",
     code: `return await Cesium.GeoJsonPrimitive.fromUrl("https://example.com/data.geojson");`,
-    expected: { kind: "geoJsonPrimitive", url: "https://example.com/data.geojson", options: undefined },
+    expected: {
+      kind: "geoJsonPrimitive",
+      url: "https://example.com/data.geojson",
+      options: undefined,
+    },
     getMock: () => GeoJsonPrimitive.fromUrl,
   },
   {
@@ -1353,8 +1396,10 @@ const dynamicPromiseCases = [
     code: `return await viewer.testHandles.googleEarthEnterpriseImageryProvider.requestImage(2, 3, 5);`,
     expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.googleEarthEnterpriseImageryProvider as FakeGoogleEarthEnterpriseImageryProvider)
-        .requestImage,
+      (
+        viewer.testHandles
+          .googleEarthEnterpriseImageryProvider as FakeGoogleEarthEnterpriseImageryProvider
+      ).requestImage,
   },
   {
     path: "GoogleEarthEnterpriseMapsProvider.fromUrl",
@@ -1371,8 +1416,10 @@ const dynamicPromiseCases = [
     code: `return await viewer.testHandles.googleEarthEnterpriseMapsProvider.requestImage(2, 3, 5);`,
     expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.googleEarthEnterpriseMapsProvider as FakeGoogleEarthEnterpriseMapsProvider)
-        .requestImage,
+      (
+        viewer.testHandles
+          .googleEarthEnterpriseMapsProvider as FakeGoogleEarthEnterpriseMapsProvider
+      ).requestImage,
   },
   {
     path: "GridImageryProvider.requestImage",
@@ -1400,14 +1447,16 @@ const dynamicPromiseCases = [
     code: `return await viewer.testHandles.mapboxStyleImageryProvider.requestImage(2, 3, 5);`,
     expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider).requestImage,
+      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider)
+        .requestImage,
   },
   {
     path: "MapboxStyleImageryProvider.pickFeatures",
     code: `return await viewer.testHandles.mapboxStyleImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
     expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider).pickFeatures,
+      (viewer.testHandles.mapboxStyleImageryProvider as FakeMapboxStyleImageryProvider)
+        .pickFeatures,
   },
   {
     path: "SingleTileImageryProvider.fromUrl",
@@ -1439,14 +1488,16 @@ const dynamicPromiseCases = [
     code: `return await viewer.testHandles.urlTemplateImageryProvider.requestImage(2, 3, 5);`,
     expected: { kind: "imageryTile", x: 2, y: 3, level: 5 },
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider).requestImage,
+      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider)
+        .requestImage,
   },
   {
     path: "UrlTemplateImageryProvider.pickFeatures",
     code: `return await viewer.testHandles.urlTemplateImageryProvider.pickFeatures(2, 3, 5, 12.5, 41.9);`,
     expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider).pickFeatures,
+      (viewer.testHandles.urlTemplateImageryProvider as FakeUrlTemplateImageryProvider)
+        .pickFeatures,
   },
   {
     path: "WebMapServiceImageryProvider.requestImage",
@@ -1542,8 +1593,10 @@ const dynamicPromiseCases = [
     code: `return await viewer.testHandles.googleEarthEnterpriseTerrainProvider.requestTileGeometry(0, 0, 5);`,
     expected: { kind: "terrainData", x: 0, y: 0, level: 5 },
     getMock: (viewer: ReturnType<typeof fakeViewer>) =>
-      (viewer.testHandles.googleEarthEnterpriseTerrainProvider as FakeGoogleEarthEnterpriseTerrainProvider)
-        .requestTileGeometry,
+      (
+        viewer.testHandles
+          .googleEarthEnterpriseTerrainProvider as FakeGoogleEarthEnterpriseTerrainProvider
+      ).requestTileGeometry,
   },
   {
     path: "Cesium3DTilesTerrainData.upsample",
@@ -1703,14 +1756,18 @@ const dynamicPromiseCases = [
   {
     path: "ITwinData.loadGeospatialFeatures",
     code: `return await Cesium.ITwinData.loadGeospatialFeatures({ iTwinId: "it-1", collectionId: "coll-1" });`,
-    expected: { kind: "iTwinGeospatialFeatures", options: { iTwinId: "it-1", collectionId: "coll-1" } },
+    expected: {
+      kind: "iTwinGeospatialFeatures",
+      options: { iTwinId: "it-1", collectionId: "coll-1" },
+    },
     getMock: () => ITwinData.loadGeospatialFeatures,
   },
   {
     path: "ImageryLayerCollection.pickImageryLayerFeatures",
     code: `return await viewer.imageryLayers.pickImageryLayerFeatures(2, 3, 5, 12.5, 41.9);`,
     expected: [{ kind: "featureInfo", x: 2, y: 3, level: 5, longitude: 12.5, latitude: 41.9 }],
-    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.imageryLayers.pickImageryLayerFeatures,
+    getMock: (viewer: ReturnType<typeof fakeViewer>) =>
+      viewer.imageryLayers.pickImageryLayerFeatures,
   },
   {
     path: "CesiumWidget.flyTo",
@@ -1829,7 +1886,11 @@ const dynamicPromiseCases = [
   {
     path: "ArcGisMapServerImageryProvider.fromUrl",
     code: `return await Cesium.ArcGisMapServerImageryProvider.fromUrl("https://example.com/arcgis", {});`,
-    expected: { kind: "arcGisMapServerImageryProvider", url: "https://example.com/arcgis", options: {} },
+    expected: {
+      kind: "arcGisMapServerImageryProvider",
+      url: "https://example.com/arcgis",
+      options: {},
+    },
     getMock: () => ArcGisMapServerImageryProvider.fromUrl,
   },
   {
@@ -1861,6 +1922,18 @@ afterEach(() => {
 });
 
 describe("runCesiumCodeInSandbox", () => {
+  test("exposes non-blocked Cesium exports by default", async () => {
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: fakeViewer() as never,
+      code: `return { defined: Cesium.defined(0), arcType: Cesium.ArcType.GEODESIC };`,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      result: { defined: true, arcType: 1 },
+    });
+  });
+
   test("composes Cesium.Cartesian3.fromDegrees + viewer.camera.flyTo from generated code", async () => {
     const viewer = fakeViewer();
 
@@ -1880,6 +1953,22 @@ describe("runCesiumCodeInSandbox", () => {
     expect(passedDestination.x).toBeCloseTo(expected.x, 3);
     expect(passedDestination.y).toBeCloseTo(expected.y, 3);
     expect(passedDestination.z).toBeCloseTo(expected.z, 3);
+  });
+
+  test("reports the generated source location for a nonexistent Cesium method", async () => {
+    const viewer = fakeViewer();
+    (viewer.scene as typeof viewer.scene & { camera: typeof viewer.camera }).camera = viewer.camera;
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `const target = Cesium.Cartesian3.fromDegrees(-74.006, 40.7128, 0);
+viewer.scene.camera.flyAround(target, 0.8);`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toContain("TypeError: not a function");
+    expect(outcome.error).toContain("generated code line 2");
+    expect(outcome.error).toContain("viewer.scene.camera.flyAround(target, 0.8);");
   });
 
   test("composes an entity add/remove round trip using a real returned object handle", async () => {
@@ -2139,6 +2228,19 @@ describe("runCesiumCodeInSandbox", () => {
     expect(viewer.scene.primitives.add).toHaveBeenCalledTimes(1);
   });
 
+  test("rejects an unawaited OSM buildings Promise before adding an invalid primitive", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `viewer.scene.primitives.add(Cesium.createOsmBuildingsAsync());`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/Promise cannot be passed.*Await the Promise/i);
+    expect(viewer.scene.primitives.add).not.toHaveBeenCalled();
+  });
+
   test("loads a 3D Tileset by URL and adds it to scene.primitives", async () => {
     const viewer = fakeViewer();
 
@@ -2156,7 +2258,7 @@ describe("runCesiumCodeInSandbox", () => {
     expect(viewer.scene.primitives.add).toHaveBeenCalledTimes(1);
   });
 
-  test("loads a 3D Tileset by Ion asset id and styles it via property assignment (tileset.style = ...)", async () => {
+  test("constructs Cesium3DTileStyle through the static bridge and assigns it to a tileset", async () => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({
@@ -2288,6 +2390,27 @@ describe("runCesiumCodeInSandbox", () => {
     "returns a rejected dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
   );
 
+  // Generated code very commonly chains a bare `.then(...)` onto a Promise-returning call as a
+  // fire-and-forget statement instead of `await`ing (or `return`ing) it. Without a post-completion
+  // drain window, the wrapped script's own top-level `async` function resolves the instant its
+  // synchronous portion finishes — before the dangling `GeoJsonDataSource.load(...).then(...)`
+  // callback (which mutates the real `Viewer` via `viewer.dataSources.add`) ever runs — and the VM
+  // is disposed out from under it, so the mutation silently never happens despite the sandbox
+  // reporting success.
+  test("still applies a fire-and-forget .then() continuation's Viewer mutation before disposing", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `Cesium.GeoJsonDataSource.load("https://example.com/data.geojson", {}).then((dataSource) => {
+        viewer.dataSources.add(dataSource);
+      });`,
+    });
+
+    expect(outcome.success).toBe(true);
+    expect(viewer.dataSources.add).toHaveBeenCalledTimes(1);
+  });
+
   test("times out a stalled dynamically bridged Promise", async () => {
     const viewer = fakeViewer();
     viewer.scene.pickAsync.mockImplementationOnce(() => new Promise(() => {}));
@@ -2306,8 +2429,8 @@ describe("runCesiumCodeInSandbox", () => {
     "rejects a second dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
   );
 
-  // `Resource` is deliberately absent from `SAFE_STATIC_CESIUM_EXPORTS` in
-  // `cesium-capabilities.json` — every one of its static methods below issues (or would issue)
+  // `Resource` is deliberately present in `BLOCKED_STATIC_CESIUM_EXPORTS` — every one of its
+  // static methods below issues (or would issue)
   // real HTTP requests, including mutating verbs (`post`/`put`/`patch`/`delete`), and every
   // `Resource.*` path is tracked only as a "declaration-only" candidate in
   // `CESIUM_COMPATIBILITY.md`, never as runtime-covered. Banning `fetch` and every network
@@ -2322,15 +2445,9 @@ describe("runCesiumCodeInSandbox", () => {
       `Cesium.Resource.fetchArrayBuffer({ url: "https://example.com/data.bin" })`,
     ],
     ["Resource.fetchBlob", `Cesium.Resource.fetchBlob({ url: "https://example.com/data.bin" })`],
-    [
-      "Resource.fetchImage",
-      `Cesium.Resource.fetchImage({ url: "https://example.com/image.png" })`,
-    ],
+    ["Resource.fetchImage", `Cesium.Resource.fetchImage({ url: "https://example.com/image.png" })`],
     ["Resource.fetchJson", `Cesium.Resource.fetchJson({ url: "https://example.com/data.json" })`],
-    [
-      "Resource.fetchJsonp",
-      `Cesium.Resource.fetchJsonp({ url: "https://example.com/data.json" })`,
-    ],
+    ["Resource.fetchJsonp", `Cesium.Resource.fetchJsonp({ url: "https://example.com/data.json" })`],
     ["Resource.fetchText", `Cesium.Resource.fetchText({ url: "https://example.com/data.txt" })`],
     ["Resource.fetchXML", `Cesium.Resource.fetchXML({ url: "https://example.com/data.xml" })`],
     ["Resource.head", `Cesium.Resource.head({ url: "https://example.com/data.json" })`],
@@ -2348,7 +2465,7 @@ describe("runCesiumCodeInSandbox", () => {
       `Cesium.Resource.put({ url: "https://example.com/data.json" }, { data: "{}" })`,
     ],
     // `IonResource` extends `Resource` and is likewise deliberately absent from
-    // `SAFE_STATIC_CESIUM_EXPORTS` — it fetches arbitrary Ion asset content (potentially
+    // `BLOCKED_STATIC_CESIUM_EXPORTS` — it fetches arbitrary Ion asset content (potentially
     // credentialed, via Ion access tokens) over the network, the same SSRF/data-exfiltration
     // concern as `Resource` itself, so it's excluded for the same reason rather than merely
     // being untested.
@@ -2457,6 +2574,30 @@ describe("runCesiumCodeInSandbox", () => {
     });
     expect(createWorldImageryAsync).toHaveBeenCalledTimes(1);
     expect(createWorldTerrainAsync).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression test for `guarded-viewer-proxy.ts`'s `createGuardedProxy`: a real CesiumJS
+  // accessor setter (`Viewer.prototype.trackedEntity`) internally does
+  // `this._cesiumWidget.trackedEntity = value`. Without an explicit `set` trap forwarding
+  // `receiver = t` (the real target), the Proxy's default set semantics invoke that setter with
+  // `this` = the guarded Proxy itself, so its own internal `this._cesiumWidget` read re-enters
+  // the same Proxy's `get` trap and trips `assertSandboxPropertyAllowed("_cesiumWidget")` \u2014
+  // exactly the reported "Cesium sandbox access to \"_cesiumWidget\" is not allowed." error.
+  test("assigning viewer.trackedEntity does not trip the sandbox's own underscore-property guard", async () => {
+    const viewer = fakeViewer();
+    viewer.entities.add({ id: "plane" });
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const planeEntity = viewer.entities.values.find((e) => e.id === "plane");
+        viewer.trackedEntity = planeEntity;
+        return "done";
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: "done" });
+    expect(viewer.trackedEntity).toMatchObject({ id: "plane" });
   });
 
   describe("logger option", () => {

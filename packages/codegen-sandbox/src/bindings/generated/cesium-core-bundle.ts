@@ -4,9 +4,8 @@
 // (see ../../../scripts/generate-cesium-core-bundle.mjs)
 
 /**
- * Source text of a self-contained IIFE bundling real, pure CesiumJS value-type classes
- * (`Cartesian2`, `Cartesian3`, `Cartographic`, `Color`, `HeadingPitchRange`,
- * `HeadingPitchRoll`, `NearFarScalar`, `Math` as `CesiumMath`), built from
+ * Source text of a self-contained IIFE bundling the real, pure CesiumJS value-type classes
+ * configured in `cesium-capabilities.json` plus `Math` as `CesiumMath`, built from
  * `@cesium/engine`'s `Source/Core/*.js`. Evaluating this in the QuickJS guest defines a
  * top-level `__CesiumCoreBundle__` object exposing each as a real class/namespace — see
  * `guest-prelude-value-types.ts`, which evaluates this before attaching them onto `Cesium.*`.

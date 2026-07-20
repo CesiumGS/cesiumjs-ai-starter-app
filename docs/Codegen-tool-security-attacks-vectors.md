@@ -443,13 +443,13 @@ for (let i = 0; i < 1000000; i++) {
    - Prevents memory exhaustion attacks
 
 3. **Runtime Entity/Primitive/Data-Source Caps** — Resource limits enforced during execution:
-    - A shared per-collection ceiling (e.g., 200 items) for entities, primitives, imagery layers,
-       post-process stages, and data sources
+   - A shared per-collection ceiling (e.g., 200 items) for entities, primitives, imagery layers,
+     post-process stages, and data sources
    - Rate limiting on sandbox execution frequency
 
    ```typescript
-    if (viewer.entities.values.length >= maxItemsPerCollection) {
-       throw new EntityCapExceededError(maxItemsPerCollection);
+   if (viewer.entities.values.length >= maxItemsPerCollection) {
+     throw new EntityCapExceededError(maxItemsPerCollection);
    }
    ```
 

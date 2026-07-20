@@ -258,20 +258,12 @@ export class ChatClient {
         );
         break;
       case "tool-output-available":
-        this.applyToolResult(
-          { toolCallId: chunk.toolCallId!, result: chunk.output },
-          ensureAssistantMsg,
-        );
+        this.applyToolResult({ toolCallId: chunk.toolCallId!, result: chunk.output });
         // Note: unlike `tool-input-available`, the `tool-output-available`
         // chunk carries no `toolName` of its own — the tool name was
         // established by the earlier `tool-input-available` chunk for the
         // same `toolCallId`, so we look the invocation back up here.
-        this.fireServerToolResult(
-          chunk.toolCallId!,
-          chunk.output,
-          ensureAssistantMsg,
-          pendingServerResults,
-        );
+        this.fireServerToolResult(chunk.toolCallId!, chunk.output, pendingServerResults);
         break;
       case "tool-input-error":
         // Fires instead of `tool-input-available` when the model's arguments
@@ -282,22 +274,16 @@ export class ChatClient {
           ensureAssistantMsg,
           pendingToolCalls,
         );
-        this.applyToolResult(
-          {
-            toolCallId: chunk.toolCallId!,
-            result: { error: chunk.errorText ?? "Tool call failed" },
-          },
-          ensureAssistantMsg,
-        );
+        this.applyToolResult({
+          toolCallId: chunk.toolCallId!,
+          result: { error: chunk.errorText ?? "Tool call failed" },
+        });
         break;
       case "tool-output-error":
-        this.applyToolResult(
-          {
-            toolCallId: chunk.toolCallId!,
-            result: { error: chunk.errorText ?? "Tool call failed" },
-          },
-          ensureAssistantMsg,
-        );
+        this.applyToolResult({
+          toolCallId: chunk.toolCallId!,
+          result: { error: chunk.errorText ?? "Tool call failed" },
+        });
         break;
       case "tool-approval-request":
         // The server declared this tool `needsApproval` and paused the agent
@@ -311,7 +297,6 @@ export class ChatClient {
             isAutomatic: chunk.isAutomatic,
             signature: chunk.signature,
           },
-          ensureAssistantMsg,
           pendingApprovals,
         );
         break;
@@ -320,13 +305,10 @@ export class ChatClient {
         // the tool's `execute` never ran. Surface it exactly like any other
         // resolved tool result so the transcript and the agent loop both move
         // on; the model sees this and can respond to the decline in text.
-        this.applyToolResult(
-          {
-            toolCallId: chunk.toolCallId!,
-            result: { error: "Tool call was declined." },
-          },
-          ensureAssistantMsg,
-        );
+        this.applyToolResult({
+          toolCallId: chunk.toolCallId!,
+          result: { error: "Tool call was declined." },
+        });
         break;
       case "error":
         this.emitError(chunk.errorText ?? "Stream error");
@@ -385,7 +367,10 @@ export class ChatClient {
    * `tool-input-available` chunk) as awaiting a human approval decision, and
    * queues it for {@link resolveApprovals}. If no matching invocation exists
    * (shouldn't happen — the server always streams the call before pausing for
-   * approval) this is a defensive no-op rather than a thrown error.
+   * approval) this is a defensive no-op rather than a thrown error. Never
+   * creates a new assistant message: it only mutates an invocation recorded
+   * earlier (possibly in an older message from a previous request), so
+   * there's nothing of its own to attach one to.
    */
   private addToolApprovalRequest(
     approvalRequest: {
@@ -394,10 +379,8 @@ export class ChatClient {
       isAutomatic?: boolean;
       signature?: string;
     },
-    ensureAssistantMsg: EnsureAssistantMessage,
     pendingApprovals: ToolInvocation[],
   ) {
-    ensureAssistantMsg();
     const invocation = this.findToolInvocation(approvalRequest.toolCallId);
     if (!invocation) return;
 
@@ -411,8 +394,15 @@ export class ChatClient {
     this.onUpdate();
   }
 
-  private applyToolResult(result: StreamToolResult, ensureAssistantMsg: EnsureAssistantMessage) {
-    ensureAssistantMsg();
+  /**
+   * Updates an already-recorded invocation with its resolved result. Never
+   * creates a new assistant message (see {@link addToolApprovalRequest}'s doc
+   * comment) — if this fires alone, with no accompanying text or new tool
+   * call in the same stream (e.g. a `stopAfterTools`-suppressed reply, see
+   * `packages/server/src/chat-router.ts`'s `suppressTextChunks`), no empty
+   * placeholder bubble is created for it.
+   */
+  private applyToolResult(result: StreamToolResult) {
     const invocation = this.findToolInvocation(result.toolCallId);
 
     if (invocation) {
@@ -430,17 +420,17 @@ export class ChatClient {
    * be found. Doesn't block stream parsing — the callback's promise is queued
    * into `pendingServerResults` and only awaited by
    * {@link resolveServerToolOutcomes} once the current stream finishes, mirroring
-   * how `pendingToolCalls`/`pendingApprovals` are resolved after the loop.
+   * how `pendingToolCalls`/`pendingApprovals` are resolved after the loop. Never
+   * creates a new assistant message (see {@link addToolApprovalRequest}'s doc
+   * comment).
    */
   private fireServerToolResult(
     toolCallId: string,
     output: unknown,
-    ensureAssistantMsg: EnsureAssistantMessage,
     pendingServerResults: PendingServerResult[],
   ) {
     if (!this.onServerToolResult) return;
 
-    ensureAssistantMsg();
     const invocation = this.findToolInvocation(toolCallId);
     if (!invocation) return;
 

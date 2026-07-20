@@ -6,11 +6,11 @@ import { buildCesiumStaticFallbackGuestPrelude } from "./guest-prelude-static-fa
 import { buildCesiumValueTypeGuestPrelude } from "./guest-prelude-value-types.js";
 import { buildViewerAsyncMethodGuestPrelude } from "./guest-prelude-viewer-async.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
-import { SAFE_STATIC_CESIUM_EXPORTS } from "./capabilities-registry.js";
+import { BLOCKED_STATIC_CESIUM_EXPORTS } from "./capabilities-registry.js";
 
-const SAFE_CESIUM_NAMESPACE = Object.freeze(
+const AVAILABLE_CESIUM_NAMESPACE = Object.freeze(
   Object.fromEntries(
-    Object.entries(CesiumNamespace).filter(([name]) => SAFE_STATIC_CESIUM_EXPORTS.has(name)),
+    Object.entries(CesiumNamespace).filter(([name]) => !BLOCKED_STATIC_CESIUM_EXPORTS.has(name)),
   ),
 );
 
@@ -24,7 +24,7 @@ export function buildCesiumGuestPrelude(
   maxItemsPerCollection?: number,
 ): string {
   const viewerHandleId = handles.wrapRoot(createProxiedViewer(viewer, { maxItemsPerCollection }));
-  const staticCesiumHandleId = handles.wrapRoot(SAFE_CESIUM_NAMESPACE);
+  const staticCesiumHandleId = handles.wrapRoot(AVAILABLE_CESIUM_NAMESPACE);
 
   return [
     buildCesiumValueTypeGuestPrelude(),

@@ -96,15 +96,15 @@ boundary itself — not by additional application-level code layered on top (AST
 limits, caps) which should be kept regardless of runtime (see the cancellation/resource-limit
 caveat in [Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) below).
 
-| Property | QuickJS-WASM guarded bridge (current) | Sandboxed iframe with command RPC | Disposable in-iframe Viewer, no RPC layer |
-| --- | --- | --- | --- |
-| Isolation family | Family A — separate WASM heap | Family B — separate browsing context | Family B — separate browsing context |
-| Blocks parent DOM/cookie/storage access | ✅ Yes — no browser globals unless explicitly bound | ✅ Yes — opaque origin (no `allow-same-origin`) | ⚠️ Only if served from a genuinely separate origin; same-origin removes the guarantee |
-| Blocks outbound network (`fetch`/`XHR`) by default | ✅ Yes — unless the host deliberately exposes it | ⚠️ Requires an explicit CSP (`connect-src 'none'`); not automatic | ❌ No — real `fetch`/`XHR` unless a CSP is added separately |
-| Enforced CPU timeout / memory ceiling | ✅ Yes — QuickJS interrupt handler + configurable memory limit | ❌ No — no reliable parent-enforced deadline or portable memory ceiling | ❌ No — same limitation as command RPC |
-| Capability surface is a small, reviewable allowlist | ❌ No — broad `viewer`/`Cesium` proxy guarded by a denylist | ✅ Yes — command names are a fixed, enumerable catalog | ❌ No — full, unrestricted Cesium/DOM surface, nothing reviewable |
-| Runs existing `viewer.*`/`Cesium.*` codegen unchanged | ✅ Yes — current, already-compatible executor | ❌ No — needs a new command-oriented generation contract | ✅ Yes — arguably most compatible, no marshaling boundary at all |
-| Extra infrastructure required | ✅ None — runs entirely within the existing page | ✅ None — an opaque `srcdoc` origin needs no separate origin/port | ❌ Yes — requires provisioning a genuinely separate origin for the Viewer iframe |
+| Property                                              | QuickJS-WASM guarded bridge (current)                          | Sandboxed iframe with command RPC                                       | Disposable in-iframe Viewer, no RPC layer                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Isolation family                                      | Family A — separate WASM heap                                  | Family B — separate browsing context                                    | Family B — separate browsing context                                                  |
+| Blocks parent DOM/cookie/storage access               | ✅ Yes — no browser globals unless explicitly bound            | ✅ Yes — opaque origin (no `allow-same-origin`)                         | ⚠️ Only if served from a genuinely separate origin; same-origin removes the guarantee |
+| Blocks outbound network (`fetch`/`XHR`) by default    | ✅ Yes — unless the host deliberately exposes it               | ⚠️ Requires an explicit CSP (`connect-src 'none'`); not automatic       | ❌ No — real `fetch`/`XHR` unless a CSP is added separately                           |
+| Enforced CPU timeout / memory ceiling                 | ✅ Yes — QuickJS interrupt handler + configurable memory limit | ❌ No — no reliable parent-enforced deadline or portable memory ceiling | ❌ No — same limitation as command RPC                                                |
+| Capability surface is a small, reviewable allowlist   | ❌ No — broad `viewer`/`Cesium` proxy guarded by a denylist    | ✅ Yes — command names are a fixed, enumerable catalog                  | ❌ No — full, unrestricted Cesium/DOM surface, nothing reviewable                     |
+| Runs existing `viewer.*`/`Cesium.*` codegen unchanged | ✅ Yes — current, already-compatible executor                  | ❌ No — needs a new command-oriented generation contract                | ✅ Yes — arguably most compatible, no marshaling boundary at all                      |
+| Extra infrastructure required                         | ✅ None — runs entirely within the existing page               | ✅ None — an opaque `srcdoc` origin needs no separate origin/port       | ❌ Yes — requires provisioning a genuinely separate origin for the Viewer iframe      |
 
 ## Recommendation
 

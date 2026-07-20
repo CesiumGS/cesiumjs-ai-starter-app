@@ -56,7 +56,15 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
   );
 
   /**
-   * Executes server-resolved code and reports runtime errors for model feedback.
+   * Executes server-resolved code and reports the real outcome for model
+   * feedback. The backend now always suppresses the model's reply for the
+   * request that resolves `executeCesiumCode`'s approval (see
+   * `packages/server/src/chat-router.ts`'s `suppressTextChunks`) — that
+   * request can only carry a preliminary result (verification passed/failed,
+   * not "actually ran"), so the model's one real chance to reply is always
+   * this follow-up. `continueConversation` must therefore always be `true`
+   * here, whether the outcome is success, a runtime execution failure, or a
+   * verification failure the tool itself already reported as `{ error }`.
    */
   const handleServerToolResult = useCallback(
     async (toolCall: {
@@ -71,10 +79,11 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
         toolCall.output,
         () => sandboxRateLimiterRef.current?.checkAndRecord(),
       );
-      if (!errorMessage) return undefined;
 
       return {
-        result: { ...(toolCall.output as object), executionError: errorMessage },
+        result: errorMessage
+          ? { ...(toolCall.output as object), executionError: errorMessage }
+          : toolCall.output,
         continueConversation: true,
       };
     },

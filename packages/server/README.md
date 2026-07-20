@@ -26,15 +26,17 @@ When `model` is `undefined` (no provider key configured), `/api/chat` responds `
 
 `createChatRouter` accepts a `ChatRouterOptions` object:
 
-| Option        | Default                             | Description                                                                                      |
-| ------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `model`       | —                                   | Required to enable chat. Omit to run with `/api/chat` returning `NOT_CONFIGURED`.                |
-| `tools`       | —                                   | Required. The tool registry exposed to the agent loop, e.g. `createCesiumTools()`.               |
-| `system`      | `DEFAULT_SYSTEM_PROMPT` (see below) | System prompt override.                                                                          |
-| `maxSteps`    | `DEFAULT_MAX_STEPS` = `5`           | Max agent-loop iterations (model call → tool call → model call) per request.                     |
-| `maxMessages` | `DEFAULT_MAX_MESSAGES` = `100`      | Max messages accepted in a single request body; requests over the cap get `400 INVALID_REQUEST`. |
+| Option           | Default                             | Description                                                                                              |
+| ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `model`          | —                                   | Required to enable chat. Omit to run with `/api/chat` returning `NOT_CONFIGURED`.                        |
+| `tools`          | —                                   | Required. The tool registry exposed to the agent loop, e.g. `createCesiumTools()`.                       |
+| `system`         | `DEFAULT_SYSTEM_PROMPT` (see below) | System prompt override.                                                                                  |
+| `maxSteps`       | `DEFAULT_MAX_STEPS` = `5`           | Max agent-loop iterations (model call → tool call → model call) per request.                             |
+| `maxMessages`    | `DEFAULT_MAX_MESSAGES` = `100`      | Max messages accepted in a single request body; requests over the cap get `400 INVALID_REQUEST`.         |
+| `toolApproval`   | —                                   | Per-tool human-in-the-loop approval gating, passed straight through to `streamText`.                     |
+| `stopAfterTools` | —                                   | Tool names to end the agent loop after, instead of letting the model reply in the same turn (see below). |
 
-`system` and `maxSteps` are forwarded to `runAgent` (see below); `maxMessages` is enforced only at the router's request-validation layer.
+`system`, `maxSteps`, `toolApproval`, and `stopAfterTools` are forwarded to `runAgent` (see below); `maxMessages` is enforced only at the router's request-validation layer.
 
 ### Overriding the system prompt
 
@@ -66,6 +68,24 @@ createChatRouter({
   tools: createCesiumTools(),
   maxSteps: 10, // allow longer tool-calling chains
   maxMessages: 50, // tighten the per-request history cap
+});
+```
+
+### Deferring the model's reply for tools with a delayed real outcome
+
+Some tools only report an intermediate result server-side (e.g. "the generated code passed
+verification") while their real, final outcome (e.g. "it actually ran without error in the
+browser") is only known later and reported back via a separate follow-up request. Left alone, the
+agent loop would let the model reply immediately after the intermediate result — often producing a
+confident "I did X" before the action has actually been confirmed to succeed. Pass such tool names
+via `stopAfterTools` to end the loop right after that tool's result instead, so the model only gets
+a chance to reply once a follow-up request (starting a fresh agent loop) reports the real outcome:
+
+```ts
+createChatRouter({
+  model,
+  tools: { ...createCesiumTools(), executeCesiumCode },
+  stopAfterTools: ["executeCesiumCode"],
 });
 ```
 

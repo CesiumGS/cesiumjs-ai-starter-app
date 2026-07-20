@@ -1,6 +1,5 @@
-// Generates `src/bindings/generated/cesium-core-bundle.ts`: a self-contained IIFE bundle of real
-// CesiumJS *value*-type classes (`Cartesian2`, `Cartesian3`, `Cartographic`, `Color`,
-// `HeadingPitchRange`, `HeadingPitchRoll`, `NearFarScalar`, `Math`), built directly from
+// Generates `src/bindings/generated/cesium-core-bundle.ts`: a self-contained IIFE bundle of the
+// reviewed CesiumJS value-type classes in `cesium-capabilities.json` plus `Math`, built from
 // `@cesium/engine`'s `Source/Core/*.js` (deep-imported, NOT the package barrel — importing the
 // barrel pulls in the entire engine, including WebGL/DOM-dependent modules that can never
 // resolve/run inside the QuickJS guest sandbox).
@@ -27,7 +26,7 @@ const capabilities = JSON.parse(
 );
 
 const entryContents = [
-  ...capabilities.valueTypes.map(
+  ...Object.keys(capabilities.valueTypes).map(
     (name) => `export { default as ${name} } from "@cesium/engine/Source/Core/${name}.js";`,
   ),
   'export { default as CesiumMath } from "@cesium/engine/Source/Core/Math.js";',
@@ -70,9 +69,8 @@ const fileContents = await format(
 // (see ../../../scripts/generate-cesium-core-bundle.mjs)
 
 /**
- * Source text of a self-contained IIFE bundling real, pure CesiumJS value-type classes
- * (\`Cartesian2\`, \`Cartesian3\`, \`Cartographic\`, \`Color\`, \`HeadingPitchRange\`,
- * \`HeadingPitchRoll\`, \`NearFarScalar\`, \`Math\` as \`CesiumMath\`), built from
+ * Source text of a self-contained IIFE bundling the real, pure CesiumJS value-type classes
+ * configured in \`cesium-capabilities.json\` plus \`Math\` as \`CesiumMath\`, built from
  * \`@cesium/engine\`'s \`Source/Core/*.js\`. Evaluating this in the QuickJS guest defines a
  * top-level \`__CesiumCoreBundle__\` object exposing each as a real class/namespace — see
  * \`guest-prelude-value-types.ts\`, which evaluates this before attaching them onto \`Cesium.*\`.

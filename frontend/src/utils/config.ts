@@ -9,13 +9,7 @@ const apiBaseUrl = (
   (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "http://localhost:3001"
 ).replace(/\/+$/, "");
 
-const VALID_SANDBOX_LOG_LEVELS: readonly LogLevel[] = [
-  "debug",
-  "info",
-  "warn",
-  "error",
-  "silent",
-];
+const VALID_SANDBOX_LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error", "silent"];
 
 /**
  * Minimum severity for the `@cesium-ai/codegen-sandbox` console logger (see

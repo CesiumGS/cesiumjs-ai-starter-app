@@ -93,6 +93,88 @@ Key points:
   unsupported guest callbacks, rejected Promise-returning APIs, and other runtime errors all
   resolve to `{ success: false, error }` rather than an unhandled rejection or crashed tab.
 
+## How Cesium Values Are Resolved
+
+The guest starts with a local `Cesium` object and then wraps it in a fallback `Proxy`. Resolution
+depends on which kind of Cesium value generated code requests:
+
+| Kind                                            | When it is used                                                                                                                                                                                     | How it is resolved                                                                                                                                                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guest-local value type, enum, or constant table | Pure math/data APIs such as `Cesium.Cartesian3`, `Cesium.Color`, and `Cesium.Math`, plus automatically discovered immutable primitive records such as `Cesium.ArcType` and `Cesium.VerticalOrigin`. | The property already exists on the guest's local `Cesium` object, so the fallback proxy returns it directly. Construction and static methods run entirely inside QuickJS with no host bridge call.                                                               |
+| Static Cesium export                            | Any installed top-level Cesium export that is not in `blockedStaticExports`, such as `Cesium.defined`, `Cesium.Rectangle`, or `Cesium.Cesium3DTileset`.                                             | The property is absent from the local object, so `guest-prelude-static-fallback.ts` reads it from the denylist-filtered host namespace through `__cesiumSandboxHostGetSync__`. The returned function, class, or object is represented by an opaque remote proxy. |
+| Dynamic Promise result                          | Any non-blocked host function or method whose actual return value is Promise-like, such as `Cesium.Cesium3DTileset.fromUrl(...)`, `viewer.flyTo(...)`, or `viewer.dataSources.add(...)`.            | It uses the normal `__cesiumSandboxHostApplySync__` call path. `host-bridge.ts` detects the returned thenable at runtime and creates a genuine QuickJS promise with `ctx.newPromise()`. There is no separate async allowlist or async dispatch function.         |
+| Host object instance                            | A real `Viewer`, entity, tileset, provider, collection, function, or other non-JSON host value.                                                                                                     | `SandboxHandles` keeps the real value host-side and gives the guest an opaque handle-backed remote proxy. Reads, writes, calls, and construction on that proxy use the four bridge functions below.                                                              |
+
+Value types stay guest-local while calculations are local. If one crosses into a real host call,
+for example `viewer.entities.add({ position: Cesium.Cartesian3.fromDegrees(...) })`, the guest tags
+it as JSON-safe value-type data. `SandboxHandles.unwrap` reconstructs the corresponding real
+Cesium instance before invoking the host API. A value type returned from the host is tagged in the
+opposite direction and becomes guest-usable data instead of an opaque handle.
+
+The reviewed `valueTypes` map in `cesium-capabilities.json` is the single source of truth for these
+types. Each key is a Cesium constructor and its ordered field list is both the serialized shape and
+constructor argument order:
+
+```json
+"valueTypes": {
+  "Cartesian3": ["x", "y", "z"],
+  "Color": ["red", "green", "blue", "alpha"]
+}
+```
+
+`npm run generate:value-type-registry -w @cesium-ai/codegen-sandbox` generates
+`bindings/generated/value-type-registry.ts` from that map. Host tagging/revival and guest tagging
+iterate the generated definitions, so adding a reviewed positional value type does not require new
+manual branches in `sandbox-handles.ts` or `guest-prelude-host-bridge.ts`. The Cesium core bundle
+generator also derives its imports from the same map. Non-positional or identity-bearing classes
+such as `Cesium3DTileStyle` use the generic static-export bridge and remain opaque host handles.
+
+The list is intentionally reviewed rather than inferred from every Cesium class. A candidate must
+be pure data, safe to run inside QuickJS, and fully reconstructable from the listed public fields.
+DOM, WebGL, network, worker, lifecycle, and identity-bearing classes must use opaque host handles.
+
+Enums and constant tables are generated automatically from the installed Cesium namespace. The
+generator copies every frozen top-level record whose keys are uppercase identifiers and whose
+values are JSON-safe primitives. This includes public enums such as `ArcType`, `ClockRange`, and
+`ScreenSpaceEventType`, as well as immutable tables such as `TimeConstants`. Cesium enums that
+also expose helper functions do not satisfy that data-only rule; they remain automatically
+available through the static host fallback rather than being copied into the guest. Value-type
+constructors cannot use this inference safely because runtime reflection does not reveal their
+security characteristics or authoritative constructor-field order, so `valueTypes` stays reviewed.
+
+The static export denylist applies only to top-level fallback lookups. Every nested host property
+still passes through `assertSandboxPropertyAllowed`, which rejects underscore-prefixed members and
+the names in `blockedProperties`.
+
+`dynamicPromiseRuntimeCoverage` and `dynamicPromiseRuntimeGaps` in `cesium-capabilities.json` are
+compatibility-report and test metadata. They record which Promise-returning paths have been
+exercised or are known gaps, but they do not select which calls use the Promise bridge. Runtime
+selection depends only on whether `__cesiumSandboxHostApplySync__` receives a Promise-like result.
+
+Typical resolution paths are:
+
+```text
+Cesium.Cartesian3.fromDegrees(...)
+  -> guest-local Cesium.Cartesian3
+  -> no host bridge until the result is passed to a host API
+
+Cesium.defined(value)
+  -> __cesiumSandboxHostGetSync__(staticCesiumHandle, "defined")
+  -> __cesiumSandboxHostApplySync__(definedHandle, args)
+  -> synchronous JSON result
+
+await Cesium.Cesium3DTileset.fromUrl(url)
+  -> __cesiumSandboxHostGetSync__(staticCesiumHandle, "Cesium3DTileset")
+  -> __cesiumSandboxHostGetSync__(classHandle, "fromUrl")
+  -> __cesiumSandboxHostApplySync__(methodHandle, args)
+  -> host thenable detected -> QuickJS promise -> opaque tileset handle
+
+new Cesium.PinBuilder()
+  -> __cesiumSandboxHostGetSync__(staticCesiumHandle, "PinBuilder")
+  -> __cesiumSandboxHostConstructSync__(classHandle, args)
+  -> opaque PinBuilder instance handle
+```
+
 ## Host Bridge Functions
 
 The guest never talks to the real `Viewer`/`Cesium` module directly — it only ever calls one of
@@ -104,18 +186,20 @@ under a name of this package's choosing. Every `viewer.*` / `Cesium.*` property 
 call, or `new` in generated code is rewritten by the guest-side `__remoteProxy__` (see
 `guest-prelude-host-bridge.ts`) into one of these:
 
-| Function                                                          | Direction               | What it does                                                                                                                                                                                                                              | Triggered by (guest side)                                                             |
-| ------------------------------------------------------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `__cesiumSandboxHostGetSync__(handleId, prop)`                    | guest → host, sync      | Checks `assertSandboxPropertyAllowed(prop)`, `Reflect.get`s the property off the real object the handle refers to, then wraps the result (new opaque handle, tagged value type, or plain data).                                           | Any property read on a remote-proxy value, e.g. `viewer.entities`, `entity.position`. |
-| `__cesiumSandboxHostSetSync__(handleId, prop, valueJson)`         | guest → host, sync      | Checks the same property allowlist, unwraps the JSON value (reviving tagged handles/value types back into real instances), then `Reflect.set`s it on the real object.                                                                     | Any property assignment, e.g. `tileset.style = ...`, `entity.polygon.material = ...`. |
-| `__cesiumSandboxHostApplySync__(handleId, argsJson)`              | guest → host, sync or **Promise-bridged** | Resolves the handle to a real function, unwraps the marshaled arguments, invokes it, and wraps the return value. If the call returns a host `Promise`, settles a genuine QuickJS promise (via `ctx.newPromise()`) once it resolves/rejects, instead of returning synchronously.      | Calling a remote-proxy value as a function, e.g. `viewer.camera.flyTo({...})`, `await viewer.dataSources.add(...)`. |
-| `__cesiumSandboxHostConstructSync__(handleId, argsJson)`          | guest → host, sync      | Same as apply, but via `Reflect.construct` — supports real classes reached through the `Cesium.*` static-namespace fallback.                                                                                                              | `new Cesium.SomeClass(...)`, e.g. `new Cesium.PinBuilder()`.                          |
+| Function                                                  | Direction                                 | What it does                                                                                                                                                                                                                              | Triggered by (guest side)                                                                                                               |
+| --------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `__cesiumSandboxHostGetSync__(handleId, prop)`            | guest → host, sync                        | Checks `assertSandboxPropertyAllowed(prop)`, reads the property with `Reflect.get`, preserves method `this` binding, and wraps the result as plain data, tagged value-type data, or a new opaque handle.                                  | Any property read on a remote proxy, including static fallback lookup: `Cesium.defined`, `viewer.entities`, or `entity.position`.       |
+| `__cesiumSandboxHostSetSync__(handleId, prop, valueJson)` | guest → host, sync                        | Checks the property denylist, unwraps JSON data and opaque handles, revives tagged value types into real Cesium instances, and writes with `Reflect.set`.                                                                                 | Any remote property assignment: `tileset.style = ...`, `viewer.clock.shouldAnimate = true`, or `entity.polygon.material = ...`.         |
+| `__cesiumSandboxHostApplySync__(handleId, argsJson)`      | guest → host, sync or **Promise-bridged** | Resolves a function handle, unwraps its arguments, and invokes it. A synchronous result is wrapped immediately. A Promise-like result increments pending host work and returns a genuine QuickJS promise created with `ctx.newPromise()`. | Calling any remote function or method: `Cesium.defined(value)`, `viewer.camera.flyTo(...)`, or `await Cesium.Model.fromGltfAsync(...)`. |
+| `__cesiumSandboxHostConstructSync__(handleId, argsJson)`  | guest → host, sync                        | Resolves a class/function handle, unwraps constructor arguments, constructs it with `Reflect.construct`, and wraps the resulting instance as data or an opaque handle.                                                                    | `new` against a remote class, such as `new Cesium.PinBuilder()` or `new Cesium.WebMapServiceImageryProvider(...)`.                      |
 
-All four return a JSON-encoded envelope, `{ ok: true, value }` or `{ ok: false, error }`. A `false`
-envelope becomes a normal thrown `Error` inside the guest, which then propagates out of the wrapped
-async IIFE and is caught by `runCesiumCodeInSandbox`'s own `try`/`catch` — guardrail violations,
-blocked properties, and unknown handle ids all surface the same way generated-code bugs do:
-`{ success: false, error }`, never an unhandled rejection.
+Get, set, construct, and synchronous apply return a JSON-encoded envelope immediately:
+`{ ok: true, value }` or `{ ok: false, error }`. Promise-returning apply returns a QuickJS promise
+that eventually resolves to the same JSON envelope. In either case, a false envelope becomes a
+normal thrown `Error` inside the guest, which propagates out of the wrapped async IIFE and is caught
+by `runCesiumCodeInSandbox`'s own `try`/`catch`. Guardrail violations, blocked properties, rejected
+host Promises, and unknown handle ids therefore surface as `{ success: false, error }`, not as
+unhandled rejections.
 
 ## Execution Guards
 
@@ -126,22 +210,22 @@ script is allowed to do with the `Viewer`).
 **Interpreter-level (QuickJS runtime) guards** — set up once per call in
 `runCesiumCodeInSandbox`:
 
-| Guard             | Mechanism                                                                       | Default                               | What happens when it trips                                                                             |
-| ----------------- | ------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Execution timeout | QuickJS interrupt handler (`shouldInterruptAfterDeadline`)                      | 5000 ms (`DEFAULT_TIMEOUT_MS`)        | Guest loops and long-running scripts are interrupted and resolve `{ success: false, error }`.          |
-| Memory limit      | `ctx.runtime.setMemoryLimit(...)`                                               | 64 MiB (`DEFAULT_MEMORY_LIMIT_BYTES`) | A runaway allocation aborts the script the same way QuickJS's own out-of-memory handling would.        |
-| Fresh VM per call | `newAsyncContext()` created and `vm.dispose()`d in a `finally` block            | n/a                                   | No state, bindings, or object handles ever leak between separate `runCesiumCodeInSandbox` invocations. |
-| Handle table cap  | `MAX_HANDLES` in `SandboxHandles`                                               | 500                                   | Bounds how many live object handles a single run may accumulate.                                       |
+| Guard             | Mechanism                                                            | Default                               | What happens when it trips                                                                             |
+| ----------------- | -------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Execution timeout | QuickJS interrupt handler (`shouldInterruptAfterDeadline`)           | 5000 ms (`DEFAULT_TIMEOUT_MS`)        | Guest loops and long-running scripts are interrupted and resolve `{ success: false, error }`.          |
+| Memory limit      | `ctx.runtime.setMemoryLimit(...)`                                    | 64 MiB (`DEFAULT_MEMORY_LIMIT_BYTES`) | A runaway allocation aborts the script the same way QuickJS's own out-of-memory handling would.        |
+| Fresh VM per call | `newAsyncContext()` created and `vm.dispose()`d in a `finally` block | n/a                                   | No state, bindings, or object handles ever leak between separate `runCesiumCodeInSandbox` invocations. |
+| Handle table cap  | `MAX_HANDLES` in `SandboxHandles`                                    | 500                                   | Bounds how many live object handles a single run may accumulate.                                       |
 
 **Cesium-domain guards** — enforced host-side, transparently, inside `createProxiedViewer` and
 `execution-guards.ts`, so generated code never has to be aware of them:
 
-| Guard                      | Enforced on                                                                                                                          | Default                                                                                                                                                                                                                                                                                         | Failure mode                                                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Entity cap                 | `viewer.entities.add(...)`                                                                                                           | 200 (`DEFAULT_MAX_ITEMS_PER_COLLECTION`); overridable via `SceneCollectionCapOptions.maxItemsPerCollection`                                                                                                                                                                                     | Throws `EntityCapExceededError` before forwarding to the real `add`.                                                                                                        |
-| Collection cap             | `scene.primitives`, `scene.groundPrimitives`, `scene.postProcessStages`, `imageryLayers`, and `dataSources` additions                | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Throws `CollectionCapExceededError`.                                                                                                                                        |
-| Data-source entity cap     | Entity count inside an item passed to `viewer.dataSources.add(...)`                                                                  | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Rejects one oversized data source before forwarding it.                                                                                                                     |
-| Blocked property allowlist | Every `__cesiumSandboxHostGetSync__` / `__cesiumSandboxHostSetSync__` / `__cesiumSandboxHostApplySync__` / `__cesiumSandboxHostConstructSync__` call, via `assertSandboxPropertyAllowed` | blocks any `_`-prefixed member, plus an explicit list (`destroy`, `document`, `window`, `canvas`, `container`, `contentWindow`, `contentDocument`, `ownerDocument`, `parentElement`, `defaultView`, `prototype`, `constructor`, `__proto__`, `caller`, `arguments`, `removeAll`, `isDestroyed`) | Throws _before_ the real property is ever read, written, or called — blocks DOM/lifecycle escape and bulk-removal footguns, on every handle, not just the initial `viewer`. |
+| Guard                     | Enforced on                                                                                                                                                                              | Default                                                                                                                                                                                                                                                                                         | Failure mode                                                                                                                                                                |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Entity cap                | `viewer.entities.add(...)`                                                                                                                                                               | 200 (`DEFAULT_MAX_ITEMS_PER_COLLECTION`); overridable via `SceneCollectionCapOptions.maxItemsPerCollection`                                                                                                                                                                                     | Throws `EntityCapExceededError` before forwarding to the real `add`.                                                                                                        |
+| Collection cap            | `scene.primitives`, `scene.groundPrimitives`, `scene.postProcessStages`, `imageryLayers`, and `dataSources` additions                                                                    | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Throws `CollectionCapExceededError`.                                                                                                                                        |
+| Data-source entity cap    | Entity count inside an item passed to `viewer.dataSources.add(...)`                                                                                                                      | shares `maxItemsPerCollection` as the per-collection ceiling                                                                                                                                                                                                                                    | Rejects one oversized data source before forwarding it.                                                                                                                     |
+| Blocked property denylist | Every `__cesiumSandboxHostGetSync__` / `__cesiumSandboxHostSetSync__` / `__cesiumSandboxHostApplySync__` / `__cesiumSandboxHostConstructSync__` call, via `assertSandboxPropertyAllowed` | blocks any `_`-prefixed member, plus an explicit list (`destroy`, `document`, `window`, `canvas`, `container`, `contentWindow`, `contentDocument`, `ownerDocument`, `parentElement`, `defaultView`, `prototype`, `constructor`, `__proto__`, `caller`, `arguments`, `removeAll`, `isDestroyed`) | Throws _before_ the real property is ever read, written, or called — blocks DOM/lifecycle escape and bulk-removal footguns, on every handle, not just the initial `viewer`. |
 
 Both layers fail the same way from the caller's perspective — a structured
 `{ success: false, error }` — so callers never need to distinguish "hit a resource limit" from "hit
@@ -151,7 +235,7 @@ a domain guardrail" from "the generated code itself threw."
 
 **The generated snippet itself is never rewritten or transformed** — it runs verbatim (just
 wrapped in an async IIFE). What `src/bindings/` does instead is fake a working `viewer`/`Cesium`
-API *inside* the guest, which otherwise has no real access to either: the guest (QuickJS-wasm) and
+API _inside_ the guest, which otherwise has no real access to either: the guest (QuickJS-wasm) and
 the host (this app's real Cesium `Viewer`) are two separate JS runtimes with no shared memory, so
 `viewer`/`Cesium` can't simply exist in guest scope as the real objects.
 
@@ -164,7 +248,7 @@ the host (this app's real Cesium `Viewer`) are two separate JS runtimes with no 
   illusion: opaque handles standing in for class instances, plain JSON for value types, and a
   reimplemented subset of pure Cesium math that runs entirely guest-side and never crosses at all.
   Everything else silently becomes a JSON round trip through the host bridge functions, checked
-  against the caps/allowlists documented below.
+  against the caps and denylisted properties/exports documented below.
 
 Without this, isolated guest code would have no way to reach — or even see — a real, mutable
 `Viewer` at all.
@@ -175,13 +259,14 @@ tracks real CesiumJS automatically as it evolves.
 
 | Module                               | Why it's needed                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cesium-capabilities.json`           | Single reviewed policy manifest for the Cesium version, allowed static exports, explicit async bindings, guest value types, blocked properties, and known unsupported capabilities. Runtime bindings and upgrade tooling both consume it.                                                                                                |
+| `cesium-capabilities.json`           | Single reviewed policy manifest for the Cesium version, blocked static exports, guest value types, blocked properties, dynamic Promise coverage, and known unsupported capabilities. Runtime bindings and upgrade tooling both consume it.                                                                                               |
 | `capabilities-registry.ts`           | Typed runtime view of `cesium-capabilities.json`; binding modules derive their sets and names from this instead of maintaining duplicate lists.                                                                                                                                                                                          |
 | `sandbox-handles.ts`                 | Defines `SandboxHandles`, the core JSON marshaling boundary: tags real class instances (`Entity`, `Viewer`, ...) as opaque handle ids, transparently passes through JSON-safe value types (`Cartesian3`, `Color`, ...), and rejects unrecognized handle ids the guest might try to forge.                                                |
 | `guarded-viewer-proxy.ts`            | Defines `createProxiedViewer` and the shared `createGuardedProxy` factory: wraps the real `Viewer` (and nested `camera`/`scene`/`entities`/`dataSources`) so cap checks and the blocked-property allowlist apply, while every other real Cesium API call still passes through transparently.                                             |
 | `guest-prelude-host-bridge.ts`       | Builds the guest-side `__remoteProxy__`: the recursive `Proxy` that turns any handle id into something guest code can read/write/call/construct, dispatching each operation to the matching `__host*Sync__` function above.                                                                                                              |
-| `guest-prelude-static-fallback.ts`   | Upgrades the guest's `Cesium` namespace object into a `Proxy` that falls back to a curated allowlist of non-network static Cesium exports through the same remote-proxy bridge. Network-capable exports such as `Resource` remain unavailable.                                                                                           |
+| `guest-prelude-static-fallback.ts`   | Upgrades the guest's `Cesium` namespace object into a `Proxy` that falls back to all non-blocked static Cesium exports through the same remote-proxy bridge. Denylisted exports such as `Resource` remain unavailable.                                                                                                                   |
 | `guest-prelude-value-types.ts`       | Reimplements the handful of most commonly generated, pure/side-effect-free CesiumJS value types (`Cartesian2`/`Cartesian3`, `Color`, `Cartographic`, `HeadingPitchRange`/`HeadingPitchRoll`, `NearFarScalar`) directly in guest JS, so common math (`Cartesian3.fromDegrees`, `Color.fromCssColorString`) never needs a host round trip. |
+| `generated/value-type-registry.ts`   | Generated constructor and ordered-field metadata derived from `cesium-capabilities.json`. Both host and guest marshaling consume it generically; regenerate it with `npm run generate:value-type-registry -w @cesium-ai/codegen-sandbox`.                                                                                                |
 | `function-source.ts`                 | Provides `extractFunctionBody`, letting the guest-prelude "body" functions above be written as real, type-checked TypeScript functions with their source text extracted for injection into the guest script — instead of hand-written, unchecked template-literal strings.                                                               |
 | `execution-guards.ts` (package root) | Client-side defense-in-depth caps (`assertEntityCapNotExceeded`, `assertCollectionCapNotExceeded`) — independent of both the sandbox's own process isolation and the backend's static verification of the generated snippet.                                                                                                             |
 
@@ -200,17 +285,17 @@ The package pins Cesium to the version recorded as `reviewedCesiumVersion` in
 
 1. Install the new exact Cesium version.
 2. Run `npm run validate:cesium-compat -w @cesium-ai/codegen-sandbox`.
-3. Review `CESIUM_COMPATIBILITY.md`, especially new or removed Promise-returning APIs.
-4. Classify each newly desired API in `cesium-capabilities.json`. Do not automatically expose
-   every Promise API; network, DOM, lifecycle, and callback behavior require review.
+3. Review `CESIUM_COMPATIBILITY.md`, especially new top-level exports and new or removed
+   Promise-returning APIs. Under the denylist policy, new top-level exports become available by
+   default after the reviewed version is updated.
+4. Add new network, DOM, lifecycle, worker, global-state, or otherwise unsafe top-level exports to
+   `blockedStaticExports` before updating the reviewed version.
 5. Update `reviewedCesiumVersion` only after that review.
 6. Run the package tests and browser domain tests.
 
-The validator fails when the installed and reviewed versions differ, when an allowed static
-export/value type disappears, or when an explicit async runtime path is no longer callable. The
-generated report inventories all Promise-returning declaration paths that remain unavailable by
-default, making the package's coverage boundary explicit rather than implying every CesiumJS API
-is supported.
+The validator fails when the installed and reviewed versions differ, when a blocked static export
+or guest value type disappears, or when a dynamic Promise runtime path no longer exists. The
+generated report inventories the static denylist and Promise-returning declaration paths.
 
 Set `maxItemsPerCollection` to override the ceiling applied independently to each guarded
 collection for one run:

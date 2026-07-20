@@ -88,7 +88,9 @@ function fakeViewer() {
   // Created once per `fakeViewer()` call (not inside a per-call callback) so every call to
   // `imageryLayers.get(0)` — both from generated code and from a test's later assertion —
   // resolves to the SAME fake layer/provider instance.
-  const arcGisImageryLayer = { imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown };
+  const arcGisImageryLayer = {
+    imageryProvider: new FakeArcGisMapServerImageryProvider() as unknown,
+  };
 
   return {
     camera: {
@@ -418,6 +420,26 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
 
     expect(outcome.success).toBe(true);
     expect(outcome.result).toBeCloseTo(3600, 5);
+  });
+
+  test("cesiumjs-time-properties: JulianDate.fromDate accepts a guest-constructed native Date", async () => {
+    const viewer = fakeViewer();
+
+    // Regression test: a guest-native `new Date(...)` has no own enumerable properties, so the
+    // generic plain-object marshaling fallback used to flatten it to `{}` on its way to the host
+    // — `JulianDate.fromDate` then threw "date must be a valid JavaScript Date" against that
+    // flattened `{}`. See the `DATE_MARK` doc comment in `bindings/sandbox-handles.ts`.
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const startTime = Cesium.JulianDate.fromDate(new Date("2026-07-20T00:00:00Z"));
+        const stopTime = Cesium.JulianDate.addSeconds(startTime, 30.0, new Cesium.JulianDate());
+        return await Cesium.JulianDate.secondsDifference(stopTime, startTime);
+      `,
+    });
+
+    expect(outcome.success).toBe(true);
+    expect(outcome.result).toBeCloseTo(30, 5);
   });
 
   test("cesiumjs-time-properties: passes a supported native constructor to Cesium.SampledProperty", async () => {

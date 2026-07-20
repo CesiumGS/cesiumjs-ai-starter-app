@@ -1,7 +1,8 @@
 /**
  * Builds the guest-side prelude that upgrades the `Cesium` namespace object (declared by
  * `buildCesiumValueTypeGuestPrelude`) into a `Proxy` falling back to the *real* static CesiumJS
- * allowlist for properties not explicitly reimplemented as pure guest-side value types.
+ * namespace for properties not explicitly reimplemented as pure guest-side value types. The
+ * host-side namespace excludes the reviewed top-level export denylist.
  *
  * `buildCesiumValueTypeGuestPrelude` only reimplements a handful of the most commonly generated,
  * pure/side-effect-free value types (`Cartesian3`, `Color`, ...) directly in guest JS — real
@@ -12,8 +13,8 @@
  * (no AST-verification failure, no thrown error surfaced as a tool result `error`), but nothing
  * ever reached the live Viewer for that specific call.
  *
- * This falls back to a `__remoteProxy__` (see `guest-prelude-host-bridge.ts`) bound to a curated
- * object of non-network Cesium exports, registered host-side as a single root handle
+ * This falls back to a `__remoteProxy__` (see `guest-prelude-host-bridge.ts`) bound to the Cesium
+ * namespace minus blocked top-level exports, registered host-side as a single root handle
  * (`guest-prelude.ts`'s `staticCesiumHandleId`) — the same generic, dynamically-dispatched
  * mechanism already used for the live `viewer`. The existing `assertSandboxPropertyAllowed` guard (run by
  * every `__cesiumSandboxHostGetSync__`/`__cesiumSandboxHostApplySync__`/

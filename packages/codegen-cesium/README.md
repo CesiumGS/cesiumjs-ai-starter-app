@@ -239,7 +239,7 @@ Rules enforced, in order:
 | --- | ----------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | **Size limits**               | Rejects oversized snippets before parsing | `maxLength`: 4000 chars (default), `maxLines`: 100 (default)                                                                                                                                                                                                                                                                                                                            |
 | 2   | **Parseability**              | Code must parse as valid ECMAScript       | Valid `Program` via `acorn.parse(code, { ecmaVersion: "latest", sourceType: "script" })`. Parse errors returned as violations, never thrown.                                                                                                                                                                                                                                            |
-| 3   | **Banned constructs**         | Forbidden regardless of allowlist         | `eval()`, `Function()`, dynamic `import()`, browser globals (`fetch`, `window`, `document`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator`, `Worker`, `SharedWorker`, `postMessage`), computed member access (`obj[expr]`) — dot notation only.                                                                                                                             |
+| 3   | **Banned constructs**         | Forbidden regardless of allowlist         | `eval()`, `Function()`, dynamic `import()`, browser globals (`fetch`, `window`, `document`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator`, `Worker`, `SharedWorker`, `postMessage`), timer/callback globals (`setTimeout`, `setInterval`, `requestAnimationFrame`), computed member access (`obj[expr]`) — dot notation only.                                              |
 | 4   | **Free-identifier allowlist** | Only allowed symbols in scope             | Must be in `options.allowedSymbols` or `SAFE_GLOBAL_IDENTIFIERS` (`Math`, `console`, `undefined`, `NaN`, `Infinity`, `Array`, `Object`, `String`, `Number`, `Boolean`, `JSON`, `Promise`, `parseInt`, `parseFloat`, `isNaN`, `isFinite`). Local bindings always allowed. Only leftmost root identifier checked in chains: `viewer.camera.flyTo()` only requires `viewer` to be allowed. |
 | 5   | **Unbounded-loop heuristic**  | Rejects infinite loops pragmatically      | `while(true)`, `for(;;)`, `do...while(true)` rejected only if body contains no `break` statement. Not a termination proof, catches obvious infinite loops.                                                                                                                                                                                                                              |
 
@@ -248,7 +248,7 @@ generation retry loop below — can see the full picture in one pass.
 
 ## Generation + verification entry point (`src/pipeline/generate-verified-cesium-code.ts`)
 
-**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts?, maxSkills?, maxLength?, maxLines?, allowedSymbols?, extraInstructions? })`
+**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts?, maxSkills?, maxLength?, maxLines?, allowedSymbols?, extraInstructions?, runtimeFeedback? })`
 
 `maxLength`, `maxLines`, and `allowedSymbols` are passed straight through to `verifyCesiumCode` (see
 Verification Rules above). `extraInstructions` is passed straight through to `buildCodegenPrompt`,
@@ -257,6 +257,11 @@ constraints (e.g. house style, app-specific caveats), never raw end-user chat in
 directly into the codegen model's prompt. The sample backend's `createExecuteCesiumCodeTool`
 exposes matching options wired from the `CODEGEN_MAX_CODE_LENGTH`, `CODEGEN_MAX_CODE_LINES`,
 `CODEGEN_ALLOWED_SYMBOLS`, and `CODEGEN_EXTRA_INSTRUCTIONS` env vars (see the root `.env.example`).
+
+`runtimeFeedback` accepts `{ previousCode, executionError }` from an earlier browser-sandbox run.
+When present, both values are appended to every generation attempt as diagnostic correction context,
+so the model can preserve the original intent while fixing the concrete runtime failure. The values
+are labeled as diagnostic data rather than instructions.
 
 **Purpose:** Single orchestration entry point that coordinates intent-to-verified-code generation.
 

@@ -18,11 +18,13 @@
  */
 import { extractFunctionBody } from "./function-source.js";
 import {
+  DATE_MARK,
   HANDLE_MARK,
   NATIVE_CONSTRUCTOR_MARK,
   UNDEFINED_MARK,
   VALUE_TYPE_MARK,
 } from "./sandbox-handles.js";
+import { CESIUM_VALUE_TYPE_DEFINITIONS } from "./generated/value-type-registry.js";
 
 // Ambient shims for guest-only globals `guestHostBridgeBody` references: `__handleMark__`/
 // `__valueTypeMark__` are injected as `const` declarations ahead of the extracted body (see
@@ -36,15 +38,14 @@ import {
 declare const __handleMark__: string;
 declare const __valueTypeMark__: string;
 declare const __undefinedMark__: string;
+declare const __dateMark__: string;
 declare const __nativeConstructorMark__: string;
+declare const __valueTypeDefinitions__: readonly {
+  name: string;
+  fields: readonly string[];
+}[];
 declare const __CesiumCoreBundle__: {
-  Cartesian2: new (...args: never[]) => any;
-  Cartesian3: new (...args: never[]) => any;
-  Cartographic: new (...args: never[]) => any;
-  Color: new (...args: never[]) => any;
-  HeadingPitchRange: new (...args: never[]) => any;
-  HeadingPitchRoll: new (...args: never[]) => any;
-  NearFarScalar: new (...args: never[]) => any;
+  [name: string]: new (...args: never[]) => any;
 };
 declare function __cesiumSandboxHostGetSync__(handleId: string, prop: string): string;
 declare function __cesiumSandboxHostSetSync__(
@@ -94,6 +95,20 @@ function guestHostBridgeBody(): void {
         "Guest callbacks cannot cross the Cesium sandbox boundary because the guest VM is disposed after execution.",
       );
     }
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      typeof (value as { then?: unknown }).then === "function"
+    ) {
+      throw new Error(
+        "A Promise cannot be passed to a Cesium API. Await the Promise and pass its resolved value instead.",
+      );
+    }
+    if (value instanceof Date) {
+      const out: Record<string, unknown> = {};
+      out[__dateMark__] = value.toISOString();
+      return out;
+    }
     if (Array.isArray(value)) return value.map(__marshalArg__);
     if (value !== null && typeof value === "object") {
       const tagged = __tagCesiumValueType__(value);
@@ -116,53 +131,14 @@ function guestHostBridgeBody(): void {
   // `instanceof`, at the point a value actually crosses the boundary.
   function __tagCesiumValueType__(value: any): Record<string, unknown> | undefined {
     const C = __CesiumCoreBundle__;
-    if (value instanceof C.Cartesian2) {
-      return { [__valueTypeMark__]: "Cartesian2", x: value.x, y: value.y };
-    }
-    if (value instanceof C.Cartesian3) {
-      return { [__valueTypeMark__]: "Cartesian3", x: value.x, y: value.y, z: value.z };
-    }
-    if (value instanceof C.Cartographic) {
-      return {
-        [__valueTypeMark__]: "Cartographic",
-        longitude: value.longitude,
-        latitude: value.latitude,
-        height: value.height,
-      };
-    }
-    if (value instanceof C.Color) {
-      return {
-        [__valueTypeMark__]: "Color",
-        red: value.red,
-        green: value.green,
-        blue: value.blue,
-        alpha: value.alpha,
-      };
-    }
-    if (value instanceof C.HeadingPitchRange) {
-      return {
-        [__valueTypeMark__]: "HeadingPitchRange",
-        heading: value.heading,
-        pitch: value.pitch,
-        range: value.range,
-      };
-    }
-    if (value instanceof C.HeadingPitchRoll) {
-      return {
-        [__valueTypeMark__]: "HeadingPitchRoll",
-        heading: value.heading,
-        pitch: value.pitch,
-        roll: value.roll,
-      };
-    }
-    if (value instanceof C.NearFarScalar) {
-      return {
-        [__valueTypeMark__]: "NearFarScalar",
-        near: value.near,
-        nearValue: value.nearValue,
-        far: value.far,
-        farValue: value.farValue,
-      };
+    for (const definition of __valueTypeDefinitions__) {
+      if (value instanceof C[definition.name]) {
+        const tagged: Record<string, unknown> = {
+          [__valueTypeMark__]: definition.name,
+        };
+        for (const field of definition.fields) tagged[field] = value[field];
+        return tagged;
+      }
     }
     return undefined;
   }
@@ -176,6 +152,7 @@ function guestHostBridgeBody(): void {
     if (value !== null && typeof value === "object") {
       if (__handleMark__ in value) return __remoteProxy__(value[__handleMark__]);
       if (__valueTypeMark__ in value) return value;
+      if (__dateMark__ in value) return new Date(value[__dateMark__]);
       const out: Record<string, unknown> = {};
       for (const key in value) out[key] = __reviveRemoteValue__(value[key]);
       return out;
@@ -220,7 +197,11 @@ function guestHostBridgeBody(): void {
         // A Promise-returning host call bridges back as a genuine QuickJS promise (see
         // `registerHostApply` in `host-bridge.ts`) rather than a JSON string — awaiting/`.then`-ing
         // it here works exactly like awaiting the result of any other async call.
-        if (raw !== null && typeof raw === "object" && typeof (raw as { then?: unknown }).then === "function") {
+        if (
+          raw !== null &&
+          typeof raw === "object" &&
+          typeof (raw as { then?: unknown }).then === "function"
+        ) {
           return (raw as Promise<string>).then((json) => {
             const envelope = JSON.parse(json);
             if (!envelope.ok) throw new Error(envelope.error);
@@ -248,11 +229,17 @@ function guestHostBridgeBody(): void {
 }
 
 export function buildCesiumHostBridgeGuestPrelude(): string {
+  const valueTypeDefinitions = CESIUM_VALUE_TYPE_DEFINITIONS.map(({ name, fields }) => ({
+    name,
+    fields,
+  }));
   return [
     `const __handleMark__ = ${JSON.stringify(HANDLE_MARK)};`,
     `const __valueTypeMark__ = ${JSON.stringify(VALUE_TYPE_MARK)};`,
     `const __undefinedMark__ = ${JSON.stringify(UNDEFINED_MARK)};`,
+    `const __dateMark__ = ${JSON.stringify(DATE_MARK)};`,
     `const __nativeConstructorMark__ = ${JSON.stringify(NATIVE_CONSTRUCTOR_MARK)};`,
+    `const __valueTypeDefinitions__ = ${JSON.stringify(valueTypeDefinitions)};`,
     extractFunctionBody(guestHostBridgeBody),
   ].join("\n");
 }

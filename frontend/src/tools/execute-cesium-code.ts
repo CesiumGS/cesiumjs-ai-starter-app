@@ -40,6 +40,49 @@ export function isExecuteCesiumCodeTool(toolName: string): boolean {
  */
 const DEFAULT_RENDER_ERROR_WATCH_MS = 1500;
 
+interface RenderErrorWatch {
+  result: Promise<string | undefined>;
+  finishExecution: () => void;
+}
+
+function createRenderErrorWatch(viewer: Viewer, timeoutMs: number): RenderErrorWatch {
+  const renderError = viewer.scene?.renderError;
+  if (!renderError || typeof renderError.addEventListener !== "function") {
+    return { result: Promise.resolve(undefined), finishExecution: () => {} };
+  }
+
+  let finishCalled = false;
+  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let resolveResult: (error: string | undefined) => void;
+  const result = new Promise<string | undefined>((resolve) => {
+    resolveResult = resolve;
+  });
+
+  const removeListener = renderError.addEventListener((_scene: unknown, error: unknown) => {
+    if (settled) return;
+    settled = true;
+    if (timer) clearTimeout(timer);
+    removeListener();
+    viewer.useDefaultRenderLoop = true;
+    resolveResult(error instanceof Error ? error.message : String(error));
+  });
+
+  return {
+    result,
+    finishExecution: () => {
+      if (finishCalled || settled) return;
+      finishCalled = true;
+      timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        removeListener();
+        resolveResult(undefined);
+      }, timeoutMs);
+    },
+  };
+}
+
 /**
  * Watches `viewer.scene.renderError` for a bounded window and resolves with the error message if
  * one fires, or `undefined` if the window elapses cleanly.
@@ -62,32 +105,9 @@ export function waitForRenderError(
   viewer: Viewer,
   timeoutMs = DEFAULT_RENDER_ERROR_WATCH_MS,
 ): Promise<string | undefined> {
-  const renderError = viewer.scene?.renderError;
-  if (!renderError || typeof renderError.addEventListener !== "function") {
-    return Promise.resolve(undefined);
-  }
-
-  return new Promise((resolve) => {
-    let settled = false;
-
-    const removeListener = renderError.addEventListener((_scene: unknown, error: unknown) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      removeListener();
-      // Cesium's own render loop stops itself on any renderError — resume it so the view doesn't
-      // stay permanently frozen because of one bad generated snippet.
-      viewer.useDefaultRenderLoop = true;
-      resolve(error instanceof Error ? error.message : String(error));
-    });
-
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      removeListener();
-      resolve(undefined);
-    }, timeoutMs);
-  });
+  const watch = createRenderErrorWatch(viewer, timeoutMs);
+  watch.finishExecution();
+  return watch.result;
 }
 
 /**
@@ -103,12 +123,18 @@ export async function executeApprovedCesiumCode(
   viewer: Viewer,
   code: string,
 ): Promise<string | null> {
+  const renderErrorWatch = createRenderErrorWatch(viewer, DEFAULT_RENDER_ERROR_WATCH_MS);
   const outcome = await runCesiumCodeInSandbox({ viewer, code, logger: sandboxLogger });
+  renderErrorWatch.finishExecution();
+  const renderError = await renderErrorWatch.result;
+
   if (!outcome.success) {
-    return `Code execution failed: ${outcome.error ?? "Unknown sandbox error"}`;
+    const executionError = `Code execution failed: ${outcome.error ?? "Unknown sandbox error"}`;
+    return renderError
+      ? `${executionError}; partial scene changes also caused a rendering error: ${renderError}`
+      : executionError;
   }
 
-  const renderError = await waitForRenderError(viewer);
   return renderError ? `Code executed but caused a rendering error: ${renderError}` : null;
 }
 

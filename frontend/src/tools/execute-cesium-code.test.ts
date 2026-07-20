@@ -60,7 +60,8 @@ describe("executeApprovedCesiumCode", () => {
 
     const result = await executeApprovedCesiumCode(fakeViewer, `throw new Error("boom");`);
 
-    expect(result).toBe("Code execution failed: boom");
+    expect(result).toContain("Code execution failed: Error: boom");
+    expect(result).toContain("generated code line 1");
   });
 
   it("returns an error message for a non-Error throw", async () => {
@@ -68,7 +69,7 @@ describe("executeApprovedCesiumCode", () => {
 
     const result = await executeApprovedCesiumCode(fakeViewer, `throw "just a string";`);
 
-    expect(result).toBe("Code execution failed: just a string");
+    expect(result).toContain("Code execution failed: Error: just a string");
   });
 
   it("returns an error message when the code references undefined viewer state", async () => {
@@ -111,7 +112,8 @@ describe("executeApprovedCesiumCode", () => {
         `await Promise.reject(new Error("async boom"));`,
       );
 
-      expect(result).toBe("Code execution failed: async boom");
+      expect(result).toContain("Code execution failed: Error: async boom");
+      expect(result).toContain("generated code line 1");
     });
   });
 
@@ -161,6 +163,31 @@ describe("executeApprovedCesiumCode", () => {
         "Code executed but caused a rendering error: shader compile failed",
       );
       // Resumes the render loop Cesium halted, instead of leaving the view permanently frozen.
+      expect(fakeViewer.useDefaultRenderLoop).toBe(true);
+    });
+
+    it("reports a renderError caused by partial scene changes before generated code fails", async () => {
+      const renderError = fakeRenderErrorEvent();
+      const add = vi.fn();
+      const fakeViewer = {
+        entities: { values: [], add },
+        scene: { renderError },
+        useDefaultRenderLoop: false,
+      } as unknown as Viewer;
+
+      const resultPromise = executeApprovedCesiumCode(
+        fakeViewer,
+        `viewer.entities.add({}); throw new Error("later failure");`,
+      );
+      await waitUntilListening(renderError);
+      while (add.mock.calls.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      renderError.emit(new Error("invalid partial scene state"));
+
+      expect(await resultPromise).toContain(
+        "partial scene changes also caused a rendering error: invalid partial scene state",
+      );
       expect(fakeViewer.useDefaultRenderLoop).toBe(true);
     });
 
@@ -276,6 +303,7 @@ describe("handleExecuteCesiumCodeResult", () => {
       code: `throw new Error("runtime failure");`,
     });
 
-    expect(result).toBe("Code execution failed: runtime failure");
+    expect(result).toContain("Code execution failed: Error: runtime failure");
+    expect(result).toContain("generated code line 1");
   });
 });
