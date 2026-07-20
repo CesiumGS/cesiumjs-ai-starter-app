@@ -89,6 +89,8 @@
     "GoogleStreetViewCubeMapPanoramaProvider.fromUrl",
     "GpxDataSource.load",
     "GridImageryProvider.requestImage",
+    "GroundPolylinePrimitive.initializeTerrainHeights",
+    "GroundPrimitive.initializeTerrainHeights",
     "HeightmapTerrainData.upsample",
     "I3SDataProvider.filterByAttributes",
     "I3SDataProvider.fromUrl",
@@ -120,12 +122,15 @@
     "PinBuilder.fromMakiIconId",
     "PinBuilder.fromUrl",
     "QuantizedMeshTerrainData.upsample",
+    "Scene.clampToHeightMostDetailed",
+    "Scene.pickAsync",
     "Scene.sampleHeightMostDetailed",
     "SingleTileImageryProvider.fromUrl",
     "SingleTileImageryProvider.requestImage",
     "TileCoordinatesImageryProvider.requestImage",
     "TileMapServiceImageryProvider.fromUrl",
     "TimeDynamicImagery.getFromCache",
+    "Transforms.preloadIcrfFixed",
     "UrlTemplateImageryProvider.pickFeatures",
     "UrlTemplateImageryProvider.requestImage",
     "VRTheWorldTerrainProvider.fromUrl",
@@ -146,15 +151,7 @@
     "sampleTerrain",
     "sampleTerrainMostDetailed"
   ],
-  "dynamicPromiseRuntimeGaps": [
-    "GroundPolylinePrimitive.initializeTerrainHeights",
-    "GroundPrimitive.initializeTerrainHeights",
-    "Scene.clampToHeightMostDetailed",
-    "Scene.pickAsync",
-    "TaskProcessor.initWebAssemblyModule",
-    "TaskProcessor.scheduleTask",
-    "Transforms.preloadIcrfFixed"
-  ],
+  "dynamicPromiseRuntimeGaps": [],
   "valueTypes": {
     "Cartesian2": ["x", "y"],
     "Cartesian3": ["x", "y", "z"],
@@ -192,7 +189,8 @@
     "DOM and lifecycle properties in blockedProperties are unavailable.",
     "Top-level Cesium exports are available by default except those in blockedStaticExports; every nested property access still passes through blockedProperties.",
     "`Resource.*` static methods (fetch/fetchJson/post/put/patch/delete/...) are explicitly blocked because unrestricted network access, including mutating HTTP verbs, is banned outright rather than restricted to a domain allowlist. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.",
-    "`IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked: `IonResource` extends `Resource` and fetches arbitrary, potentially credentialed Ion asset content over the network."
+    "`IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked: `IonResource` extends `Resource` and fetches arbitrary, potentially credentialed Ion asset content over the network.",
+    "`TaskProcessor.*` (e.g. `scheduleTask`/`initWebAssemblyModule`) is unreachable by design: `TaskProcessor` is itself a blocked static export (it spins up real Web Workers to run arbitrary code/wasm, a code-execution escape vector), so `Cesium.TaskProcessor` always resolves `undefined` in the sandbox."
   ],
-  "networkBlockedPromiseOwners": ["IonResource", "Resource"]
+  "networkBlockedPromiseOwners": ["IonResource", "Resource", "TaskProcessor"]
 }

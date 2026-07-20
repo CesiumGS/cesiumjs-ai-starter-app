@@ -149,15 +149,14 @@ const runtimeCoveredPromisePaths = [...manifest.dynamicPromiseRuntimeCoverage].s
 const runtimeCoveredPromisePathSet = new Set(runtimeCoveredPromisePaths);
 const runtimeGapPromisePaths = [...manifest.dynamicPromiseRuntimeGaps].sort();
 const runtimeGapPromisePathSet = new Set(runtimeGapPromisePaths);
-const abstractStubPromiseApis = unboundPromiseApis
-  .filter(
-    (api) =>
-      !runtimeCoveredPromisePathSet.has(api) &&
-      !runtimeGapPromisePathSet.has(api) &&
-      isAbstractStubPromiseApi(api),
-  )
-  .sort();
-const abstractStubPromiseApiSet = new Set(abstractStubPromiseApis);
+// Computed before `abstractStubPromiseApis` deliberately: `isAbstractStubPromiseApi` actually
+// *calls* the method on the class's bare prototype to observe whether it throws the expected
+// DeveloperError - safe for a genuine abstract stub (throws synchronously before any real work),
+// but not for a real, non-abstract method like `TaskProcessor.scheduleTask`/
+// `.initWebAssemblyModule`, which would actually run (e.g. spinning up a real Worker) and can
+// crash this script outright. Excluding network-blocked-owner paths first (their owner class is
+// unreachable/blocked by design, so classifying them as "abstract or not" is moot) avoids ever
+// invoking the check on them.
 const networkBlockedPromiseOwnerSet = new Set(manifest.networkBlockedPromiseOwners);
 const networkBlockedPromiseApis = unboundPromiseApis
   .filter((api) => {
@@ -167,6 +166,16 @@ const networkBlockedPromiseApis = unboundPromiseApis
   })
   .sort();
 const networkBlockedPromiseApiSet = new Set(networkBlockedPromiseApis);
+const abstractStubPromiseApis = unboundPromiseApis
+  .filter(
+    (api) =>
+      !runtimeCoveredPromisePathSet.has(api) &&
+      !runtimeGapPromisePathSet.has(api) &&
+      !networkBlockedPromiseApiSet.has(api) &&
+      isAbstractStubPromiseApi(api),
+  )
+  .sort();
+const abstractStubPromiseApiSet = new Set(abstractStubPromiseApis);
 const declarationOnlyPromiseApis = unboundPromiseApis.filter(
   (api) =>
     !runtimeCoveredPromisePathSet.has(api) &&
@@ -201,12 +210,11 @@ Every host call the sandbox bridges (property get/set, function apply, construct
 the same generic mechanism regardless of which Cesium API is involved - a synchronous result is
 just serialized straight back to the guest, with nothing version-specific that could break. A
 Promise-returning result is the one shape that needs different, non-trivial handling instead (a
-real QuickJS promise bridged via \`ctx.newPromise()\` + \`executePendingJobs()\`, previously the
-source of real hangs/crashes under an earlier Asyncify-based design - see the "Known Dynamic
-Promise Test Gap" section below). Top-level Cesium module exports are available by default except
-for the reviewed denylist below. This report also inventories Promise-returning APIs discovered in
-\`Source/Cesium.d.ts\`, classifying each path as runtime-tested, a known runtime gap, an abstract
-base-class stub, network-blocked by design, or untested/uncovered.
+real QuickJS promise bridged via \`ctx.newPromise()\` + \`executePendingJobs()\`). Top-level Cesium
+module exports are available by default except for the reviewed denylist below. This report also
+inventories Promise-returning APIs discovered in \`Source/Cesium.d.ts\`, classifying each path as
+runtime-tested, a known runtime gap, an abstract base-class stub, network-blocked by design, or
+untested/uncovered.
 
 - Installed CesiumJS: **${cesiumPackage.version}**
 - Last reviewed CesiumJS: **${manifest.reviewedCesiumVersion}**
@@ -241,18 +249,23 @@ ${manifest.blockedStaticExports
 ## Runtime-Tested Dynamic Promise APIs
 
 These paths are exercised end-to-end through the generic host-handle bridge by
-\`cesium-code-sandbox.test.ts\`. The tests use deterministic Viewer doubles rather than network,
-Ion, WebGL, or browser-worker dependencies.
+\`cesium-code-sandbox.test.ts\`. Most tests use deterministic Viewer doubles with no network, Ion,
+WebGL, or browser-worker dependencies; a few (\`GroundPrimitive\`/\`GroundPolylinePrimitive.
+initializeTerrainHeights\`, \`Transforms.preloadIcrfFixed\`) instead monkey-patch the real
+\`Resource.prototype.fetchJson\` - the actual host-side network seam those APIs funnel through -
+so no real network request is ever made.
 
 ${runtimeCoveredPromisePaths.map((api) => `- \`${api}\``).join("\n")}
 
 ## Dynamic Promise Runtime Gaps
 
-These reachable paths were attempted with deterministic Viewer doubles but are not counted as
-covered because the current QuickJS Asyncify build can hang or crash while resolving them. Their
-tests remain visible as \`test.todo\` cases.
+These reachable paths are not blocked and would use the generic dynamic Promise bridge like any
+other case, but are not counted as runtime-covered because they ultimately depend on a real
+network fetch (\`Resource.fetchJson\` for a Cesium-bundled data asset) and/or Cesium-internal
+process-global memoized state that can't be faked deterministically alongside every other
+network-free case in this suite. Their tests remain visible as \`test.todo\` cases.
 
-${runtimeGapPromisePaths.map((api) => `- \`${api}\``).join("\n")}
+${formatList(runtimeGapPromisePaths, "None currently - every reachable Promise-returning path with a genuine network/global-state dependency has a dedicated runtime test instead.")}
 
 ## Untested Dynamic Promise Candidates (Not Yet Covered)
 

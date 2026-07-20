@@ -30,6 +30,7 @@ import {
   KmlDataSource,
   Material,
   Model,
+  Resource,
   sampleTerrain,
   sampleTerrainMostDetailed,
   SingleTileImageryProvider,
@@ -1131,6 +1132,18 @@ const dynamicPromiseCases = [
         .requestImage,
   },
   {
+    path: "Scene.clampToHeightMostDetailed",
+    code: `return await viewer.scene.clampToHeightMostDetailed([{ longitude: 1, latitude: 2 }]);`,
+    expected: [{ longitude: 1, latitude: 2 }],
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.scene.clampToHeightMostDetailed,
+  },
+  {
+    path: "Scene.pickAsync",
+    code: `return await viewer.scene.pickAsync({ x: 1, y: 2 });`,
+    expected: { kind: "pick", position: { x: 1, y: 2 } },
+    getMock: (viewer: ReturnType<typeof fakeViewer>) => viewer.scene.pickAsync,
+  },
+  {
     path: "Scene.sampleHeightMostDetailed",
     code: `return await viewer.scene.sampleHeightMostDetailed([{ longitude: 1, latitude: 2 }]);`,
     expected: [{ longitude: 1, latitude: 2 }],
@@ -1907,13 +1920,17 @@ const dynamicPromiseCases = [
   },
 ] as const;
 
-const dynamicPromiseGapPaths = [
+const dynamicPromiseGapPaths = [] as const;
+
+// These 3 are genuinely runtime-tested (see the dedicated tests further below that monkey-patch
+// the real `Resource.prototype.fetchJson`), but don't fit the generic `dynamicPromiseCases`
+// `test.each` shape: `GroundPrimitive`/`GroundPolylinePrimitive.initializeTerrainHeights` share
+// one Cesium-internal process-global memoized cache (`ApproximateTerrainHeights`), so they're
+// exercised together in a single test rather than independently: exactly-once call-count
+// assertions across separate cases would be wrong once the cache is warm.
+const manuallyTestedRuntimeCoveragePaths = [
   "GroundPolylinePrimitive.initializeTerrainHeights",
   "GroundPrimitive.initializeTerrainHeights",
-  "Scene.clampToHeightMostDetailed",
-  "Scene.pickAsync",
-  "TaskProcessor.initWebAssemblyModule",
-  "TaskProcessor.scheduleTask",
   "Transforms.preloadIcrfFixed",
 ] as const;
 
@@ -2340,39 +2357,78 @@ viewer.scene.camera.flyAround(target, 0.8);`,
   });
 
   test("runtime coverage manifest exactly matches the dynamic Promise cases", () => {
-    expect(dynamicPromiseCases.map(({ path }) => path).sort()).toEqual(
-      [...CESIUM_DYNAMIC_PROMISE_RUNTIME_COVERAGE].sort(),
-    );
+    expect(
+      [
+        ...dynamicPromiseCases.map(({ path }) => path),
+        ...manuallyTestedRuntimeCoveragePaths,
+      ].sort(),
+    ).toEqual([...CESIUM_DYNAMIC_PROMISE_RUNTIME_COVERAGE].sort());
     expect([...dynamicPromiseGapPaths].sort()).toEqual(
       [...CESIUM_DYNAMIC_PROMISE_RUNTIME_GAPS].sort(),
     );
   });
 
-  test.todo("dynamically bridges Scene.clampToHeightMostDetailed without an Asyncify hang");
-  test.todo("dynamically bridges Scene.pickAsync without an Asyncify hang");
+  // `GroundPrimitive`/`GroundPolylinePrimitive.initializeTerrainHeights` both delegate to the
+  // exact same Cesium-internal `ApproximateTerrainHeights.initialize()` (confirmed by reading
+  // `node_modules/cesium/Build/CesiumUnminified/Cesium.js` directly), which calls the real
+  // `Resource.fetchJson("Assets/approximateTerrainHeights.json")` and memoizes the resolved
+  // promise/data in Cesium-internal process-global state shared by BOTH classes — not per-call,
+  // per-instance state. Monkey-patching the real `Resource.prototype.fetchJson` (the actual
+  // host-side network seam both factories funnel through, restored in `finally`) avoids any real
+  // network access. Both calls are exercised together in one script/test rather than as separate
+  // cases: the second call reuses the first's already-memoized promise instead of invoking
+  // `Resource.fetchJson` again, so an exactly-once call-count assertion per class would be wrong.
+  test("dynamically bridges GroundPrimitive.initializeTerrainHeights and GroundPolylinePrimitive.initializeTerrainHeights (shared ApproximateTerrainHeights cache)", async () => {
+    const viewer = fakeViewer();
+    const originalFetchJson = Resource.prototype.fetchJson;
+    const fetchJsonMock = vi.fn(async () => ({ "0-0-0": [0, 100] }));
+    Resource.prototype.fetchJson = fetchJsonMock as typeof Resource.prototype.fetchJson;
 
-  // The five APIs below are genuinely backed by a real Web Worker and/or WebAssembly module
-  // (`TaskProcessor` spins up worker threads to run real wasm codecs; `GroundPrimitive`/
-  // `GroundPolylinePrimitive.initializeTerrainHeights` fetch and decode real approximate-terrain
-  // wasm assets; `Transforms.preloadIcrfFixed` fetches real IAU2006 XYS data files). None of them
-  // have a deterministic, dependency-free double the way every other case above does (a plain
-  // `vi.fn()` standing in for the whole call) — actually invoking them would require either a
-  // real wasm/worker environment (not available in this unit test's sandboxed jsdom/QuickJS
-  // setup) or additional test-only fixture assets, so they're tracked here rather than silently
-  // skipped, per the user's request to flag untestable declaration-only candidates explicitly.
-  test.todo(
-    "dynamically bridges TaskProcessor.initWebAssemblyModule (requires a real wasm module + worker)",
-  );
-  test.todo("dynamically bridges TaskProcessor.scheduleTask (requires a real worker thread)");
-  test.todo(
-    "dynamically bridges GroundPrimitive.initializeTerrainHeights (requires real wasm terrain-height assets)",
-  );
-  test.todo(
-    "dynamically bridges GroundPolylinePrimitive.initializeTerrainHeights (requires real wasm terrain-height assets)",
-  );
-  test.todo(
-    "dynamically bridges Transforms.preloadIcrfFixed (requires real IAU2006 XYS data file fetches)",
-  );
+    try {
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        code: `
+          await Cesium.GroundPrimitive.initializeTerrainHeights();
+          await Cesium.GroundPolylinePrimitive.initializeTerrainHeights();
+          return "done";
+        `,
+      });
+
+      expect(outcome).toEqual({ success: true, result: "done" });
+      expect(fetchJsonMock).toHaveBeenCalled();
+    } finally {
+      Resource.prototype.fetchJson = originalFetchJson;
+    }
+  });
+
+  // `Transforms.preloadIcrfFixed` delegates to `Iau2006XysData.prototype.preload`, which fetches
+  // real IAU2006 XYS chunk files via the same real `Resource.fetchJson` seam as the Ground*
+  // pair above (confirmed via the same source read), memoized per chunk index on Cesium's own
+  // `Transforms.iau2006XysData` singleton.
+  test("dynamically bridges Transforms.preloadIcrfFixed", async () => {
+    const viewer = fakeViewer();
+    const originalFetchJson = Resource.prototype.fetchJson;
+    const fetchJsonMock = vi.fn(async () => ({ samples: [] }));
+    Resource.prototype.fetchJson = fetchJsonMock as typeof Resource.prototype.fetchJson;
+
+    try {
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        code: `
+          const start = Cesium.JulianDate.now();
+          const stop = Cesium.JulianDate.addSeconds(start, 3600, new Cesium.JulianDate());
+          const interval = new Cesium.TimeInterval({ start, stop });
+          await Cesium.Transforms.preloadIcrfFixed(interval);
+          return "done";
+        `,
+      });
+
+      expect(outcome).toEqual({ success: true, result: "done" });
+      expect(fetchJsonMock).toHaveBeenCalled();
+    } finally {
+      Resource.prototype.fetchJson = originalFetchJson;
+    }
+  });
 
   test.each(dynamicPromiseCases)(
     "dynamically bridges $path through an allowed host handle",
@@ -2386,9 +2442,18 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     },
   );
 
-  test.todo(
-    "returns a rejected dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
-  );
+  test("returns a rejected dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash", async () => {
+    const viewer = fakeViewer();
+    viewer.scene.pickAsync.mockRejectedValueOnce(new Error("pick failed"));
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return await viewer.scene.pickAsync({ x: 1, y: 2 });`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/pick failed/);
+  });
 
   // Generated code very commonly chains a bare `.then(...)` onto a Promise-returning call as a
   // fire-and-forget statement instead of `await`ing (or `return`ing) it. Without a post-completion
@@ -2425,9 +2490,22 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     expect(outcome.error).toMatch(/timed out|interrupted/i);
   });
 
-  test.todo(
-    "rejects a second dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash",
-  );
+  test("rejects a second dynamically bridged Promise without triggering the upstream QuickJS Asyncify crash", async () => {
+    const viewer = fakeViewer();
+    viewer.scene.pickAsync.mockRejectedValueOnce(new Error("second pick failed"));
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const first = await viewer.scene.sampleHeightMostDetailed([{ longitude: 1, latitude: 2 }]);
+        return await viewer.scene.pickAsync({ x: 1, y: 2 });
+      `,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/second pick failed/);
+    expect(viewer.scene.sampleHeightMostDetailed).toHaveBeenCalledTimes(1);
+  });
 
   // `Resource` is deliberately present in `BLOCKED_STATIC_CESIUM_EXPORTS` — every one of its
   // static methods below issues (or would issue)
@@ -2475,6 +2553,27 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     ],
     ["IonResource.fromAssetId", `Cesium.IonResource.fromAssetId(12345)`],
   ])("does not expose network-capable %s through the static namespace", async (_path, code) => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return ${code};`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/undefined|null|property/i);
+  });
+
+  // `TaskProcessor` is deliberately in `BLOCKED_STATIC_CESIUM_EXPORTS` — it spins up real Web
+  // Workers to run arbitrary code/wasm modules, a genuine code-execution escape vector if guest
+  // code could reach it. Its own Promise-returning instance methods are therefore provably
+  // unreachable by any generated code today (`Cesium.TaskProcessor` always resolves `undefined`
+  // through the static-namespace fallback, exactly like `Resource`/`IonResource` above) — these
+  // are regression tests proving that stays true, not dynamic-bridge coverage gaps.
+  test.each([
+    ["TaskProcessor.initWebAssemblyModule", `Cesium.TaskProcessor.initWebAssemblyModule({})`],
+    ["TaskProcessor.scheduleTask", `Cesium.TaskProcessor.scheduleTask({})`],
+  ])("does not expose blocked-owner %s through the static namespace", async (_path, code) => {
     const viewer = fakeViewer();
 
     const outcome = await runCesiumCodeInSandbox({

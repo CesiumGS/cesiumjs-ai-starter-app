@@ -79,6 +79,16 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("callbacks cannot outlive");
   });
 
+  it('steers indexed array access (e.g. "the last entity") toward .at(...) instead of bracket indexing (regression: a real model reliably wrote `entities[entities.length - 1]`, which static verification always rejects as computed member access)', () => {
+    const prompt = buildCodegenPrompt({
+      intent: "make entity position time-dynamic",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain(".at(-1)");
+    expect(prompt).toContain("array.length - 1");
+  });
+
   describe("extraInstructions", () => {
     it("appends extraInstructions to the end of the prompt when provided", () => {
       const prompt = buildCodegenPrompt({

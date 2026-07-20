@@ -91,6 +91,20 @@ function guestHostBridgeBody(): void {
         out[__nativeConstructorMark__] = value.name;
         return out;
       }
+      // A bare reference to one of the bound Cesium value-type classes (e.g. `Cesium.Cartesian3`,
+      // `Cesium.Color`) passed as a *type-tag* argument, not invoked — e.g. `new
+      // Cesium.SampledProperty(Cesium.Cartesian3)`, whose `type` parameter must be a real
+      // `Packable` class so the host can call its static `pack`/`unpack`. These are real,
+      // guest-local class objects (from `__CesiumCoreBundle__`, see `guest-prelude-value-types.ts`),
+      // not remote-proxy handles, so without this check they're indistinguishable from an
+      // arbitrary (and disallowed) guest callback below.
+      for (const definition of __valueTypeDefinitions__) {
+        if (value === __CesiumCoreBundle__[definition.name]) {
+          const out: Record<string, unknown> = {};
+          out[__nativeConstructorMark__] = definition.name;
+          return out;
+        }
+      }
       throw new Error(
         "Guest callbacks cannot cross the Cesium sandbox boundary because the guest VM is disposed after execution.",
       );

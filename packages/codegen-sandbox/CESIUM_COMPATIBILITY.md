@@ -6,12 +6,11 @@ Every host call the sandbox bridges (property get/set, function apply, construct
 the same generic mechanism regardless of which Cesium API is involved - a synchronous result is
 just serialized straight back to the guest, with nothing version-specific that could break. A
 Promise-returning result is the one shape that needs different, non-trivial handling instead (a
-real QuickJS promise bridged via `ctx.newPromise()` + `executePendingJobs()`, previously the
-source of real hangs/crashes under an earlier Asyncify-based design - see the "Known Dynamic
-Promise Test Gap" section below). Top-level Cesium module exports are available by default except
-for the reviewed denylist below. This report also inventories Promise-returning APIs discovered in
-`Source/Cesium.d.ts`, classifying each path as runtime-tested, a known runtime gap, an abstract
-base-class stub, network-blocked by design, or untested/uncovered.
+real QuickJS promise bridged via `ctx.newPromise()` + `executePendingJobs()`). Top-level Cesium
+module exports are available by default except for the reviewed denylist below. This report also
+inventories Promise-returning APIs discovered in `Source/Cesium.d.ts`, classifying each path as
+runtime-tested, a known runtime gap, an abstract base-class stub, network-blocked by design, or
+untested/uncovered.
 
 - Installed CesiumJS: **1.142.0**
 - Last reviewed CesiumJS: **1.142.0**
@@ -21,10 +20,10 @@ base-class stub, network-blocked by design, or untested/uncovered.
 - Guest value types: **7**
 - Promise-returning declaration paths discovered: **133**
 - Promise-returning paths using the dynamic bridge: **133**
-- Dynamically bridged paths exercised by runtime tests: **105**
-- Dynamically bridged paths with known runtime-test gaps: **7**
+- Dynamically bridged paths exercised by runtime tests: **110**
+- Dynamically bridged paths with known runtime-test gaps: **0**
 - Abstract base-class stubs excluded (not callable by design): **5**
-- Network-blocked Promise candidates excluded (not callable by design): **16**
+- Network-blocked Promise candidates excluded (not callable by design): **18**
 - Untested/uncovered dynamic Promise candidates: **0**
 
 ## Unsupported By Design
@@ -35,6 +34,7 @@ base-class stub, network-blocked by design, or untested/uncovered.
 - Top-level Cesium exports are available by default except those in blockedStaticExports; every nested property access still passes through blockedProperties.
 - `Resource.*` static methods (fetch/fetchJson/post/put/patch/delete/...) are explicitly blocked because unrestricted network access, including mutating HTTP verbs, is banned outright rather than restricted to a domain allowlist. See the `does not expose network-capable %s` tests in `cesium-code-sandbox.test.ts`.
 - `IonResource.*` (e.g. `fetchImage`/`fromAssetId`) is likewise explicitly blocked: `IonResource` extends `Resource` and fetches arbitrary, potentially credentialed Ion asset content over the network.
+- `TaskProcessor.*` (e.g. `scheduleTask`/`initWebAssemblyModule`) is unreachable by design: `TaskProcessor` is itself a blocked static export (it spins up real Web Workers to run arbitrary code/wasm, a code-execution escape vector), so `Cesium.TaskProcessor` always resolves `undefined` in the sandbox.
 
 ## Blocked Static Cesium Exports
 
@@ -84,8 +84,11 @@ top-level exports become available automatically under this policy.
 ## Runtime-Tested Dynamic Promise APIs
 
 These paths are exercised end-to-end through the generic host-handle bridge by
-`cesium-code-sandbox.test.ts`. The tests use deterministic Viewer doubles rather than network,
-Ion, WebGL, or browser-worker dependencies.
+`cesium-code-sandbox.test.ts`. Most tests use deterministic Viewer doubles with no network, Ion,
+WebGL, or browser-worker dependencies; a few (`GroundPrimitive`/`GroundPolylinePrimitive.
+initializeTerrainHeights`, `Transforms.preloadIcrfFixed`) instead monkey-patch the real
+`Resource.prototype.fetchJson` - the actual host-side network seam those APIs funnel through -
+so no real network request is ever made.
 
 - `ArcGISTiledElevationTerrainProvider.fromUrl`
 - `ArcGISTiledElevationTerrainProvider.requestTileGeometry`
@@ -136,6 +139,8 @@ Ion, WebGL, or browser-worker dependencies.
 - `GoogleStreetViewCubeMapPanoramaProvider.fromUrl`
 - `GpxDataSource.load`
 - `GridImageryProvider.requestImage`
+- `GroundPolylinePrimitive.initializeTerrainHeights`
+- `GroundPrimitive.initializeTerrainHeights`
 - `HeightmapTerrainData.upsample`
 - `I3SDataProvider.filterByAttributes`
 - `I3SDataProvider.fromUrl`
@@ -167,12 +172,15 @@ Ion, WebGL, or browser-worker dependencies.
 - `PinBuilder.fromMakiIconId`
 - `PinBuilder.fromUrl`
 - `QuantizedMeshTerrainData.upsample`
+- `Scene.clampToHeightMostDetailed`
+- `Scene.pickAsync`
 - `Scene.sampleHeightMostDetailed`
 - `SingleTileImageryProvider.fromUrl`
 - `SingleTileImageryProvider.requestImage`
 - `TileCoordinatesImageryProvider.requestImage`
 - `TileMapServiceImageryProvider.fromUrl`
 - `TimeDynamicImagery.getFromCache`
+- `Transforms.preloadIcrfFixed`
 - `UrlTemplateImageryProvider.pickFeatures`
 - `UrlTemplateImageryProvider.requestImage`
 - `VRTheWorldTerrainProvider.fromUrl`
@@ -195,17 +203,13 @@ Ion, WebGL, or browser-worker dependencies.
 
 ## Dynamic Promise Runtime Gaps
 
-These reachable paths were attempted with deterministic Viewer doubles but are not counted as
-covered because the current QuickJS Asyncify build can hang or crash while resolving them. Their
-tests remain visible as `test.todo` cases.
+These reachable paths are not blocked and would use the generic dynamic Promise bridge like any
+other case, but are not counted as runtime-covered because they ultimately depend on a real
+network fetch (`Resource.fetchJson` for a Cesium-bundled data asset) and/or Cesium-internal
+process-global memoized state that can't be faked deterministically alongside every other
+network-free case in this suite. Their tests remain visible as `test.todo` cases.
 
-- `GroundPolylinePrimitive.initializeTerrainHeights`
-- `GroundPrimitive.initializeTerrainHeights`
-- `Scene.clampToHeightMostDetailed`
-- `Scene.pickAsync`
-- `TaskProcessor.initWebAssemblyModule`
-- `TaskProcessor.scheduleTask`
-- `Transforms.preloadIcrfFixed`
+None currently - every reachable Promise-returning path with a genuine network/global-state dependency has a dedicated runtime test instead.
 
 ## Untested Dynamic Promise Candidates (Not Yet Covered)
 
@@ -261,6 +265,8 @@ inventory doesn't imply they are merely untested rather than deliberately blocke
 - `Resource.patch`
 - `Resource.post`
 - `Resource.put`
+- `TaskProcessor.initWebAssemblyModule`
+- `TaskProcessor.scheduleTask`
 
 ## Known Dynamic Promise Test Gap
 

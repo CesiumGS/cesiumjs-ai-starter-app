@@ -51,7 +51,18 @@ export const UNDEFINED_MARK = "__cesiumUndefined__";
  */
 export const DATE_MARK = "__cesiumSandboxDate__";
 
-/** Marker key identifying a small allowlist of guest-native scalar constructors. */
+/**
+ * Marker key identifying a small allowlist of bare constructor/class references crossing the
+ * sandbox boundary as plain *type-tag* arguments — never invoked by the guest itself, only ever
+ * handed to a host Cesium API that expects a type descriptor (e.g. `new
+ * Cesium.SampledProperty(Cesium.Cartesian3)`, whose `type` parameter must be a real `Packable`
+ * class like `Cartesian3`/`Color`/`Number` so it can call that class's static `pack`/`unpack`).
+ * Covers both guest-native scalar constructors (`Boolean`/`Number`/`String`) and the known Cesium
+ * *value*-type classes ({@link CESIUM_VALUE_TYPE_DEFINITIONS}) — the guest-side bundle's own
+ * `Cartesian3`/`Color`/etc. classes (see `guest-prelude-value-types.ts`) are real, guest-local
+ * function objects, not remote-proxy handles, so without this allowlist `__marshalArg__` can't
+ * tell them apart from an arbitrary (and disallowed) guest callback.
+ */
 export const NATIVE_CONSTRUCTOR_MARK = "__cesiumNativeConstructor__";
 
 const NATIVE_CONSTRUCTORS: Record<string, Function> = {
@@ -164,7 +175,9 @@ export class SandboxHandles {
       if (DATE_MARK in record) return new Date(record[DATE_MARK] as string);
       if (NATIVE_CONSTRUCTOR_MARK in record) {
         const name = record[NATIVE_CONSTRUCTOR_MARK] as string;
-        const constructor = NATIVE_CONSTRUCTORS[name];
+        const constructor =
+          NATIVE_CONSTRUCTORS[name] ??
+          CESIUM_VALUE_TYPE_DEFINITIONS.find((candidate) => candidate.name === name)?.constructor;
         if (!constructor) throw new Error(`Unsupported native constructor "${name}"`);
         return constructor;
       }

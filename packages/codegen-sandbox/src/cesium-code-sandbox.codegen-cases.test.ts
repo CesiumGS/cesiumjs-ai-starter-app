@@ -456,6 +456,28 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(outcome).toEqual({ success: true, result: "created" });
   });
 
+  test("cesiumjs-time-properties: passes a Cesium value-type class (Cartesian3) to Cesium.SampledProperty", async () => {
+    const viewer = fakeViewer();
+
+    // Regression test: `new Cesium.SampledProperty(Cesium.Cartesian3)` is the idiomatic pattern
+    // for a position-valued sampled property (`type` must be a real `Packable` class so the host
+    // can call its static `pack`/`unpack`). The guest-side `Cesium.Cartesian3` is a real,
+    // guest-local class from the value-type bundle, not a remote-proxy handle — previously
+    // indistinguishable from an arbitrary disallowed callback, so this threw "Guest callbacks
+    // cannot cross the Cesium sandbox boundary" even though nothing here is actually invoked as a
+    // callback. See the `NATIVE_CONSTRUCTOR_MARK` doc comment in `bindings/sandbox-handles.ts`.
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const property = new Cesium.SampledProperty(Cesium.Cartesian3);
+        property.addSample(Cesium.JulianDate.now(), new Cesium.Cartesian3(1, 2, 3));
+        return "created";
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: "created" });
+  });
+
   test("cesiumjs-interaction: explicitly rejects callbacks that cannot outlive the guest VM", async () => {
     const viewer = fakeViewer();
 
