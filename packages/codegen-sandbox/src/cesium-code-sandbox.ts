@@ -91,18 +91,81 @@ async function drainPendingHostWork(
 }
 
 /**
+ * Races `pending` against `deadline`, calling `ctx.runtime.executePendingJobs()` on every poll
+ * tick while waiting — both to give the QuickJS engine's interrupt handler repeated chances to
+ * notice `shouldInterruptAfterDeadline` has elapsed, AND (independently of whether the interrupt
+ * ever actually fires) to guarantee this function itself settles no later than `deadline` even if
+ * the engine is completely idle with nothing queued to run. See {@link evaluateWrappedCode}'s doc
+ * comment for why relying on the interrupt handler alone is not sufficient. `pending` is allowed to
+ * keep running in the background after a timeout "wins" the race — the caller's `finally` disposes
+ * the whole VM regardless, and nothing here awaits `pending` any further.
+ */
+function raceAgainstDeadline<T>(
+  ctx: QuickJSAsyncContext,
+  pending: Promise<T>,
+  deadline: number,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setInterval(() => {
+      if (settled) return;
+      try {
+        ctx.runtime.executePendingJobs();
+      } catch {
+        // Ignore — a failure here just means this poll tick didn't advance anything; the next
+        // tick (or the deadline check below) still governs when we give up.
+      }
+      if (Date.now() >= deadline) {
+        settled = true;
+        clearInterval(timer);
+        reject(new Error("Sandbox execution timed out waiting for the guest script to settle."));
+      }
+    }, 10);
+
+    pending.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearInterval(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearInterval(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
  * Evaluates the fully-wrapped guest script and resolves with its final, host-dumped return value.
  * See `code-sandbox-quickjs.ts` for why the explicit `executePendingJobs()` pump is required:
  * `resolvePromise`'s returned promise only settles once QuickJS's own job queue runs the `.then`
  * handler it attaches internally, which doesn't happen automatically just by awaiting host
  * promises.
+ *
+ * Every await here is wrapped in {@link raceAgainstDeadline}, not just the final settle: relying
+ * solely on `ctx.runtime`'s interrupt handler (`shouldInterruptAfterDeadline`, installed by the
+ * caller) is not sufficient on its own — it can only fire while the engine is actively executing
+ * bytecode/pending jobs. A guest script `await`ing a host-bridged Promise that never settles (a
+ * genuinely stalled call, or a test double stubbing one) can leave the engine fully idle with
+ * nothing queued to run, so `executePendingJobs()` has zero jobs to process and never gives the
+ * engine a chance to tick its interrupt check at all — this can stall not just the final
+ * `resolvePromise` wait but, depending on exactly which async host call the guest is blocked in,
+ * even the initial `evalCodeAsync` call itself, indefinitely, regardless of `timeoutMs`.
  */
-async function evaluateWrappedCode(ctx: QuickJSAsyncContext, wrapped: string): Promise<unknown> {
-  const evalResult = await ctx.evalCodeAsync(wrapped);
+async function evaluateWrappedCode(
+  ctx: QuickJSAsyncContext,
+  wrapped: string,
+  deadline: number,
+): Promise<unknown> {
+  const evalResult = await raceAgainstDeadline(ctx, ctx.evalCodeAsync(wrapped), deadline);
   const promiseHandle = ctx.unwrapResult(evalResult);
   const settlePromise = ctx.resolvePromise(promiseHandle);
   ctx.runtime.executePendingJobs();
-  const settleResult = await settlePromise;
+  const settleResult = await raceAgainstDeadline(ctx, settlePromise, deadline);
   promiseHandle.dispose();
   const resultHandle = ctx.unwrapResult(settleResult);
   const result = ctx.dump(resultHandle);
@@ -213,7 +276,7 @@ export async function runCesiumCodeInSandbox({
     const wrappedCode = buildWrappedCode(prelude, code);
     codeStartLine = wrappedCode.codeStartLine;
 
-    const result = await evaluateWrappedCode(ctx, wrappedCode.wrapped);
+    const result = await evaluateWrappedCode(ctx, wrappedCode.wrapped, deadline);
     await drainPendingHostWork(ctx, pendingWork, Date.now() + postRunDrainMs);
 
     logger.debug("Sandbox run completed successfully");
