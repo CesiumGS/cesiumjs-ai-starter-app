@@ -10,7 +10,7 @@ import { ENABLED_CESIUM_TOOLS } from "./enabled-tools.js";
  * Enabled-tools allowlist contract.
  *
  * `ENABLED_CESIUM_TOOLS` is the single source of truth for which tools this
- * sample app turns on, spanning two packages: `@cesium-ai/tools-cesium`'s
+ * sample app turns on, spanning two packages: `@cesium-ai/tools-schemas`'s
  * viewer tools (built into a `ToolSet` by `createCesiumTools`) and
  * `@cesium-ai/codegen-cesium`'s `executeCesiumCode` (built into its own
  * server-executed tool by `backend/src/tools/execute-cesium-code-tool.ts`,

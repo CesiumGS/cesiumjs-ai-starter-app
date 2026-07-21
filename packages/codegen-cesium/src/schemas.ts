@@ -5,7 +5,7 @@
  * description strings, so the frontend can import it to validate untrusted
  * tool-call args without pulling tool *definitions* (or this package's
  * `acorn`/model-calling machinery) into the client bundle. Mirrors
- * `@cesium-ai/tools-cesium`'s identical `schemas.ts` pattern.
+ * `@cesium-ai/tools-schemas`'s identical `schemas.ts` pattern.
  */
 export {
   executeCesiumCodeInputShape,

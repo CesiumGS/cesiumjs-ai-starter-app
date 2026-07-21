@@ -18,7 +18,7 @@ import {
  * As the Cesium tool catalogue grows, a host curates its surface by editing
  * this one array — add a name to expose a tool, remove it to retire it, and
  * both sides follow. We import only the schema-free `/names` subpaths (from
- * both `@cesium-ai/tools-cesium`, viewer tools, and `@cesium-ai/codegen-cesium`,
+ * both `@cesium-ai/tools-schemas`, viewer tools, and `@cesium-ai/codegen-cesium`,
  * the codegen-backed `executeCesiumCode` tool), so no tool definitions
  * (descriptions, Zod schemas) leak into the client bundle.
  *

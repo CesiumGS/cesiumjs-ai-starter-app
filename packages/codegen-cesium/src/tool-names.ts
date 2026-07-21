@@ -9,7 +9,7 @@
  * are not sensitive — they already appear in the tool-call payloads streamed
  * to the browser.
  *
- * Mirrors `@cesium-ai/tools-cesium`'s identical `tool-names.ts` pattern, kept
+ * Mirrors `@cesium-ai/tools-schemas`'s identical `tool-names.ts` pattern, kept
  * as a separate module (and package) because `executeCesiumCode` is not a
  * viewer-specific tool — unlike `flyTo`, it needs the codegen + AST
  * verification pipeline this package owns, not a live `Viewer` handed

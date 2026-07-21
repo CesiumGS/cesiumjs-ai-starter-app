@@ -1,6 +1,6 @@
 # Getting Started
 
-<img src="assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />
+<img src="../assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />
 
 This guide gets you from a fresh clone to a running CesiumJS globe with an AI chat panel
 that can fly the camera around on request.

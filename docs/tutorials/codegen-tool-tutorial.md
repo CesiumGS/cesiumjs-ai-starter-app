@@ -1,6 +1,6 @@
 # Tutorial: Using the Codegen Tool
 
-<img src="../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
+<img src="../../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
 
 This tutorial covers the `executeCesiumCode` tool provided by the [`@cesium-ai/codegen-cesium`](../packages/codegen-cesium/index.md) package. The tool lets users describe what they want to see on the globe in plain English. The backend translates that description into verified CesiumJS JavaScript, which the browser then executes against the live `Viewer`. This tutorial explains how to use the tool, what you can configure, and how to tune its behaviour.
 
@@ -197,12 +197,12 @@ recommended sandbox approach).
 
 ## 7. Quick reference
 
-| I want to…                                | Where to look                                                                     |
-| ----------------------------------------- | --------------------------------------------------------------------------------- |
-| Enable the tool                           | `shared/src/enabled-tools.ts` — add `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode` |
-| Disable the tool                          | Same file — remove the name                                                       |
-| Change the number of skills in the prompt | `CODEGEN_MAX_SKILLS` env var or `maxSkills` in `createExecuteCesiumCodeTool`      |
-| Change how many retries are allowed       | `CODEGEN_MAX_ATTEMPTS` env var or `maxAttempts` in `createExecuteCesiumCodeTool`  |
-| Understand how the pipeline works         | [How Codegen Works](codegen-pipeline.md)                                          |
+| I want to…                                | Where to look                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| Enable the tool                           | `shared/src/enabled-tools.ts` — add `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`    |
+| Disable the tool                          | Same file — remove the name                                                          |
+| Change the number of skills in the prompt | `CODEGEN_MAX_SKILLS` env var or `maxSkills` in `createExecuteCesiumCodeTool`         |
+| Change how many retries are allowed       | `CODEGEN_MAX_ATTEMPTS` env var or `maxAttempts` in `createExecuteCesiumCodeTool`     |
+| Understand how the pipeline works         | [How Codegen Works](codegen-pipeline.md)                                             |
 | Review the security threat model          | [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) |
 | Understand the architecture               | [Codegen Architecture](../architectures/architecture-codegen.md)                     |
