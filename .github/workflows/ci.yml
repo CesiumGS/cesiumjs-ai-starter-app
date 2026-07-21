@@ -80,5 +80,9 @@ jobs:
       - name: Run unit and integration tests
         run: npm test
 
+  docs:
+    name: Docs strict build
+    uses: ./.github/workflows/docs-build-template.yml
+
   # End-to-end (Playwright) tests are intentionally not run in this CI workflow.
   # Run them via the release pipeline or locally with `npm run test:e2e`.

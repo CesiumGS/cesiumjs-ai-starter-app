@@ -10,7 +10,7 @@ For the component architecture and current implementation status of each gate, s
 
 **Current status:** The pipeline implements Gate 1 (server-side static AST verification).
 Gate 2 (browser-side sandbox isolation) is not yet implemented — verified code is returned
-to the client but not automatically executed against the Viewer.
+to the client and executed after user approval, without sandbox isolation.
 
 ---
 
@@ -87,7 +87,7 @@ flowchart TB
 | **2** | MITM Request Modification  | User → Server (request on the wire)        | [§2](#2-mitm-request-modification)  |
 | **3** | LLM Prompt Injection       | User intent → LLM → generated code         | [§3](#3-llm-prompt-injection)       |
 | **4** | Validation Bypass          | AST verifier (`verifyCesiumCode`)          | [§4](#4-validation-bypass)          |
-| **5** | Resource Exhaustion / DoS  | Browser sandbox execution                  | [§5](#5-resource-exhaustion--dos)   |
+| **5** | Resource Exhaustion / DoS  | Browser sandbox execution                  | [§5](#5-resource-exhaustion-dos)    |
 | **6** | Data Exfiltration          | Browser context (user session)             | [§6](#6-data-exfiltration)          |
 | **7** | Supply Chain               | Dependencies across server, LLM, sandbox   | [§7](#7-supply-chain)               |
 

@@ -17,7 +17,7 @@ See [Getting Started](https://cesiumgs.github.io/cesiumjs-ai-starter-app/getting
 
 ## Tool registry
 
-The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (defined in [`shared/`](../shared)) via `createCesiumTools`, so the model is only ever offered the tools this app enables. The `executeCesiumCode` tool generates and AST-verifies CesiumJS snippets server-side; the frontend receives verified code and executes it against the live Viewer.
+The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (defined in [`shared/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/shared)) via `createCesiumTools`, so the model is only ever offered the tools this app enables. The `executeCesiumCode` tool generates and AST-verifies CesiumJS snippets server-side; the frontend receives verified code and executes it against the live Viewer.
 
 See the [Cesium Viewer Tools Tutorial](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/cesium-viewer-tools-tutorial/) for the full walkthrough.
 

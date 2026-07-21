@@ -1,6 +1,6 @@
 # Tutorial: Using the Codegen Tool
 
-<img src="../../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
+<img src="../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
 
 This tutorial covers the `executeCesiumCode` tool provided by the [`@cesium-ai/codegen-cesium`](../packages/codegen-cesium/index.md) package. The tool lets users describe what they want to see on the globe in plain English. The backend translates that description into verified CesiumJS JavaScript, which the browser then executes against the live `Viewer`. This tutorial explains how to use the tool, what you can configure, and how to tune its behaviour.
 
@@ -187,12 +187,11 @@ The tool's `execute` handler in [`backend/src/tools/execute-cesium-code-tool.ts`
 } // generation failed or all retries were exhausted
 ```
 
-The browser receives this as a tool result in the SSE stream. Your frontend executor is
-responsible for actually running `code` against the live `Viewer`. The starter app currently
-returns the code to the model as a confirmation — browser-side execution of the generated code
-is planned as a follow-up step (see the
-[Security Considerations](../Codegen-tool-security-attacks-vectors.md) document for the
-recommended sandbox isolation approach before enabling direct execution).
+The browser receives this as a tool result in the SSE stream. The starter app validates the
+result shape and then executes the verified `code` against the live `Viewer` after user
+approval. This execution currently has no dedicated sandbox isolation boundary (see the
+[Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) document for the
+recommended sandbox approach).
 
 ---
 
@@ -205,5 +204,5 @@ recommended sandbox isolation approach before enabling direct execution).
 | Change the number of skills in the prompt | `CODEGEN_MAX_SKILLS` env var or `maxSkills` in `createExecuteCesiumCodeTool`      |
 | Change how many retries are allowed       | `CODEGEN_MAX_ATTEMPTS` env var or `maxAttempts` in `createExecuteCesiumCodeTool`  |
 | Understand how the pipeline works         | [How Codegen Works](codegen-pipeline.md)                                          |
-| Review the security threat model          | [Security Considerations](../Codegen-tool-security-attacks-vectors.md)            |
-| Understand the architecture               | [Codegen Architecture](../architecture-codegen.md)                                |
+| Review the security threat model          | [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) |
+| Understand the architecture               | [Codegen Architecture](../architectures/architecture-codegen.md)                     |

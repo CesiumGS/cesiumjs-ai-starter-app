@@ -1,0 +1,33 @@
+name: Docs Build Template
+
+on:
+  workflow_call:
+    inputs:
+      upload_pages_artifact:
+        description: Upload the built site as a GitHub Pages artifact.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install MkDocs
+        run: pip install "mkdocs>=1.6,<2" "mkdocs-material>=9.7,<10" "mkdocs-include-markdown-plugin>=7,<8"
+
+      - name: Build
+        run: mkdocs build --strict
+
+      - name: Upload Pages artifact
+        if: ${{ inputs.upload_pages_artifact }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site

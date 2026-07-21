@@ -46,7 +46,7 @@ Never import the root from client code — it pulls in `acorn`, `ai`, the `@cesi
 - **GATE 2 — Runtime isolation (frontend):** A sandboxed execution context with memory/deadline limits and a proxied Viewer surface runs the verified code. This repo's sample app does not yet have a frontend sandbox wired up; a browser-side execution boundary is planned.
 - **Neither gate substitutes for the other.** Verified output is still attacker-influenceable model output until the frontend validates and executes it safely.
 
-See [Codegen Security](https://cesiumgs.github.io/cesiumjs-ai-starter-app/codegen-tool-security-attacks-vectors/) for a full threat model.
+See [Codegen Security](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/codegen-tool-security-attacks-vectors/) for a full threat model.
 
 ## Skills data
 

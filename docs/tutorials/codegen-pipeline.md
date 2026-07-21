@@ -52,23 +52,9 @@ file with YAML frontmatter (`name`, `description`) and a Markdown body of Cesium
 guidance. The loader caches the full skill set after first load so subsequent calls pay no
 I/O cost.
 
-**14 available domains:**
-
-| Domain               | Topics                                                |
-| -------------------- | ----------------------------------------------------- |
-| Viewer/Camera        | Camera navigation, flyTo, lookAt, bounding spheres    |
-| Entities/DataSources | Points, polylines, polygons, labels, CZML, GeoJSON    |
-| 3D Tiles             | Tileset loading, styling, feature picking             |
-| Imagery              | Imagery layers, providers, alpha blending             |
-| Terrain/Environment  | Terrain providers, atmosphere, fog, sky               |
-| Primitives           | Geometry instances, appearances, ground primitives    |
-| Materials/Shaders    | Material properties, fabric materials                 |
-| Custom Shaders       | Vertex/fragment shaders, uniform maps                 |
-| Interaction          | Picking, mouse/keyboard handlers, screen-space events |
-| Models/Particles     | glTF models, particle systems                         |
-| Spatial Math         | Cartesian math, transforms, coordinate conversions    |
-| Time/Animation       | JulianDate, Clock, animation API                      |
-| Core Utilities       | Scene, Globe, Canvas, render loop                     |
+The available domains come directly from the installed
+[`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) package at runtime, so
+this set changes as that dependency evolves.
 
 `CODEGEN_MAX_SKILLS` (default `1`) controls how many top-ranked domains are passed forward.
 Increasing it injects broader context at the cost of a longer prompt.
@@ -239,5 +225,5 @@ into this repository.
 ## Related documents
 
 - [Codegen Tool Tutorial](codegen-tool-tutorial.md) — configuration, env vars, enabling/disabling the tool.
-- [Codegen Architecture](../architecture-codegen.md) — how codegen fits into the wider system.
-- [Security Considerations](../Codegen-tool-security-attacks-vectors.md) — threat model and mitigations for the generation pipeline.
+- [Codegen Architecture](../architectures/architecture-codegen.md) — how codegen fits into the wider system.
+- [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) — threat model and mitigations for the generation pipeline.

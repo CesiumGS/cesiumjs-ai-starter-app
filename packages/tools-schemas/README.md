@@ -11,7 +11,7 @@
 | Animation | `animationCreate`, `animationControl`, `animationRemove`, `animationListActive`, `animationUpdatePath`, `animationCameraTracking`, `clockControl`, `globeSetLighting`                                                                                                  |
 | Imagery   | `imageryAdd`, `imageryRemove`, `imageryList`                                                                                                                                                                                                                           |
 
-See the [full Tool Catalogue](../../docs/packages/tools-schemas/tools.md) for per-tool details.
+See the [full Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) for per-tool details.
 
 ## Usage
 

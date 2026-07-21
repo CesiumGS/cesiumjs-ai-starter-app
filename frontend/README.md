@@ -21,7 +21,7 @@
 
 The frontend imports only tool **names** (`/names`) and structural **shapes** (`/schemas`) from shared packages — never model-facing descriptions, which stay backend-only.
 
-`executeCesiumCode` is handled via `handleServerToolResult`: the backend streams AST-verified code, the user approves, and `runApprovedCode` executes it via `new Function("viewer", "Cesium", code)`. See the [backend](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/backend/) for the verification pipeline.
+`executeCesiumCode` is handled via `handleServerToolResult`: the backend streams AST-verified code, the user approves, and `executeApprovedCesiumCode` executes it via `new Function("viewer", "Cesium", code)`. See the [backend](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/backend/) for the verification pipeline.
 
 ## Environment
 

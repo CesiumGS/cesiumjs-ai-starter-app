@@ -6,7 +6,7 @@ A ready-to-run starter pairing a [CesiumJS](https://cesium.com/platform/cesiumjs
 
 ---
 
-[**Getting Started**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/getting-started/) &nbsp;·&nbsp; [**Architecture**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architecture/) &nbsp;·&nbsp; [**Packages**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/) &nbsp;·&nbsp; [**Viewer Tools Tutorial**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/cesium-viewer-tools-tutorial/)
+[**Getting Started**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/getting-started/) &nbsp;·&nbsp; [**Architecture**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/architecture/) &nbsp;·&nbsp; [**Packages**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/) &nbsp;·&nbsp; [**Viewer Tools Tutorial**](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/cesium-viewer-tools-tutorial/)
 
 ---
 
@@ -52,7 +52,7 @@ Type a place into the chat panel — e.g. **`fly to Paris`** — and the camera 
 
 For richer requests like **`drop a pin at the Eiffel Tower`**, the app routes through `executeCesiumCode`: the chat panel shows you the assistant's intent and waits for you to **approve or reject** before any code is generated (human-in-the-loop). The backend then generates and AST-verifies a CesiumJS snippet for your intent.
 
-If no provider key is configured, the globe still runs as a plain viewer with a "AI is not configured" banner.
+If no provider key is configured, the globe still runs as a plain viewer and the chat panel is omitted.
 
 ---
 
@@ -80,7 +80,7 @@ Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://de
 | [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/) | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                    |
 | [`@cesium-ai/sample-config`](shared/)                   | App-level tool allowlist and shared `flyTo` args contract                                                                                                           |
 
-See [Architecture](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architecture/) for more detail.
+See [Architecture](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/architecture/) for more detail.
 
 ---
 

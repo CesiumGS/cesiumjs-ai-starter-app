@@ -1,9 +1,9 @@
 # Codegen Architecture
 
 This document describes the architecture of the `executeCesiumCode` code generation system:
-where it lives in the overall component model, how its internal pieces fit together, and which
-security gates are in place. For the threat model and recommended mitigations, see the
-[Security Considerations](Codegen-tool-security-attacks-vectors.md) document.
+where it lives in the overall component model, how its internal pieces fit together, and what
+kind of security gates are in place. For the threat model and recommended mitigations, see the
+[Security Considerations](codegen-tool-security-attacks-vectors.md) document.
 
 ---
 
@@ -110,7 +110,7 @@ packages/codegen-cesium/
 
 ### Three-subpath export pattern
 
-Like `@cesium-ai/tools-cesium`, the codegen package uses a three-subpath export to enforce
+Like `@cesium-ai/tools-schemas`, the codegen package uses a three-subpath export to enforce
 the server-only boundary for tool descriptions:
 
 | Subpath                             | Exports                                              | Consumer         |
@@ -173,9 +173,9 @@ infinite loops. Unverified code is never returned as the verified result. The LL
 and raw skill bodies never cross the Backend → Browser boundary — both stay server-side.
 
 **Gate 2 — Browser-side Sandbox Isolation** is not yet implemented. Currently, verified
-code is returned to the chat panel but not automatically executed against the `Viewer`.
-Enabling execution without Gate 2 means relying entirely on server-side static analysis.
-The [Security Considerations](Codegen-tool-security-attacks-vectors.md) document covers the
+code is returned to the chat panel and executed directly against the `Viewer` after user
+approval, without a dedicated sandbox isolation boundary.
+The [Security Considerations](codegen-tool-security-attacks-vectors.md) document covers the
 recommended sandbox options (QuickJS WASM, iframe sandbox, and the recommended hybrid
 approach) before Gate 2 is added.
 
@@ -192,6 +192,6 @@ approach) before Gate 2 is added.
 ## Related documents
 
 - [Architecture](architecture.md) — overall system component model and sequence diagrams.
-- [Codegen Tool Tutorial](tutorials/codegen-tool-tutorial.md) — how to use and configure the tool.
-- [How Codegen Works](tutorials/codegen-pipeline.md) — step-by-step pipeline walkthrough with diagrams.
-- [Security Considerations](Codegen-tool-security-attacks-vectors.md) — full threat model, attack vectors, and recommended mitigations for the generation pipeline.
+- [Codegen Tool Tutorial](../tutorials/codegen-tool-tutorial.md) — how to use and configure the tool.
+- [How Codegen Works](../tutorials/codegen-pipeline.md) — step-by-step pipeline walkthrough with diagrams.
+- [Security Considerations](codegen-tool-security-attacks-vectors.md) — full threat model, attack vectors, and recommended mitigations for the generation pipeline.

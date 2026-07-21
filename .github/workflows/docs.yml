@@ -1,11 +1,25 @@
 name: Deploy Docs
 
 on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+      - "backend/README.md"
+      - "frontend/README.md"
+      - "packages/*/README.md"
+      - "shared/README.md"
   push:
     branches: [main]
     paths:
       - "docs/**"
       - "mkdocs.yml"
+      - "README.md"
+      - "backend/README.md"
+      - "frontend/README.md"
+      - "packages/*/README.md"
+      - "shared/README.md"
   workflow_dispatch:
 
 permissions:
@@ -20,26 +34,13 @@ concurrency:
 jobs:
   build:
     name: Build docs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
-      - name: Install MkDocs
-        run: pip install "mkdocs>=1.6,<2" "mkdocs-material>=9.7,<10" "mkdocs-include-markdown-plugin>=7,<8"
-
-      - name: Build
-        run: mkdocs build --strict
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
+    uses: ./.github/workflows/docs-build-template.yml
+    with:
+      upload_pages_artifact: true
 
   deploy:
     name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

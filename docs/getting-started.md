@@ -1,6 +1,6 @@
 # Getting Started
 
-<img src="../assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />
+<img src="assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />
 
 This guide gets you from a fresh clone to a running CesiumJS globe with an AI chat panel
 that can fly the camera around on request.
@@ -88,7 +88,7 @@ npm run dev
 - Globe (with HMR): **http://localhost:5173**
 - Chat API: **http://localhost:3001**
 
-`npm run dev` first builds the workspace packages (`tools-cesium`, `sample-config`,
+`npm run dev` first builds the workspace packages (`tools-schemas`, `sample-config`,
 `server`) once, then runs all five dev processes concurrently (three packages in watch
 mode, plus the frontend and backend dev servers) — see the `dev` script in the root
 [`package.json`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/package.json).
@@ -114,7 +114,7 @@ docker compose ps                                 # both services should show "h
 
 ## Next steps
 
-- Read [`docs/architecture.md`](architecture.md) for how the pieces fit together, request
+- Read [`docs/architectures/architecture.md`](architectures/architecture.md) for how the pieces fit together, request
   flow, and deployment topology.
 - Read [`docs/packages/index.md`](packages/index.md) for what each workspace package does and how they
   depend on each other.

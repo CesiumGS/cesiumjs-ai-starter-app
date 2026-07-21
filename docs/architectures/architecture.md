@@ -54,8 +54,8 @@ MCP-backed tools would run entirely server-side and never stream as client tool 
   inside a tool's `name` or `description` field to manipulate the model's behaviour
   without the user's knowledge; keeping the tool registry server-only prevents a
   compromised client from injecting or replacing tool definitions. See
-  [`docs/packages/index.md`](packages/index.md) for how
-  [`@cesium-ai/tools-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-cesium)
+  [`docs/packages/index.md`](../packages/index.md) for how
+  [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas)
   splits its exports to enforce that boundary at the module level.
 - **CORS restrictions on MCP servers** — most MCP servers do not set permissive
   `Access-Control-Allow-Origin` headers, so browser `fetch` calls to them are blocked by
@@ -115,6 +115,6 @@ Key points this diagram makes explicit:
 
 ## Related documents
 
-- [Getting Started](getting-started.md) — install and run the app.
-- [Packages](packages/index.md) — what each workspace package is responsible for.
-- [Cesium Viewer Tools Tutorial](tutorials/cesium-viewer-tools-tutorial.md) — how the viewer tool system works, and how to add/remove a tool.
+- [Getting Started](../getting-started.md) — install and run the app.
+- [Packages](../packages/index.md) — what each workspace package is responsible for.
+- [Cesium Viewer Tools Tutorial](../tutorials/cesium-viewer-tools-tutorial.md) — how the viewer tool system works, and how to add/remove a tool.

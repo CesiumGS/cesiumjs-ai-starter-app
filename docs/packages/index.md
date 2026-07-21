@@ -1,7 +1,7 @@
 # Workspace Packages
 
 This repo is an npm workspace monorepo. Each workspace is documented in its own section below.
-See [Architecture](../architecture.md) for how the pieces fit together at runtime.
+See [Architecture](../architectures/architecture.md) for how the pieces fit together at runtime.
 
 ## Workspace map
 
@@ -62,9 +62,9 @@ Because of the graph above, packages must be built before the apps that depend o
 ## Packages
 
 - [tools-schemas](tools-schemas/index.md) — CesiumJS viewer tool library
-- [codegen-cesium](../../packages/codegen-cesium/README.md) — intent-to-code generation pipeline
-- [server](../../packages/server/README.md) — Express chat router and agent loop
-- [chat-element](../../packages/chat-element/README.md) — React chat panel component
-- [sample-config](../../shared/README.md) — this app's tool selection and config
-- [backend](../../backend/README.md) — backend app (Node/Express)
-- [frontend](../../frontend/README.md) — frontend app (Vite/React)
+- [codegen-cesium](codegen-cesium/index.md) — intent-to-code generation pipeline
+- [server](server/index.md) — Express chat router and agent loop
+- [chat-element](chat-element/index.md) — React chat panel component
+- [sample-config](sample-config/index.md) — this app's tool selection and config
+- [backend](backend.md) — backend app (Node/Express)
+- [frontend](frontend.md) — frontend app (Vite/React)
