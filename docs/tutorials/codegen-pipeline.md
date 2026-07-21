@@ -52,9 +52,7 @@ file with YAML frontmatter (`name`, `description`) and a Markdown body of Cesium
 guidance. The loader caches the full skill set after first load so subsequent calls pay no
 I/O cost.
 
-The available domains come directly from the installed
-[`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) package at runtime, so
-this set changes as that dependency evolves.
+The current skill domains are:
 
 {%
   include-markdown "../generated/cesiumjs-skills-table.md"
