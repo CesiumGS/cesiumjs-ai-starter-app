@@ -30,15 +30,24 @@ export function ToolCard({
   isPendingApproval,
   onApprove,
   onReject,
+  codeResultToolName,
 }: {
   invocation: ToolInvocation;
   isPendingApproval: boolean;
   onApprove?: () => void;
   onReject?: () => void;
+  /**
+   * Tool name that gets the dedicated code/error rendering (see
+   * {@link ExecuteCesiumCodeResult} and `ToolResultErrorPanel` below) instead
+   * of the generic result view.
+   * Omitted means no tool call gets this special-cased treatment.
+   */
+  codeResultToolName?: string;
 }) {
   const argsText = JSON.stringify(invocation.args, null, 2);
   const hasResult = invocation.state === "result" && invocation.result !== undefined;
-  const isCodeResult = hasResult && invocation.toolName === "executeCesiumCode";
+  const isCodeResult =
+    hasResult && codeResultToolName !== undefined && invocation.toolName === codeResultToolName;
   const resultText = hasResult && !isCodeResult ? formatToolPayload(invocation.result) : "";
   const generationError =
     isCodeResult && invocation.result && typeof invocation.result === "object"
@@ -132,10 +141,7 @@ export function ToolCard({
  * — rather than folded into the tool card's result output — so either kind of
  * failure reads as clearly distinct from a successful tool call, similar to
  * how a top-level `error-text` message bubble is visually separated from a
- * normal assistant message. Previously only `executionError` got this
- * treatment, which made a verification failure look like a plain/successful
- * result — both are equally failures and now share the same critical
- * styling, distinguished only by `title`/`testId`.
+ * normal assistant message.
  */
 function ToolResultErrorPanel({
   testId,

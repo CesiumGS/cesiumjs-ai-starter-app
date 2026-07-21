@@ -9,9 +9,12 @@ export type { PendingApprovalHandlers } from "./ToolCard";
 export function MessageItem({
   message,
   approval,
+  codeResultToolName,
 }: {
   message: Message;
   approval?: PendingApprovalHandlers;
+  /** Forwarded straight through to {@link ToolCard} — see its prop doc. */
+  codeResultToolName?: string;
 }) {
   const isUser = message.role === "user";
   const isError = message.error === true;
@@ -42,6 +45,7 @@ export function MessageItem({
           isPendingApproval={approval?.pendingApprovalToolCallId === inv.toolCallId}
           onApprove={approval?.onApprove}
           onReject={approval?.onReject}
+          codeResultToolName={codeResultToolName}
         />
       ))}
     </div>

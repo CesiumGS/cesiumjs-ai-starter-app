@@ -101,6 +101,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       apiEndpoint={config.chatApiEndpoint}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
+      codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}
     />
   );
 }

@@ -5,8 +5,7 @@
 // resolve/run inside the QuickJS guest sandbox).
 //
 // These are pure, side-effect-free math/data classes with no WebGL/DOM/network dependency, so
-// running the *real* CesiumJS implementation inside the guest (instead of `guest-prelude-value-
-// types.ts`'s previous hand-reimplementation) removes an entire class of "the model used a real
+// running the *real* CesiumJS implementation inside the guest removes an entire class of "the model used a real
 // Cesium API this hand-rolled version doesn't cover" gaps (e.g. the full named-CSS-color table,
 // exact geodetic math, `Color.fromHsl`, ...) at the cost of needing to regenerate this file
 // whenever the `cesium` dependency is upgraded.

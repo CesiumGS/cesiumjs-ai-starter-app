@@ -4,7 +4,6 @@ import { createProxiedViewer } from "./guarded-viewer-proxy.js";
 import { buildCesiumHostBridgeGuestPrelude } from "./guest-prelude-host-bridge.js";
 import { buildCesiumStaticFallbackGuestPrelude } from "./guest-prelude-static-fallback.js";
 import { buildCesiumValueTypeGuestPrelude } from "./guest-prelude-value-types.js";
-import { buildViewerAsyncMethodGuestPrelude } from "./guest-prelude-viewer-async.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
 import { BLOCKED_STATIC_CESIUM_EXPORTS } from "./capabilities-registry.js";
 
@@ -30,6 +29,15 @@ export function buildCesiumGuestPrelude(
     buildCesiumValueTypeGuestPrelude(),
     buildCesiumHostBridgeGuestPrelude(),
     buildCesiumStaticFallbackGuestPrelude(staticCesiumHandleId),
-    buildViewerAsyncMethodGuestPrelude(viewerHandleId),
+    // The guest's live `viewer` binding: a plain `__remoteProxy__` wrapping the live Viewer's root
+    // handle. `Viewer.prototype.flyTo`/`zoomTo` are genuinely Promise-returning, but need no
+    // special-casing here -- the generic remote-proxy `apply` trap (`guest-prelude-host-bridge.ts`)
+    // already bridges any Promise-returning call result back to the guest transparently via a real
+    // `ctx.newPromise()` (see `registerHostApply` in `host-bridge.ts`), the same mechanism already
+    // used for e.g. `viewer.dataSources.add(...)`. (An earlier design routed `flyTo`/`zoomTo`
+    // guest-side through QuickJS's Asyncify mechanism instead, which reproducibly crashed the
+    // interpreter with a native `free_zero_refcount` assertion failure -- removed in favor of this
+    // already-safe generic path.)
+    `const viewer = __remoteProxy__(${JSON.stringify(viewerHandleId)});`,
   ].join("\n");
 }

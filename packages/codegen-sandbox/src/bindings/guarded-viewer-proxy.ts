@@ -183,6 +183,11 @@ export function createProxiedViewer(
  */
 function createProxiedCamera(camera: object): unknown {
   return createGuardedProxy(camera, {
+    // Real Cesium defines `positionCartographic` as a getter-only accessor (see
+    // `Camera.js`'s `Object.defineProperties` block) that calls its internal `updateMembers(this)`
+    // recompute on every read before returning `_positionCartographic` -- so this must stay a live
+    // `Reflect.get` at call time (not a value snapshotted once), or `getPositionCartographic()`
+    // would return stale data instead of triggering that recompute.
     synthetic: {
       getPositionCartographic: (target) => () => Reflect.get(target, "positionCartographic"),
     },

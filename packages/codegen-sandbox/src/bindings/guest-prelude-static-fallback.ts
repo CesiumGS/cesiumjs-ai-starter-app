@@ -23,8 +23,7 @@
  * underscore-prefixed internal) remains blocked exactly as it would on the `viewer` itself.
  *
  * Must be evaluated after `buildCesiumValueTypeGuestPrelude` (needs the `Cesium` binding to
- * reassign) and `buildCesiumHostBridgeGuestPrelude` (needs `__remoteProxy__`), and before
- * `buildViewerAsyncMethodGuestPrelude`.
+ * reassign) and `buildCesiumHostBridgeGuestPrelude` (needs `__remoteProxy__`).
  */
 import { extractFunctionBody } from "./function-source.js";
 

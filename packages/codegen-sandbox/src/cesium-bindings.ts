@@ -33,5 +33,3 @@ export { buildCesiumHostBridgeGuestPrelude } from "./bindings/guest-prelude-host
 export { buildCesiumValueTypeGuestPrelude } from "./bindings/guest-prelude-value-types.js";
 
 export { buildCesiumStaticFallbackGuestPrelude } from "./bindings/guest-prelude-static-fallback.js";
-
-export { buildViewerAsyncMethodGuestPrelude } from "./bindings/guest-prelude-viewer-async.js";
