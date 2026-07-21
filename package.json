@@ -20,6 +20,7 @@
     "typecheck:test": "npm run typecheck:test -w @cesium-ai/tools-schemas -w @cesium-ai/sample-config -w @cesium-ai/codegen-cesium -w @cesium-ai/server -w @cesium-ai/chat-element -w backend -w frontend",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "docs:generate:skills-table": "node ./docs/scripts/generate-cesiumjs-skills-table.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

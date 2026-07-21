@@ -9,6 +9,7 @@ on:
       - "backend/README.md"
       - "frontend/README.md"
       - "packages/*/README.md"
+      - "packages/codegen-cesium/package.json"
       - "shared/README.md"
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - "backend/README.md"
       - "frontend/README.md"
       - "packages/*/README.md"
+      - "packages/codegen-cesium/package.json"
       - "shared/README.md"
   workflow_dispatch:
 

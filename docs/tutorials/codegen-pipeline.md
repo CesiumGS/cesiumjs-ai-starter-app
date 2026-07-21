@@ -42,7 +42,7 @@ returns the top-N `CesiumSkill` objects whose score exceeds a minimum threshold.
 ```
 Intent: "add a polygon over France"
          ↓
-BM25 ranking against 14 skill domains
+BM25 ranking against skill domains
          ↓
 Top match: Entities/DataSources (score > 1.0)
 ```
@@ -55,6 +55,10 @@ I/O cost.
 The available domains come directly from the installed
 [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) package at runtime, so
 this set changes as that dependency evolves.
+
+{%
+  include-markdown "../generated/cesiumjs-skills-table.md"
+%}
 
 `CODEGEN_MAX_SKILLS` (default `1`) controls how many top-ranked domains are passed forward.
 Increasing it injects broader context at the cost of a longer prompt.
