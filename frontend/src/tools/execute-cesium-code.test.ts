@@ -1,29 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Viewer } from "cesium";
-import {
-  executeApprovedCesiumCode,
-  handleExecuteCesiumCodeResult,
-  isExecuteCesiumCodeTool,
-  waitForRenderError,
-} from "./execute-cesium-code";
+import { executeApprovedCesiumCode, handleExecuteCesiumCodeResult } from "./execute-cesium-code";
 
 /**
  * Unit tests for the client-side half of the `executeCesiumCode` tool.
  * `executeApprovedCesiumCode` runs server-verified snippets through the
  * QuickJS-WASM sandbox, followed by the result validation gate.
+ *
+ * See also `execute-cesium-code-result.test.ts` (`isExecuteCesiumCodeTool`) and
+ * `render-error-watch.test.ts` (standalone `waitForRenderError` behavior) — this file only covers
+ * `waitForRenderError`'s *integration* with `executeApprovedCesiumCode` below.
  */
-
-describe("isExecuteCesiumCodeTool", () => {
-  it("returns true for the exact tool name", () => {
-    expect(isExecuteCesiumCodeTool("executeCesiumCode")).toBe(true);
-  });
-
-  it("returns false for any other tool name", () => {
-    expect(isExecuteCesiumCodeTool("flyTo")).toBe(false);
-    expect(isExecuteCesiumCodeTool("")).toBe(false);
-    expect(isExecuteCesiumCodeTool("executecesiumcode")).toBe(false);
-  });
-});
 
 describe("executeApprovedCesiumCode", () => {
   it("runs the snippet against the given viewer and returns null on success", async () => {
@@ -189,40 +176,6 @@ describe("executeApprovedCesiumCode", () => {
         "partial scene changes also caused a rendering error: invalid partial scene state",
       );
       expect(fakeViewer.useDefaultRenderLoop).toBe(true);
-    });
-
-    it("handles a non-Error renderError value", async () => {
-      const renderError = fakeRenderErrorEvent();
-      const fakeViewer = {
-        scene: { renderError },
-        useDefaultRenderLoop: false,
-      } as unknown as Viewer;
-
-      const resultPromise = waitForRenderError(fakeViewer, 1000);
-      renderError.emit("plain string error");
-
-      expect(await resultPromise).toBe("plain string error");
-    });
-
-    it("resolves undefined (no false positive) once the watch window elapses with no error", async () => {
-      vi.useFakeTimers();
-      try {
-        const renderError = fakeRenderErrorEvent();
-        const fakeViewer = { scene: { renderError } } as unknown as Viewer;
-
-        const resultPromise = waitForRenderError(fakeViewer, 1000);
-        await vi.advanceTimersByTimeAsync(1000);
-
-        expect(await resultPromise).toBeUndefined();
-      } finally {
-        vi.useRealTimers();
-      }
-    });
-
-    it("resolves immediately without waiting when the viewer has no scene.renderError", async () => {
-      const fakeViewer = {} as Viewer;
-
-      expect(await waitForRenderError(fakeViewer)).toBeUndefined();
     });
   });
 });

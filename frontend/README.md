@@ -11,8 +11,10 @@ src/
 │   ├── CesiumGlobe.tsx          # CesiumJS Viewer lifecycle wrapper
 │   └── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
 ├── tools/
-│   ├── camera.ts                 # flyToLocation — client-side flyTo executor
-│   └── execute-cesium-code.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
+│   ├── camera.ts                       # flyToLocation — client-side flyTo executor
+│   ├── execute-cesium-code-result.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
+│   ├── render-error-watch.ts           # waitForRenderError — delayed render-loop crash detection
+│   └── execute-cesium-code.ts          # Sandbox execution (executeApprovedCesiumCode) + orchestration (handleExecuteCesiumCodeResult)
 ├── utils/
 │   ├── cesium-loader.ts          # Viewer initialization (terrain, imagery, defaults)
 │   └── config.ts                 # Reads VITE_* env vars (Ion token, chat API base URL)

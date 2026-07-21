@@ -123,18 +123,14 @@ export class ChatClient {
       return;
     }
 
-    if (!response.ok) {
-      this.isLoading = false;
-      this.emitError(await describeError(response, this.api));
-      return;
-    }
-
     // A 200 response that is an HTML page (rather than the chat stream) almost
     // always means the request never reached the backend — e.g. the frontend
     // points `/api/chat` at its own dev server, which answers with the SPA
     // index.html. Parsing that as a stream would silently yield nothing, so we
-    // surface it as an error instead of failing quietly.
-    if ((response.headers.get("content-type") ?? "").includes("text/html")) {
+    // treat it the same as a non-OK response: surface it as an error instead
+    // of failing quietly.
+    const isHtmlResponse = (response.headers.get("content-type") ?? "").includes("text/html");
+    if (!response.ok || isHtmlResponse) {
       this.isLoading = false;
       this.emitError(await describeError(response, this.api));
       return;
@@ -535,14 +531,7 @@ export class ChatClient {
    * (e.g., sandbox execution failures).
    */
   reportError(errorMessage: string) {
-    this.messages.push({
-      id: this.genId(),
-      role: "assistant",
-      content: errorMessage,
-      error: true,
-    });
-    this.onError(new Error(errorMessage));
-    this.onUpdate();
+    this.emitError(errorMessage);
   }
 
   private emitError(error: ChatError | string) {
