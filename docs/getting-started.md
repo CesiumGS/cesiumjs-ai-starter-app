@@ -88,9 +88,9 @@ npm run dev
 - Globe (with HMR): **http://localhost:5173**
 - Chat API: **http://localhost:3001**
 
-`npm run dev` first builds the workspace packages (`tools-schemas`, `sample-config`,
-`server`) once, then runs all five dev processes concurrently (three packages in watch
-mode, plus the frontend and backend dev servers) — see the `dev` script in the root
+`npm run dev` first builds the workspace packages (`tools-schemas`, `codegen-cesium`,
+`sample-config`, `server`) once, then runs all six dev processes concurrently (four
+packages in watch mode, plus the frontend and backend dev servers) — see the `dev` script in the root
 [`package.json`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/package.json).
 
 ## Step 4 — Try it out

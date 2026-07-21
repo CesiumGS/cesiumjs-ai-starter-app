@@ -36,7 +36,10 @@ jobs:
     name: Build docs
     uses: ./.github/workflows/docs-build-template.yml
     with:
-      upload_pages_artifact: true
+      # Only upload the Pages artifact when this run can actually be deployed
+      # (i.e. on push to main after a PR merge, or manual dispatch) — not for
+      # pull_request validation builds, which are never deployed.
+      upload_pages_artifact: ${{ github.event_name != 'pull_request' }}
 
   deploy:
     name: Deploy to GitHub Pages

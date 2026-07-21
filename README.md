@@ -52,7 +52,7 @@ Type a place into the chat panel — e.g. **`fly to Paris`** — and the camera 
 
 For richer requests like **`drop a pin at the Eiffel Tower`**, the app routes through `executeCesiumCode`: the chat panel shows you the assistant's intent and waits for you to **approve or reject** before any code is generated (human-in-the-loop). The backend then generates and AST-verifies a CesiumJS snippet for your intent.
 
-If no provider key is configured, the globe still runs as a plain viewer and the chat panel is omitted.
+If no provider key is configured, the globe still runs as a plain viewer with a "AI is not configured" banner.
 
 ---
 
