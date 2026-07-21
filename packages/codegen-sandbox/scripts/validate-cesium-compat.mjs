@@ -8,7 +8,7 @@ import * as Cesium from "cesium";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, "..");
-const manifestPath = path.join(packageDir, "src/bindings/cesium-capabilities.json");
+const manifestPath = path.join(packageDir, "cesium-capabilities.json");
 const reportPath = path.join(packageDir, "CESIUM_COMPATIBILITY.md");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const require = createRequire(import.meta.url);
@@ -263,7 +263,7 @@ These reachable paths are not blocked and would use the generic dynamic Promise 
 other case, but are not counted as runtime-covered because they ultimately depend on a real
 network fetch (\`Resource.fetchJson\` for a Cesium-bundled data asset) and/or Cesium-internal
 process-global memoized state that can't be faked deterministically alongside every other
-network-free case in this suite. Their tests remain visible as \`test.todo\` cases.
+network-free case in this suite. Add paths here only while that limitation still exists.
 
 ${formatList(runtimeGapPromisePaths, "None currently - every reachable Promise-returning path with a genuine network/global-state dependency has a dedicated runtime test instead.")}
 
@@ -302,15 +302,6 @@ asset fetches). Listed here separately, distinct from genuine untested/uncovered
 inventory doesn't imply they are merely untested rather than deliberately blocked.
 
 ${formatList(networkBlockedPromiseApis, "None currently.")}
-
-## Known Dynamic Promise Test Gap
-
-- A rejected dynamically bridged host Promise can trigger a native QuickJS crash instead of
-  producing a structured sandbox error. The unit suite records this case as \`test.todo\`.
-- A second dynamically bridged Promise can, in some as-yet-unreproduced-deterministically
-  circumstances, trigger the same native QuickJS crash instead of resolving normally (multiple
-  dynamically bridged Promises in one script are otherwise supported and covered by passing
-  tests). The unit suite records this remaining edge case as \`test.todo\`.
 `;
 
 await writeFile(reportPath, report, "utf8");

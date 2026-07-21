@@ -6,7 +6,7 @@ import * as Cesium from "cesium";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, "..");
-const manifestPath = path.join(packageDir, "src/bindings/cesium-capabilities.json");
+const manifestPath = path.join(packageDir, "cesium-capabilities.json");
 const outputPath = path.join(packageDir, "src/bindings/generated/value-type-registry.ts");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const definitions = Object.entries(manifest.valueTypes);

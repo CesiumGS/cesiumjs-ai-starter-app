@@ -10,7 +10,16 @@ import {
   ModelAnimationLoop,
   WebMapServiceImageryProvider,
 } from "cesium";
-import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
+import { runCesiumCodeInSandbox as runCesiumCodeInSandboxImpl } from "./cesium-code-sandbox.js";
+
+function runCesiumCodeInSandbox(
+  options: Parameters<typeof runCesiumCodeInSandboxImpl>[0],
+): ReturnType<typeof runCesiumCodeInSandboxImpl> {
+  return runCesiumCodeInSandboxImpl({
+    ...options,
+    allowedNetworkOrigins: ["https://example.com", "https://services.arcgisonline.com"],
+  });
+}
 
 /**
  * Imitates realistic LLM-generated `executeCesiumCode` snippets across (most of) the same

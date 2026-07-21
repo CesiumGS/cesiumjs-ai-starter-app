@@ -207,7 +207,7 @@ These reachable paths are not blocked and would use the generic dynamic Promise 
 other case, but are not counted as runtime-covered because they ultimately depend on a real
 network fetch (`Resource.fetchJson` for a Cesium-bundled data asset) and/or Cesium-internal
 process-global memoized state that can't be faked deterministically alongside every other
-network-free case in this suite. Their tests remain visible as `test.todo` cases.
+network-free case in this suite. Add paths here only while that limitation still exists.
 
 None currently - every reachable Promise-returning path with a genuine network/global-state dependency has a dedicated runtime test instead.
 
@@ -267,12 +267,3 @@ inventory doesn't imply they are merely untested rather than deliberately blocke
 - `Resource.put`
 - `TaskProcessor.initWebAssemblyModule`
 - `TaskProcessor.scheduleTask`
-
-## Known Dynamic Promise Test Gap
-
-- A rejected dynamically bridged host Promise can trigger a native QuickJS crash instead of
-  producing a structured sandbox error. The unit suite records this case as `test.todo`.
-- A second dynamically bridged Promise can, in some as-yet-unreproduced-deterministically
-  circumstances, trigger the same native QuickJS crash instead of resolving normally (multiple
-  dynamically bridged Promises in one script are otherwise supported and covered by passing
-  tests). The unit suite records this remaining edge case as `test.todo`.

@@ -33,7 +33,12 @@ export async function executeApprovedCesiumCode(
   code: string,
 ): Promise<string | null> {
   const renderErrorWatch = createRenderErrorWatch(viewer, DEFAULT_RENDER_ERROR_WATCH_MS);
-  const outcome = await runCesiumCodeInSandbox({ viewer, code, logger: sandboxLogger });
+  const outcome = await runCesiumCodeInSandbox({
+    viewer,
+    code,
+    logger: sandboxLogger,
+    allowedNetworkOrigins: config.sandboxAllowedNetworkOrigins,
+  });
   renderErrorWatch.finishExecution();
   const renderError = await renderErrorWatch.result;
 

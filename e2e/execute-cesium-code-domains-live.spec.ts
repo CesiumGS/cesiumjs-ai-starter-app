@@ -8,12 +8,10 @@ import {
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 
 /**
- * A snapshot of observable, generic Cesium `Viewer` state — everything an AI-generated snippet is
- * plausibly able to change, collected via the dev-only `window.__cesiumViewerForE2E` test seam
- * (see `frontend/src/components/CesiumGlobe.tsx`). Used to prove the globe actually changed as a
- * result of running the generated code, not just that no error was surfaced (that alone doesn't
- * prove the code did anything real to the live Viewer — see the "Sandbox gaps found via live
- * manual testing" repo note).
+ * Snapshot of observable Cesium `Viewer` state that an AI-generated snippet could plausibly
+ * change, read via the dev-only `window.__cesiumViewerForE2E` test seam (see
+ * `frontend/src/components/CesiumGlobe.tsx`). Comparing two snapshots proves the globe actually
+ * changed, not just that no error was surfaced.
  */
 interface ViewerSnapshot {
   entities: number;
@@ -80,11 +78,10 @@ function hasChanged(before: ViewerSnapshot, after: ViewerSnapshot): boolean {
 }
 
 /**
- * Generic "something observable actually changed" check, applied to every domain as a baseline —
- * catches the common case (an entity/primitive/imagery layer/data source was added, or the camera
- * moved) without needing bespoke per-domain assertions. Polls rather than taking a single snapshot
- * since some effects (e.g. `Scene.morphToColumbusView`'s animated transition) settle a couple of
- * seconds after the tool result already appeared in the transcript.
+ * Baseline check applied to every domain: something observable changed (an entity/primitive/
+ * imagery layer/data source was added, or the camera/scene mode moved). Polls instead of a single
+ * snapshot because some effects (e.g. `Scene.morphToColumbusView`) settle a couple of seconds
+ * after the tool result already appears in the transcript.
  */
 async function assertSomethingChanged(page: Page, before: ViewerSnapshot, domain: string) {
   await expect(async () => {
@@ -145,68 +142,70 @@ const DOMAIN_ASSERTIONS: Record<string, (page: Page, before: ViewerSnapshot) => 
     assertPrimitiveAdded(page, before, "the glTF Model and/or ParticleSystem"),
 };
 
-async function assertEntityAdded(page: Page, before: ViewerSnapshot, what: string) {
+/** Shared polling assertion behind `assertEntityAdded`/`assertPrimitiveAdded`/`assertImageryLayerAdded`. */
+async function assertCountIncreased(
+  page: Page,
+  before: number,
+  select: (snapshot: ViewerSnapshot) => number,
+  message: string,
+) {
   await expect
-    .poll(async () => (await getViewerSnapshot(page)).entities, {
-      message: `expected ${what} to be added to viewer.entities`,
-      timeout: 10_000,
-    })
-    .toBeGreaterThan(before.entities);
+    .poll(async () => select(await getViewerSnapshot(page)), { message, timeout: 10_000 })
+    .toBeGreaterThan(before);
 }
 
-async function assertPrimitiveAdded(page: Page, before: ViewerSnapshot, what: string) {
-  await expect
-    .poll(
-      async () => {
-        const current = await getViewerSnapshot(page);
-        return current.primitives + current.groundPrimitives;
-      },
-      {
-        message: `expected ${what} to be added to scene.primitives or scene.groundPrimitives`,
-        timeout: 10_000,
-      },
-    )
-    .toBeGreaterThan(before.primitives + before.groundPrimitives);
-}
+const assertEntityAdded = (page: Page, before: ViewerSnapshot, what: string) =>
+  assertCountIncreased(
+    page,
+    before.entities,
+    (s) => s.entities,
+    `expected ${what} to be added to viewer.entities`,
+  );
 
-async function assertImageryLayerAdded(page: Page, before: ViewerSnapshot) {
-  await expect
-    .poll(async () => (await getViewerSnapshot(page)).imageryLayers, {
-      message: "expected the WMS imagery layer to be added",
-      timeout: 10_000,
-    })
-    .toBeGreaterThan(before.imageryLayers);
-}
+const assertPrimitiveAdded = (page: Page, before: ViewerSnapshot, what: string) =>
+  assertCountIncreased(
+    page,
+    before.primitives + before.groundPrimitives,
+    (s) => s.primitives + s.groundPrimitives,
+    `expected ${what} to be added to scene.primitives or scene.groundPrimitives`,
+  );
+
+const assertImageryLayerAdded = (page: Page, before: ViewerSnapshot) =>
+  assertCountIncreased(
+    page,
+    before.imageryLayers,
+    (s) => s.imageryLayers,
+    "expected the WMS imagery layer to be added",
+  );
 
 /**
- * Real end-to-end coverage of the `executeCesiumCode` tool across a representative intent from
- * each `@cesium/cesiumjs-skills` domain — the full intent -> skill-matching -> prompt-building ->
- * model generation -> AST verification -> approval -> execution pipeline, against a real model.
+ * Real end-to-end coverage of the `executeCesiumCode` tool: one representative intent per
+ * `@cesium/cesiumjs-skills` domain, exercising the full intent -> skill-matching -> prompt-
+ * building -> model generation -> AST verification -> approval -> execution pipeline against a
+ * real model.
  *
- * See `execute-cesium-code-domains.spec.ts` for the stubbed, deterministic counterpart and
- * `execute-cesium-code-live.spec.ts` for the single-scenario real-backend test this generalizes.
+ * See `execute-cesium-code-domains.spec.ts` for the stubbed, deterministic counterpart, and
+ * `execute-cesium-code-live.spec.ts` for the single-scenario test this generalizes.
  *
- * Requires the same setup as `fly-to-paris.spec.ts`:
+ * Setup (same as `fly-to-paris.spec.ts`):
  *   1) npm run dev:backend     # backend on :3001 with .env loaded
  *   2) npm run test:e2e        # Playwright starts the frontend on :5173 and runs this
  *
- * Every domain should succeed: the model calls the tool, the generated snippet passes the real
- * AST verifier, and the approved code executes against the live Viewer with no error surfaced
- * and no crash. A `{ error }` result fails the test. Beyond that, each scenario also captures a
- * `ViewerSnapshot` of the live Viewer (via the dev-only `window.__cesiumViewerForE2E` test seam)
- * before submitting the intent and asserts the globe actually visibly changed as a result —
- * either generically (an entity/primitive/imagery layer was added, or the camera/scene mode
- * moved) or, for domains with an unambiguous expected outcome, a stronger precise check (e.g. the
- * camera heading/pitch, or the scene mode after a Columbus View morph). This catches "sandbox
- * reports success but nothing visibly changed" bugs that a bare no-error assertion can't.
+ * Each domain must: call the tool, pass AST verification, and execute against the live Viewer
+ * with no error or crash — a `{ error }` result fails the test. It also captures a
+ * `ViewerSnapshot` before submitting the intent and asserts the globe visibly changed —
+ * generically (an entity/primitive/imagery layer was added, or the camera/scene mode moved), or
+ * with a stronger domain-specific check where the expected outcome is unambiguous (e.g. camera
+ * heading/pitch, or scene mode after a Columbus View morph). This catches "sandbox reports
+ * success but nothing visibly changed" bugs that a bare no-error assertion would miss.
  */
 
 /**
- * One representative natural-language intent per domain, phrased to route to the right skill via
- * BM25 matching (mirrors `packages/codegen-cesium/src/pipeline/domain-coverage.test.ts`'s
- * `REPRESENTATIVE_INTENTS`) and to reliably win real model tool-choice over the narrower `flyTo`
- * tool where it would otherwise apply. Inline comments below note where and why an intent was
- * tuned to avoid a specific known failure mode.
+ * One representative natural-language intent per domain, phrased to (a) route to the right skill
+ * via BM25 matching (mirrors `REPRESENTATIVE_INTENTS` in
+ * `packages/codegen-cesium/src/pipeline/domain-coverage.test.ts`) and (b) reliably beat the
+ * narrower `flyTo` tool in the model's tool choice. Comments below flag intents tuned to dodge a
+ * specific known failure mode.
  */
 const DOMAIN_INTENTS: Record<string, string> = {
   // Names a known-good public Ion asset so the scenario is deterministic (no invented/missing
@@ -217,47 +216,39 @@ const DOMAIN_INTENTS: Record<string, string> = {
   // executeCesiumCode instead of the narrower tool.
   "cesiumjs-camera":
     "instantly snap the camera (no flight animation) to a view above the Grand Canyon with heading 30 degrees, pitch -60 degrees, and roll 0, using Camera.setView",
-  // Uses PinBuilder for a visually-verifiable outcome, and states explicitly that
-  // fromColor/fromText are synchronous (not this domain's usual async Resource.fetch* pattern) to
-  // avoid the model wrongly calling .then() on the returned canvas.
+  // Uses PinBuilder (visually verifiable) and explicitly notes fromColor/fromText are
+  // synchronous — unlike this domain's usual async Resource.fetch* — so the model doesn't
+  // wrongly call .then() on the returned canvas.
   "cesiumjs-core-utilities":
     "use Cesium's PinBuilder to create a red pin marker icon — pinBuilder.fromColor(color, size) is SYNCHRONOUS and returns a canvas directly, no .then()/await needed — check it's defined with the defined() utility, and add it as a billboard entity over Berlin",
-  // Reuses the known-good NYC Buildings tileset (real per-building feature IDs) and asks for
-  // fragment-only recoloring, avoiding a WebGL shader-compile crash from a demo model with no
-  // EXT_mesh_features data.
+  // Reuses the known-good NYC Buildings tileset (real per-building feature IDs) for fragment-only
+  // recoloring, avoiding a shader-compile crash from a demo model lacking EXT_mesh_features data.
   "cesiumjs-custom-shader":
     "load Cesium ion asset 75343 (New York City 3D Buildings) as a Cesium3DTileset, then attach a CustomShader whose fragmentShaderText recolors each building using its EXT_mesh_features feature ID (fsInput.featureIds.featureId_0) so buildings are visibly tinted in different colors",
   "cesiumjs-entities": "add a GeoJSON polygon entity with labels using the high-level Entity API",
   "cesiumjs-imagery": "add a WMS imagery layer as a base map using an ImageryProvider",
-  // Seeds a concrete entity plus a visible effect on pick, making the ask an unambiguous
-  // live-Viewer modification instead of an abstract event-handler snippet. Deliberately does NOT
-  // ask to register a ScreenSpaceEventHandler click handler: any registered callback is invoked
-  // later, after this script's single execution ends and its VM is disposed — architecturally
-  // impossible in this sandbox (same root cause as CallbackProperty/setTimeout/addEventListener
-  // being disallowed). Instead asks for an immediate, synchronous pick right after adding the
-  // entity, using the same scene.pick API the domain is actually about, achievable within one
-  // script. Explicitly uses a fixed literal Cartesian2 screen position rather than deriving one
-  // from scene.canvas/viewer.container (e.g. via SceneTransforms.worldToWindowCoordinates) —
-  // canvas/container are blocked DOM-escape guards, so any path that reads them (even indirectly
-  // through a Cesium helper) is rejected too.
+  // Seeds an entity, then does a synchronous scene.pick right after — a real, single-script
+  // exercise of the domain's pick API. Deliberately avoids registering a ScreenSpaceEventHandler:
+  // any callback would fire after this script's VM is disposed, which the sandbox can't support
+  // (same reason CallbackProperty/setTimeout/addEventListener are disallowed). Also uses a fixed
+  // literal Cartesian2 instead of deriving one from scene.canvas/viewer.container, since those are
+  // blocked DOM-escape guards even via helpers like SceneTransforms.worldToWindowCoordinates.
   "cesiumjs-interaction":
     "add a red point entity over London, then in the SAME script (do not register a ScreenSpaceEventHandler or any other callback — it cannot run after this script finishes) call viewer.scene.pick with a fixed literal screen position such as new Cesium.Cartesian2(400, 300) — do NOT read viewer.scene.canvas or viewer.container to compute a position, they are unavailable; if Cesium.defined() confirms something was picked, change its point color to yellow",
   // Steers explicitly to the Primitive + MaterialAppearance pattern (not the Entity API), since a
   // raw Material assigned to an Entity's polygon.material throws at runtime.
   "cesiumjs-materials-shaders":
     "define a custom Fabric material with GLSL source and apply it via a Primitive + GeometryInstance + MaterialAppearance (not the Entity API) to a rectangle geometry, then add a PostProcessStage bloom post-processing effect with default settings",
-  // Names a real, publicly-reachable sample glTF (Khronos's BoxAnimated) so the scenario is
-  // deterministic, mirroring the cesiumjs-3d-tiles fix above. Deliberately does NOT ask to play
-  // the model's animation: real Cesium only finishes loading animation data on a LATER render
-  // tick after fromGltfAsync's promise resolves (model.readyEvent fires then, not at the promise
-  // resolution) — reacting to that from inside this single-shot script is the same architectural
-  // impossibility as a registered ScreenSpaceEventHandler callback.
+  // Names a real, public sample glTF (Khronos's BoxAnimated) for determinism, mirroring the
+  // cesiumjs-3d-tiles fix above. Doesn't ask to play the animation: Cesium only finishes loading
+  // animation data on a later render tick after fromGltfAsync resolves (readyEvent fires then, not
+  // at promise resolution) — reacting to that is the same single-script impossibility as a
+  // ScreenSpaceEventHandler callback.
   "cesiumjs-models-particles":
     "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb and add it to the scene (do not call model.activeAnimations.addAll or otherwise play its animation), and add a ParticleSystem for fire at its base — for the particle's image, use new Cesium.PinBuilder().fromColor(Cesium.Color.ORANGE, size) (synchronous, returns a real canvas) instead of drawing your own canvas with document.createElement",
-  // Supplies concrete inline GeoJSON since this app has no pre-loaded GeoJSON for the model to
-  // reference. Explicitly forbids clearing/removing existing scene content first — `removeAll()`
-  // is deliberately blocked by the sandbox's security guardrail (against wiping the whole scene),
-  // and the model sometimes reaches for it to "start clean" even though nothing needs clearing.
+  // Supplies inline GeoJSON since the app has none pre-loaded. Explicitly forbids removeAll()
+  // first — it's blocked by the sandbox's security guardrail, but the model sometimes reaches for
+  // it to "start clean" even though nothing needs clearing.
   "cesiumjs-primitives":
     "render this GeoJSON polygon as a ground-clamped primitive for performance using GeoJsonPrimitive instead of the Entity API: a rectangle covering roughly Colorado with coordinates [[-109,37],[-102,37],[-102,41],[-109,41],[-109,37]]. Just add the new primitive — do not call removeAll() or clear any existing primitives/entities first.",
   // Ties the conversion to a visible label so the outcome is actionable rather than a pure math
@@ -284,29 +275,35 @@ function trackPageErrors(page: Page): Error[] {
   return errors;
 }
 
+/** Clicks Approve, waits for the tool card's code/error panel, then reads the settled result. */
+async function approveAndAwaitResult(
+  page: Page,
+): Promise<{ toolCard: Locator; result: ExecuteCesiumCodeResultInfo }> {
+  await page.getByRole("button", { name: "Approve" }).click();
+
+  const toolCard = await expandToolCard(page, "executeCesiumCode");
+  await expect(
+    toolCard
+      .locator('pre[class*="codeBlock"]')
+      .or(page.locator('[data-testid="generation-error-panel"]')),
+  ).toBeVisible({ timeout: 60_000 });
+
+  return { toolCard, result: await readSettledExecuteCesiumCodeResult(page, toolCard) };
+}
+
 /**
- * Approves the currently-pending `executeCesiumCode` tool call and reads its result — then, if
- * that result has a runtime `executionError`, gives the model a bounded number of chances to
- * self-correct: a runtime failure commonly triggers the model to immediately retry with a fixed
- * snippet in the same turn, which itself pauses on a brand-new approval request. Without this,
- * such a retry's Approve button is simply never clicked, so its (successful) corrected code never
- * runs and `assertSomethingChanged` times out waiting for a Viewer change that already happened
- * only in the model's un-approved retry.
+ * Approves the pending `executeCesiumCode` call and reads its result. If the result has a runtime
+ * `executionError`, gives the model a bounded number of chances to self-correct: a runtime failure
+ * often triggers an immediate retry with a fixed snippet, which pauses on its own new approval
+ * request. Without retrying here, that retry's Approve button is never clicked, so the
+ * (successful) corrected code never runs and `assertSomethingChanged` times out.
  */
 async function approveAndReadExecuteCesiumCodeResult(
   page: Page,
 ): Promise<{ toolCard: Locator; result: ExecuteCesiumCodeResultInfo }> {
   const MAX_RETRIES = 2;
 
-  await page.getByRole("button", { name: "Approve" }).click();
-
-  let toolCard = await expandToolCard(page, "executeCesiumCode");
-  await expect(
-    toolCard
-      .locator('pre[class*="codeBlock"]')
-      .or(page.locator('[data-testid="generation-error-panel"]')),
-  ).toBeVisible({ timeout: 60_000 });
-  let result = await readSettledExecuteCesiumCodeResult(page, toolCard);
+  let { toolCard, result } = await approveAndAwaitResult(page);
 
   for (let attempt = 0; attempt < MAX_RETRIES && result.executionError; attempt++) {
     const retryApproveButton = page.getByRole("button", { name: "Approve" });
@@ -316,38 +313,26 @@ async function approveAndReadExecuteCesiumCodeResult(
       .catch(() => false);
     if (!retryRequested) break;
 
-    await retryApproveButton.click();
-    toolCard = await expandToolCard(page, "executeCesiumCode");
-    await expect(
-      toolCard
-        .locator('pre[class*="codeBlock"]')
-        .or(page.locator('[data-testid="generation-error-panel"]')),
-    ).toBeVisible({ timeout: 60_000 });
-    result = await readSettledExecuteCesiumCodeResult(page, toolCard);
+    ({ toolCard, result } = await approveAndAwaitResult(page));
   }
 
   return { toolCard, result };
 }
 
 /**
- * Reads the `executeCesiumCode` result only after giving the client-side execution outcome a
- * chance to actually land in the DOM — NOT immediately once the tool card's codeBlock/
- * generation-error-panel appears (as a naive `readExecuteCesiumCodeResult` call right after that
- * would do).
+ * Reads the `executeCesiumCode` result only after giving client-side execution a chance to land
+ * in the DOM — not immediately once the tool card's codeBlock/generation-error-panel appears.
  *
- * That first DOM update only reflects the initial, server-side response (codegen + AST
- * verification) — the approval-resume request's own reply text is deliberately suppressed (see
- * `chat-router.ts`'s `suppressTextChunks`) specifically because it can't yet reflect whether the
- * code actually ran. The real outcome is only known after `ChatPanel.tsx`'s
- * `handleServerToolResult` asynchronously executes the generated code against the live Viewer
- * (bounded by the sandbox's own `timeoutMs`) and fires a follow-up request that updates the DOM
- * with an `execution-error-panel` on failure. Reading the result before that follow-up lands
- * always finds `executionError` `undefined` regardless of what actually happens — silently
- * treating a real runtime crash as success. This previously let 3 of 14 domains ("interaction",
- * "models-particles", "time-properties") report a genuine `Sandbox run failed` error to the
- * console while the test itself still passed (see the "execute-cesium-code sandbox test race"
- * repo note) — a partial Viewer mutation that happened to occur before the failing line was
- * enough to satisfy `assertSomethingChanged`, masking the runtime failure entirely.
+ * That first DOM update only reflects the server-side response (codegen + AST verification); the
+ * approval-resume reply text is deliberately suppressed (see `chat-router.ts`'s
+ * `suppressTextChunks`) because it can't yet know whether the code actually ran. The real outcome
+ * only lands after `ChatPanel.tsx`'s `handleServerToolResult` executes the code against the live
+ * Viewer and, on failure, fires a follow-up request that renders an `execution-error-panel`.
+ * Reading too early always finds `executionError` `undefined`, silently treating a runtime crash
+ * as success — this previously let 3 of 14 domains ("interaction", "models-particles",
+ * "time-properties") pass despite a genuine `Sandbox run failed` console error (see the
+ * "execute-cesium-code sandbox test race" repo note): a partial mutation before the failing line
+ * was enough to satisfy `assertSomethingChanged`, masking the failure.
  */
 async function readSettledExecuteCesiumCodeResult(
   page: Page,

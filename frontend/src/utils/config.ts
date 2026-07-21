@@ -36,8 +36,16 @@ function resolveLogLevel(): LogLevel {
   );
 }
 
+function resolveSandboxAllowedNetworkOrigins(): string[] {
+  return ((import.meta.env.VITE_SANDBOX_ALLOWED_NETWORK_ORIGINS as string | undefined) ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 export const config = {
   cesiumIonToken: import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN as string | undefined,
   chatApiEndpoint: `${apiBaseUrl}/api/chat`,
   logLevel: resolveLogLevel(),
+  sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
 };

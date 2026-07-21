@@ -6,7 +6,7 @@
     "resolveJsonModule": true,
     "lib": ["ES2023", "DOM"],
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "noEmit": false,
     "strict": true,
     "esModuleInterop": true,
@@ -20,6 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "cesium-capabilities.json"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

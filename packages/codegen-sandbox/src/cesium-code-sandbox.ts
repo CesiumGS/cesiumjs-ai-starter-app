@@ -60,6 +60,10 @@ export interface RunCesiumCodeOptions extends SceneCollectionCapOptions {
    * there's no pending host work.
    */
   postRunDrainMs?: number;
+  /** HTTP(S) origins that guest-provided Cesium URL arguments may target. Defaults to none. */
+  allowedNetworkOrigins?: readonly string[];
+  /** Allows guest-provided root/path-relative Cesium URL arguments. Defaults to false. */
+  allowRelativeNetworkUrls?: boolean;
 }
 
 /** The live QuickJS async interpreter context, as returned by `newAsyncContext()`. */
@@ -249,6 +253,8 @@ export async function runCesiumCodeInSandbox({
   maxItemsPerCollection,
   logger = noopLogger,
   postRunDrainMs = DEFAULT_POST_RUN_DRAIN_MS,
+  allowedNetworkOrigins,
+  allowRelativeNetworkUrls,
 }: RunCesiumCodeOptions): Promise<SandboxResult> {
   // `newAsyncContext()` itself can reject (e.g. the interpreter's WASM binary failing to load/
   // instantiate) — that must resolve to this function's documented `{ success:false, error }`
@@ -270,7 +276,12 @@ export async function runCesiumCodeInSandbox({
     ctx.runtime.setMemoryLimit(memoryLimitBytes);
 
     const pendingWork: PendingHostWorkTracker = { count: 0 };
-    registerHostBindings(ctx, handles, { logger, pendingWork });
+    registerHostBindings(ctx, handles, {
+      logger,
+      pendingWork,
+      allowedNetworkOrigins,
+      allowRelativeNetworkUrls,
+    });
 
     const prelude = buildCesiumGuestPrelude(viewer, handles, maxItemsPerCollection);
     const wrappedCode = buildWrappedCode(prelude, code);

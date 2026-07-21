@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import * as Cesium from "cesium";
 import { BLOCKED_STATIC_CESIUM_EXPORTS, CESIUM_VALUE_TYPE_NAMES } from "./capabilities-registry.js";
-import capabilities from "./cesium-capabilities.json" with { type: "json" };
+import capabilities from "../../cesium-capabilities.json" with { type: "json" };
 import {
   CESIUM_GUEST_CONSTANTS,
   CESIUM_VALUE_TYPE_DEFINITIONS,

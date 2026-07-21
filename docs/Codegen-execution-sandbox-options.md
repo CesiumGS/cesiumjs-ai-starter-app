@@ -302,4 +302,3 @@ structural families described above:
 - [MetaMask Snaps](https://github.com/MetaMask/snaps)
 - ["How to build a plugin system on the web and also sleep well at night"](https://www.figma.com/blog/how-we-built-the-figma-plugin-system/) — background reading on an `<iframe>` + WASM-interpreter sandbox journey (Rudi Chen, Aug 22, 2019)
 - ["An update on plugin security"](https://www.figma.com/blog/an-update-on-plugin-security/) — background reading on a disclosed same-realm sandbox vulnerability and a permanent switch to QuickJS-in-WASM (Evan Wallace, Oct 2, 2019)
-- [MDN: `MessageChannel`](https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel)

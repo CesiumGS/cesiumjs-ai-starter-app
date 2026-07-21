@@ -2263,6 +2263,7 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
+      allowedNetworkOrigins: ["https://example.com"],
       code: `
         const tileset = await Cesium.Cesium3DTileset.fromUrl("https://example.com/tileset.json");
         await viewer.scene.primitives.add(tileset);
@@ -2318,6 +2319,7 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
+      allowedNetworkOrigins: ["https://elevation3d.arcgis.com"],
       code: `
         const terrainProvider = await Cesium.ArcGISTiledElevationTerrainProvider.fromUrl(
           "https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer",
@@ -2435,7 +2437,11 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     async ({ code, expected, getMock }) => {
       const viewer = fakeViewer();
 
-      const outcome = await runCesiumCodeInSandbox({ viewer: viewer as never, code });
+      const outcome = await runCesiumCodeInSandbox({
+        viewer: viewer as never,
+        code,
+        allowedNetworkOrigins: ["https://example.com"],
+      });
 
       expect(outcome).toEqual({ success: true, result: expected });
       expect(getMock(viewer)).toHaveBeenCalledTimes(1);
@@ -2467,6 +2473,7 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
+      allowedNetworkOrigins: ["https://example.com"],
       code: `Cesium.GeoJsonDataSource.load("https://example.com/data.geojson", {}).then((dataSource) => {
         viewer.dataSources.add(dataSource);
       });`,
@@ -2505,6 +2512,61 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     expect(outcome.success).toBe(false);
     expect(outcome.error).toMatch(/second pick failed/);
     expect(viewer.scene.sampleHeightMostDetailed).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks absolute URL arguments passed through allowed Cesium loaders by default", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return await Cesium.GeoJsonDataSource.load("https://example.com/data.geojson");`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(
+      /network access to origin "https:\/\/example\.com" is not allowed/i,
+    );
+    expect(GeoJsonDataSource.load).not.toHaveBeenCalled();
+  });
+
+  test("allows URL arguments whose exact origin is explicitly configured", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      allowedNetworkOrigins: ["https://example.com"],
+      code: `return await Cesium.GeoJsonDataSource.load("https://example.com/data.geojson");`,
+    });
+
+    expect(outcome.success).toBe(true);
+    expect(GeoJsonDataSource.load).toHaveBeenCalledTimes(1);
+  });
+
+  test("blocks relative URL arguments unless explicitly enabled", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return await Cesium.GeoJsonDataSource.load("/api/private-data");`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/relative network URL .* is not allowed/i);
+    expect(GeoJsonDataSource.load).not.toHaveBeenCalled();
+  });
+
+  test("rejects ambiguous protocol-relative URL arguments", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      allowedNetworkOrigins: ["https://example.com"],
+      code: `return await Cesium.GeoJsonDataSource.load("//example.com/data.geojson");`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/protocol-relative network URL .* is not allowed/i);
+    expect(GeoJsonDataSource.load).not.toHaveBeenCalled();
   });
 
   // `Resource` is deliberately present in `BLOCKED_STATIC_CESIUM_EXPORTS` — every one of its
@@ -2614,6 +2676,48 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
     expect(outcome.success).toBe(false);
     expect(outcome.error).toMatch(new RegExp(`${kind} cap of 0`, "i"));
+  });
+
+  test("preserves optional arguments passed to guarded collection add methods", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `return viewer.imageryLayers.addImageryProvider({ id: "provider" }, 2);`,
+    });
+
+    expect(outcome.success).toBe(true);
+    expect(viewer.imageryLayers.addImageryProvider).toHaveBeenCalledWith({ id: "provider" }, 2);
+  });
+
+  test("reports a failed host property assignment", async () => {
+    const viewer = fakeViewer();
+    Object.defineProperty(viewer.scene.globe, "terrainProvider", {
+      configurable: true,
+      value: undefined,
+      writable: false,
+    });
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `viewer.scene.globe.terrainProvider = { id: "terrain" };`,
+    });
+
+    expect(outcome.success).toBe(false);
+    expect(outcome.error).toMatch(/could not assign Cesium property "terrainProvider"/i);
+  });
+
+  test("allows a data source whose entity count exactly matches the per-run cap", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      maxItemsPerCollection: 2,
+      code: `return viewer.dataSources.add({ entities: { values: [{}, {}] } });`,
+    });
+
+    expect(outcome.success).toBe(true);
+    expect(viewer.dataSources.add).toHaveBeenCalledTimes(1);
   });
 
   test("rejects a data source whose own entity count exceeds the per-run cap", async () => {

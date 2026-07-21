@@ -1,4 +1,4 @@
-import capabilities from "./cesium-capabilities.json" with { type: "json" };
+import capabilities from "../../cesium-capabilities.json" with { type: "json" };
 
 /** Reviewed CesiumJS capability policy consumed by runtime bindings and upgrade tooling. */
 export const CESIUM_SANDBOX_CAPABILITIES = capabilities;

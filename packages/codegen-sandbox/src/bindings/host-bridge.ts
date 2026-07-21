@@ -2,6 +2,11 @@ import { newAsyncContext } from "quickjs-emscripten";
 import { assertSandboxPropertyAllowed } from "./guarded-viewer-proxy.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
 import { noopLogger, type SandboxLogger } from "../logger.js";
+import {
+  assertNetworkUrlsAllowed,
+  createNetworkUrlPolicy,
+  type NetworkUrlPolicy,
+} from "./network-url-policy.js";
 
 type HostCallEnvelope = { ok: true; value: unknown } | { ok: false; error: string };
 type QuickJSAsyncContext = Awaited<ReturnType<typeof newAsyncContext>>;
@@ -27,6 +32,10 @@ export interface RegisterHostBindingsOptions {
    * decremented once it settles. Defaults to a private, unobserved counter if omitted.
    */
   pendingWork?: PendingHostWorkTracker;
+  /** Absolute HTTP(S) origins guest-provided URL arguments may target. Defaults to none. */
+  allowedNetworkOrigins?: readonly string[];
+  /** Whether guest-provided root/path-relative URL arguments are allowed. Defaults to false. */
+  allowRelativeNetworkUrls?: boolean;
 }
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
@@ -84,6 +93,7 @@ function registerHostSet(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
   logger: SandboxLogger,
+  networkUrlPolicy: NetworkUrlPolicy,
 ): void {
   const hostFunction = ctx.newFunction(
     "__cesiumSandboxHostSetSync__",
@@ -93,8 +103,12 @@ function registerHostSet(
       try {
         assertSandboxPropertyAllowed(prop);
         const target = handles.resolve(handleId);
-        const value = handles.unwrap(JSON.parse(ctx.getString(valueHandle)) as unknown);
-        Reflect.set(target as object, prop, value);
+        const encodedValue = JSON.parse(ctx.getString(valueHandle)) as unknown;
+        assertNetworkUrlsAllowed(encodedValue, networkUrlPolicy);
+        const value = handles.unwrap(encodedValue);
+        if (!Reflect.set(target as object, prop, value)) {
+          throw new Error(`Could not assign Cesium property "${prop}"`);
+        }
         logger.debug(`set "${prop}" on handle ${handleId}`);
         return toEnvelopeString(ctx, { ok: true, value: null });
       } catch (error) {
@@ -112,6 +126,7 @@ function registerHostApply(
   handles: SandboxHandles,
   logger: SandboxLogger,
   pendingWork: PendingHostWorkTracker,
+  networkUrlPolicy: NetworkUrlPolicy,
 ): void {
   const hostFunction = ctx.newFunction(
     "__cesiumSandboxHostApplySync__",
@@ -120,9 +135,9 @@ function registerHostApply(
       try {
         const callable = handles.resolve(handleId);
         if (typeof callable !== "function") throw new Error("Sandbox handle is not callable");
-        const args = (JSON.parse(ctx.getString(argsHandle)) as unknown[]).map((arg) =>
-          handles.unwrap(arg),
-        );
+        const encodedArgs = JSON.parse(ctx.getString(argsHandle)) as unknown[];
+        assertNetworkUrlsAllowed(encodedArgs, networkUrlPolicy);
+        const args = encodedArgs.map((arg) => handles.unwrap(arg));
         logger.debug(`apply on handle ${handleId} (${args.length} arg(s))`);
         const result = (callable as (...args: unknown[]) => unknown)(...args);
         if (isPromiseLike(result)) {
@@ -181,6 +196,7 @@ function registerHostConstruct(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
   logger: SandboxLogger,
+  networkUrlPolicy: NetworkUrlPolicy,
 ): void {
   const hostFunction = ctx.newFunction(
     "__cesiumSandboxHostConstructSync__",
@@ -191,9 +207,9 @@ function registerHostConstruct(
         if (typeof constructor !== "function") {
           throw new Error("Sandbox handle is not constructable");
         }
-        const args = (JSON.parse(ctx.getString(argsHandle)) as unknown[]).map((arg) =>
-          handles.unwrap(arg),
-        );
+        const encodedArgs = JSON.parse(ctx.getString(argsHandle)) as unknown[];
+        assertNetworkUrlsAllowed(encodedArgs, networkUrlPolicy);
+        const args = encodedArgs.map((arg) => handles.unwrap(arg));
         const result = Reflect.construct(constructor as new (...args: unknown[]) => unknown, args);
         logger.debug(`construct on handle ${handleId} (${args.length} arg(s))`);
         return toEnvelopeString(ctx, { ok: true, value: handles.wrap(result ?? null) });
@@ -258,9 +274,13 @@ export function registerHostBindings(
 ): void {
   const logger = options.logger ?? noopLogger;
   const pendingWork = options.pendingWork ?? { count: 0 };
+  const networkUrlPolicy = createNetworkUrlPolicy(
+    options.allowedNetworkOrigins,
+    options.allowRelativeNetworkUrls,
+  );
   registerHostGet(ctx, handles, logger);
-  registerHostSet(ctx, handles, logger);
-  registerHostApply(ctx, handles, logger, pendingWork);
-  registerHostConstruct(ctx, handles, logger);
+  registerHostSet(ctx, handles, logger, networkUrlPolicy);
+  registerHostApply(ctx, handles, logger, pendingWork, networkUrlPolicy);
+  registerHostConstruct(ctx, handles, logger, networkUrlPolicy);
   registerHostInstanceOf(ctx, handles, logger);
 }

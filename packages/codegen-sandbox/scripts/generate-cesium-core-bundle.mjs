@@ -22,7 +22,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, "../src/bindings/generated");
 const outFile = path.join(outDir, "cesium-core-bundle.ts");
 const capabilities = JSON.parse(
-  await readFile(path.join(__dirname, "../src/bindings/cesium-capabilities.json"), "utf8"),
+  await readFile(path.join(__dirname, "../cesium-capabilities.json"), "utf8"),
 );
 
 const entryContents = [

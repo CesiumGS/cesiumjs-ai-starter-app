@@ -27,6 +27,7 @@
  */
 import type { Viewer } from "cesium";
 import {
+  CollectionCapExceededError,
   DEFAULT_MAX_ITEMS_PER_COLLECTION,
   assertCollectionCapNotExceeded,
   assertEntityCapNotExceeded,
@@ -138,10 +139,10 @@ function guardedAdd(
   real: (...args: unknown[]) => unknown,
   target: object,
   assertCapNotExceeded: (item: unknown) => void,
-): (item: unknown) => unknown {
-  return function addWithGuardrails(item: unknown): unknown {
-    assertCapNotExceeded(item);
-    return Reflect.apply(real, target, [item]);
+): (...args: unknown[]) => unknown {
+  return function addWithGuardrails(...args: unknown[]): unknown {
+    assertCapNotExceeded(args[0]);
+    return Reflect.apply(real, target, args);
   };
 }
 
@@ -263,8 +264,8 @@ function createProxiedDataSources(dataSources: object, maxCount: number): unknow
           });
           const entityCount = (item as { entities?: { values?: unknown[] } } | null)?.entities
             ?.values?.length;
-          if (entityCount !== undefined) {
-            assertCollectionCapNotExceeded(entityCount, "Data source entity", { maxCount });
+          if (entityCount !== undefined && entityCount > maxCount) {
+            throw new CollectionCapExceededError("Data source entity", maxCount);
           }
         }),
     },
