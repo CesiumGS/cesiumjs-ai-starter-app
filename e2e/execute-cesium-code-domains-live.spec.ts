@@ -229,18 +229,31 @@ const DOMAIN_INTENTS: Record<string, string> = {
     "load Cesium ion asset 75343 (New York City 3D Buildings) as a Cesium3DTileset, then attach a CustomShader whose fragmentShaderText recolors each building using its EXT_mesh_features feature ID (fsInput.featureIds.featureId_0) so buildings are visibly tinted in different colors",
   "cesiumjs-entities": "add a GeoJSON polygon entity with labels using the high-level Entity API",
   "cesiumjs-imagery": "add a WMS imagery layer as a base map using an ImageryProvider",
-  // Seeds a concrete entity to click plus a visible effect on pick, making the ask an unambiguous
-  // live-Viewer modification instead of an abstract event-handler snippet.
+  // Seeds a concrete entity plus a visible effect on pick, making the ask an unambiguous
+  // live-Viewer modification instead of an abstract event-handler snippet. Deliberately does NOT
+  // ask to register a ScreenSpaceEventHandler click handler: any registered callback is invoked
+  // later, after this script's single execution ends and its VM is disposed — architecturally
+  // impossible in this sandbox (same root cause as CallbackProperty/setTimeout/addEventListener
+  // being disallowed). Instead asks for an immediate, synchronous pick right after adding the
+  // entity, using the same scene.pick API the domain is actually about, achievable within one
+  // script. Explicitly uses a fixed literal Cartesian2 screen position rather than deriving one
+  // from scene.canvas/viewer.container (e.g. via SceneTransforms.worldToWindowCoordinates) —
+  // canvas/container are blocked DOM-escape guards, so any path that reads them (even indirectly
+  // through a Cesium helper) is rejected too.
   "cesiumjs-interaction":
-    "add a red point entity over London, then register a ScreenSpaceEventHandler LEFT_CLICK handler that uses scene.pick to detect clicks on entities and changes the picked entity's point color to yellow",
+    "add a red point entity over London, then in the SAME script (do not register a ScreenSpaceEventHandler or any other callback — it cannot run after this script finishes) call viewer.scene.pick with a fixed literal screen position such as new Cesium.Cartesian2(400, 300) — do NOT read viewer.scene.canvas or viewer.container to compute a position, they are unavailable; if Cesium.defined() confirms something was picked, change its point color to yellow",
   // Steers explicitly to the Primitive + MaterialAppearance pattern (not the Entity API), since a
   // raw Material assigned to an Entity's polygon.material throws at runtime.
   "cesiumjs-materials-shaders":
     "define a custom Fabric material with GLSL source and apply it via a Primitive + GeometryInstance + MaterialAppearance (not the Entity API) to a rectangle geometry, then add a PostProcessStage bloom post-processing effect with default settings",
   // Names a real, publicly-reachable sample glTF (Khronos's BoxAnimated) so the scenario is
-  // deterministic, mirroring the cesiumjs-3d-tiles fix above.
+  // deterministic, mirroring the cesiumjs-3d-tiles fix above. Deliberately does NOT ask to play
+  // the model's animation: real Cesium only finishes loading animation data on a LATER render
+  // tick after fromGltfAsync's promise resolves (model.readyEvent fires then, not at the promise
+  // resolution) — reacting to that from inside this single-shot script is the same architectural
+  // impossibility as a registered ScreenSpaceEventHandler callback.
   "cesiumjs-models-particles":
-    "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb, play its animation, and add a ParticleSystem for fire at its base — for the particle's image, use new Cesium.PinBuilder().fromColor(Cesium.Color.ORANGE, size) (synchronous, returns a real canvas) instead of drawing your own canvas with document.createElement",
+    "load the glTF model at https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/main/2.0/BoxAnimated/glTF-Binary/BoxAnimated.glb and add it to the scene (do not call model.activeAnimations.addAll or otherwise play its animation), and add a ParticleSystem for fire at its base — for the particle's image, use new Cesium.PinBuilder().fromColor(Cesium.Color.ORANGE, size) (synchronous, returns a real canvas) instead of drawing your own canvas with document.createElement",
   // Supplies concrete inline GeoJSON since this app has no pre-loaded GeoJSON for the model to
   // reference. Explicitly forbids clearing/removing existing scene content first — `removeAll()`
   // is deliberately blocked by the sandbox's security guardrail (against wiping the whole scene),
@@ -293,7 +306,7 @@ async function approveAndReadExecuteCesiumCodeResult(
       .locator('pre[class*="codeBlock"]')
       .or(page.locator('[data-testid="generation-error-panel"]')),
   ).toBeVisible({ timeout: 60_000 });
-  let result = await readExecuteCesiumCodeResult(toolCard);
+  let result = await readSettledExecuteCesiumCodeResult(page, toolCard);
 
   for (let attempt = 0; attempt < MAX_RETRIES && result.executionError; attempt++) {
     const retryApproveButton = page.getByRole("button", { name: "Approve" });
@@ -310,10 +323,51 @@ async function approveAndReadExecuteCesiumCodeResult(
         .locator('pre[class*="codeBlock"]')
         .or(page.locator('[data-testid="generation-error-panel"]')),
     ).toBeVisible({ timeout: 60_000 });
-    result = await readExecuteCesiumCodeResult(toolCard);
+    result = await readSettledExecuteCesiumCodeResult(page, toolCard);
   }
 
   return { toolCard, result };
+}
+
+/**
+ * Reads the `executeCesiumCode` result only after giving the client-side execution outcome a
+ * chance to actually land in the DOM — NOT immediately once the tool card's codeBlock/
+ * generation-error-panel appears (as a naive `readExecuteCesiumCodeResult` call right after that
+ * would do).
+ *
+ * That first DOM update only reflects the initial, server-side response (codegen + AST
+ * verification) — the approval-resume request's own reply text is deliberately suppressed (see
+ * `chat-router.ts`'s `suppressTextChunks`) specifically because it can't yet reflect whether the
+ * code actually ran. The real outcome is only known after `ChatPanel.tsx`'s
+ * `handleServerToolResult` asynchronously executes the generated code against the live Viewer
+ * (bounded by the sandbox's own `timeoutMs`) and fires a follow-up request that updates the DOM
+ * with an `execution-error-panel` on failure. Reading the result before that follow-up lands
+ * always finds `executionError` `undefined` regardless of what actually happens — silently
+ * treating a real runtime crash as success. This previously let 3 of 14 domains ("interaction",
+ * "models-particles", "time-properties") report a genuine `Sandbox run failed` error to the
+ * console while the test itself still passed (see the "execute-cesium-code sandbox test race"
+ * repo note) — a partial Viewer mutation that happened to occur before the failing line was
+ * enough to satisfy `assertSomethingChanged`, masking the runtime failure entirely.
+ */
+async function readSettledExecuteCesiumCodeResult(
+  page: Page,
+  toolCard: Locator,
+): Promise<ExecuteCesiumCodeResultInfo> {
+  // No client-side execution is ever attempted for a generation/verification failure (there's no
+  // code to run) — nothing to wait for.
+  if ((await toolCard.locator('pre[class*="codeBlock"]').count()) === 0) {
+    return readExecuteCesiumCodeResult(toolCard);
+  }
+  // Give the execution-error-panel a bounded grace window to appear — long enough to cover the
+  // sandbox's own execution timeout (5s as configured in this app) plus the follow-up request's
+  // round trip. A timeout here is the expected/common case (success) and is not itself a failure;
+  // it just means we waited long enough to trust that no `executionError` is coming.
+  await page
+    .locator('[data-testid="execution-error-panel"]')
+    .last()
+    .waitFor({ state: "attached", timeout: 8_000 })
+    .catch(() => {});
+  return readExecuteCesiumCodeResult(toolCard);
 }
 
 test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skills domain", () => {

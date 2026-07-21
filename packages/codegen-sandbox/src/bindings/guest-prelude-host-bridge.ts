@@ -58,6 +58,10 @@ declare function __cesiumSandboxHostApplySync__(
   argsJson: string,
 ): string | Promise<string>;
 declare function __cesiumSandboxHostConstructSync__(handleId: string, argsJson: string): string;
+declare function __cesiumSandboxHostInstanceOfSync__(
+  instanceHandleId: string,
+  ctorHandleId: string,
+): string;
 
 /**
  * Never invoked — exists only so `extractFunctionBody` can recover its exact source text (see
@@ -186,6 +190,31 @@ function guestHostBridgeBody(): void {
       get(_target, prop) {
         if (prop === __remoteProxyMarker__) return true;
         if (prop === "__handleId__") return handleId;
+        // Real `instanceof` internally reads `Ctor.prototype`, which the host bridge always
+        // rejects (see `assertSandboxPropertyAllowed` in `host-bridge.ts` — exposing a real
+        // prototype object to guest code is a classic sandbox-escape vector). Instead, route
+        // `instance instanceof thisRemoteProxy` through a dedicated host-side check that never
+        // hands a prototype object back — only a plain boolean. Only applies when `instance` is
+        // itself a remote-proxy handle; anything else (a plain value, a local value-type
+        // instance already handled by `__tagCesiumValueType__`, `null`/`undefined`) can't be an
+        // instance of a remote class.
+        if (prop === Symbol.hasInstance) {
+          return function (instance: unknown): boolean {
+            if (
+              instance === null ||
+              (typeof instance !== "object" && typeof instance !== "function") ||
+              !(instance as { [key: string]: unknown })[__remoteProxyMarker__]
+            ) {
+              return false;
+            }
+            const instanceHandleId = (instance as { __handleId__: string }).__handleId__;
+            const envelope = JSON.parse(
+              __cesiumSandboxHostInstanceOfSync__(instanceHandleId, handleId),
+            );
+            if (!envelope.ok) throw new Error(envelope.error);
+            return envelope.value;
+          };
+        }
         if (typeof prop === "symbol") return undefined;
         const envelope = JSON.parse(__cesiumSandboxHostGetSync__(handleId, String(prop)));
         if (!envelope.ok) throw new Error(envelope.error);

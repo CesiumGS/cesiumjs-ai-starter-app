@@ -207,6 +207,49 @@ function registerHostConstruct(
   hostFunction.dispose();
 }
 
+/**
+ * Backs the guest's `instance instanceof Cesium.SomeClass` support for classes reached through
+ * the remote-proxy bridge (e.g. the static-namespace fallback). The real `instanceof` operator
+ * internally does `Get(Ctor, "prototype")`, which `registerHostGet` unconditionally rejects (see
+ * `assertSandboxPropertyAllowed`) — `prototype` is deliberately blocked there since exposing a
+ * real prototype object to guest code is a classic sandbox-escape vector (e.g. walking up to
+ * `Function.prototype.constructor`). This performs the comparison entirely host-side instead,
+ * resolving both the instance and constructor to their real underlying objects and returning only
+ * a plain boolean — no prototype object ever crosses the boundary.
+ */
+function registerHostInstanceOf(
+  ctx: QuickJSAsyncContext,
+  handles: SandboxHandles,
+  logger: SandboxLogger,
+): void {
+  const hostFunction = ctx.newFunction(
+    "__cesiumSandboxHostInstanceOfSync__",
+    (instanceHandleIdHandle, ctorHandleIdHandle) => {
+      const instanceHandleId = ctx.getString(instanceHandleIdHandle);
+      const ctorHandleId = ctx.getString(ctorHandleIdHandle);
+      try {
+        const instance = handles.resolve(instanceHandleId);
+        const ctor = handles.resolve(ctorHandleId);
+        if (typeof ctor !== "function") {
+          throw new Error("Sandbox handle is not a constructor");
+        }
+        const result = instance instanceof ctor;
+        logger.debug(
+          `instanceof check: handle ${instanceHandleId} instanceof handle ${ctorHandleId} -> ${result}`,
+        );
+        return toEnvelopeString(ctx, { ok: true, value: result });
+      } catch (error) {
+        logger.warn(
+          `instanceof check on handle ${instanceHandleId} failed: ${errorMessage(error)}`,
+        );
+        return toEnvelopeString(ctx, { ok: false, error: errorMessage(error) });
+      }
+    },
+  );
+  ctx.setProp(ctx.global, "__cesiumSandboxHostInstanceOfSync__", hostFunction);
+  hostFunction.dispose();
+}
+
 /** Registers the complete host API consumed by the guest-side binding preludes. */
 export function registerHostBindings(
   ctx: QuickJSAsyncContext,
@@ -219,4 +262,5 @@ export function registerHostBindings(
   registerHostSet(ctx, handles, logger);
   registerHostApply(ctx, handles, logger, pendingWork);
   registerHostConstruct(ctx, handles, logger);
+  registerHostInstanceOf(ctx, handles, logger);
 }

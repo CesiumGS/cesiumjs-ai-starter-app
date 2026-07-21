@@ -89,6 +89,36 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("array.length - 1");
   });
 
+  it("warns against .addEventListener(...) on a CesiumJS Event (readyEvent/errorEvent/etc.), since the callback can't outlive the disposed VM (regression: a real model wrote model.readyEvent.addEventListener(() => {...}), rejected at runtime as a guest callback crossing the sandbox boundary)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "load a glTF model and react once it's ready",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain("addEventListener");
+    expect(prompt).toContain("readyEvent");
+  });
+
+  it("steers custom Fabric materials toward `new Cesium.Material({ fabric: {...} })` instead of the internal Material._materialCache (regression: a real model wrote Cesium.Material._materialCache.addMaterial(...), rejected at runtime as blocked internal access)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "define a custom Fabric material",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain("_materialCache");
+    expect(prompt).toContain("new Cesium.Material(");
+  });
+
+  it("warns against .removeAll() (or other _-prefixed access) to clear scene collections before adding new content, unless the intent explicitly asks to clear (regression: a real model called viewer.scene.primitives.removeAll() to 'start clean' with no such ask in the intent)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "add a rectangle primitive",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain(".removeAll()");
+    expect(prompt).toContain("start clean");
+  });
+
   describe("extraInstructions", () => {
     it("appends extraInstructions to the end of the prompt when provided", () => {
       const prompt = buildCodegenPrompt({

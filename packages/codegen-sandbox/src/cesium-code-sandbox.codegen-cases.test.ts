@@ -824,6 +824,17 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
         await property.addSample(laterTime, laterPosition);
 
         const entity = await viewer.entities.add({ position: property });
+
+        // Regression check (2026-07-20 live bug): a model reasonably guards a dynamic-position
+        // read with "is this actually time-dynamic?" via instanceof against the remote-proxied
+        // static-namespace class. This used to throw 'Cesium sandbox access to "prototype" is
+        // not allowed.' because real instanceof internally reads Ctor.prototype, which the host
+        // bridge blocks for everything. See the dedicated __cesiumSandboxHostInstanceOfSync__
+        // bridge in host-bridge.ts, which never exposes a prototype object to guest code.
+        if (!(entity.position instanceof Cesium.SampledPositionProperty)) {
+          throw new Error("expected entity.position to be a SampledPositionProperty");
+        }
+
         const sampled = await entity.position.getValue(startTime);
         return { x: sampled.x, y: sampled.y, z: sampled.z };
       `,
@@ -835,6 +846,25 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
     expect(result.x).toBeCloseTo(expectedStart.x, 1);
     expect(result.y).toBeCloseTo(expectedStart.y, 1);
     expect(result.z).toBeCloseTo(expectedStart.z, 1);
+  });
+
+  test("cesiumjs-time-properties: instanceof against a remote-proxied static class returns false for a non-matching type, without throwing", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const property = new Cesium.SampledPositionProperty();
+        const isRectangle = property instanceof Cesium.Rectangle;
+        const isSampledPositionProperty = property instanceof Cesium.SampledPositionProperty;
+        return { isRectangle, isSampledPositionProperty };
+      `,
+    });
+
+    expect(outcome).toEqual({
+      success: true,
+      result: { isRectangle: false, isSampledPositionProperty: true },
+    });
   });
 
   test("cesiumjs-models-particles: entity model options reference the real Cesium.ModelAnimationLoop enum", async () => {
