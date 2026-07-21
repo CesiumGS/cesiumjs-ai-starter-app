@@ -5,12 +5,12 @@ import { createConsoleLogger, runCesiumCodeInSandbox } from "@cesium-ai/codegen-
 import { config } from "../utils/config";
 
 /**
- * Console-backed sandbox logger, level configured via `config.sandboxLogLevel` (env
- * `VITE_SANDBOX_LOG_LEVEL`, defaults to `debug` in dev / `silent` in production builds — see
- * `utils/config.ts`). Shared across every `executeApprovedCesiumCode` call rather than created
- * per-call since it's stateless and its level never changes at runtime.
+ * Console-backed sandbox logger, level configured via `config.logLevel` (env `VITE_LOG_LEVEL`,
+ * defaults to `debug` in dev / `silent` in production builds — see `utils/config.ts`). Shared
+ * across every `executeApprovedCesiumCode` call rather than created per-call since it's stateless
+ * and its level never changes at runtime.
  */
-const sandboxLogger = createConsoleLogger(config.sandboxLogLevel);
+const sandboxLogger = createConsoleLogger(config.logLevel);
 
 /**
  * The `executeCesiumCode` tool's server-resolved output shape — this app's

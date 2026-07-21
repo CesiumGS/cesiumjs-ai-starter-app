@@ -36,6 +36,12 @@ const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
+  // Defense-in-depth against a runaway/adversarial model calling the sandbox too often —
+  // independent of whether any individual generated snippet is itself safe (see
+  // `sandbox-call-rate-limiter.ts`). One instance per mounted ChatPanel, kept in a ref (rather
+  // than state) so it survives re-renders without triggering any, and lazily constructed here
+  // since passing `new SandboxCallRateLimiter(...)` as `useRef`'s initial value would otherwise
+  // build a fresh limiter on every render.
   const sandboxRateLimiterRef = useRef<SandboxCallRateLimiter | null>(null);
   if (!sandboxRateLimiterRef.current) {
     sandboxRateLimiterRef.current = new SandboxCallRateLimiter(DEFAULT_RATE_LIMIT);

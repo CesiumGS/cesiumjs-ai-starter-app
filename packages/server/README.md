@@ -89,6 +89,42 @@ createChatRouter({
 });
 ```
 
+Without `stopAfterTools`, the same-turn loop replies immediately after the tool result — before
+the real outcome is known:
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as Model
+    participant T as executeCesiumCode (tool)
+
+    U->>M: "Fly to Paris" (request 1)
+    M->>T: call executeCesiumCode
+    T-->>M: intermediate result (code generated/verified)
+    M-->>U: "Done! Flew to Paris." ⚠️ premature — not yet confirmed
+```
+
+With `stopAfterTools: ["executeCesiumCode"]`, `stopWhen` ends the loop right after that tool's
+result, so the model waits for a follow-up request carrying the real outcome before commenting:
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant M as Model
+    participant T as executeCesiumCode (tool)
+    participant B as Browser sandbox
+
+    U->>M: "Fly to Paris" (request 1)
+    M->>T: call executeCesiumCode
+    T-->>M: intermediate result (code generated/verified)
+    Note over M: hasToolCall("executeCesiumCode") true → stopWhen fires
+    M-->>U: loop ends, no reply yet (request 1 done)
+    T->>B: run generated code client-side
+    B-->>U: real outcome (success or error)
+    U->>M: report outcome (request 2, via onServerToolResult + continueConversation)
+    M-->>U: "Done! Flew to Paris." / "That failed: ..." ✅ reflects real result
+```
+
 ## Using the agent loop directly
 
 `runAgent` (also exported) is the lower-level primitive `createChatRouter` calls per request. Use it directly if you need to build a custom route instead of mounting the provided router:
