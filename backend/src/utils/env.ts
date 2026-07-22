@@ -1,4 +1,9 @@
 import { resolve } from "node:path";
+import {
+  DEFAULT_MCP_TOOL_TIMEOUT_MS,
+  McpServerConfigsSchema,
+  type McpServerConfig,
+} from "@cesium-ai/mcp-tools";
 import dotenv from "dotenv";
 import { z } from "zod";
 
@@ -25,6 +30,29 @@ const boolEnv = (defaultValue: boolean) =>
       if (!v || !v.trim()) return defaultValue;
       return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
     });
+
+// MCP_SERVERS is a JSON array of McpServerConfig — trusted, operator-supplied
+// config only (never derived from a chat request). Blank/unset -> no MCP
+// servers configured, a zero-behavior-change default.
+const mcpServersEnv = z
+  .string()
+  .optional()
+  .transform((value, ctx): McpServerConfig[] => {
+    if (!value || !value.trim()) return [];
+    let json: unknown;
+    try {
+      json = JSON.parse(value);
+    } catch {
+      ctx.addIssue({ code: "custom", message: "MCP_SERVERS must be valid JSON." });
+      return z.NEVER;
+    }
+    const result = McpServerConfigsSchema.safeParse(json);
+    if (!result.success) {
+      ctx.addIssue({ code: "custom", message: `MCP_SERVERS is invalid: ${result.error.message}` });
+      return z.NEVER;
+    }
+    return result.data as McpServerConfig[];
+  });
 
 const EnvSchema = z.object({
   PUBLIC_URL: z.url().default("http://localhost:3001"),
@@ -57,6 +85,13 @@ const EnvSchema = z.object({
 
   TELEMETRY_ENABLED: boolEnv(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
+
+  // Optional MCP (Model Context Protocol) servers to connect to — see
+  // @cesium-ai/mcp-tools. JSON array of { name, transport, allowedTools? }.
+  // Empty/unset means MCP support stays fully off.
+  MCP_SERVERS: mcpServersEnv,
+  // Per-tool-call timeout for MCP tools (ms).
+  MCP_TOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_MCP_TOOL_TIMEOUT_MS),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

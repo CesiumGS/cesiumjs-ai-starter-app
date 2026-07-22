@@ -5,7 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * each test resets the module registry and re-imports with a controlled
  * environment. `dotenv.config` is a no-op here since no `.env` file exists
  * relative to the test's `process.cwd()`.
+ *
+ * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP_SERVERS parsing),
+ * a heavier dependency chain than before. `vi.resetModules()` forces every
+ * `loadEnv()` call below to re-evaluate that whole chain from scratch, which
+ * can push the first couple of dynamic imports in this file past vitest's
+ * default 5000ms per-test timeout under full-workspace-suite parallel
+ * contention (each in isolation is fast — see repo memory on this file's
+ * pre-existing full-run timing flakiness). Bump this file's timeout rather
+ * than chase a "fix" for what's fundamentally cold-module-load variance.
  */
+vi.setConfig({ testTimeout: 15_000 });
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -152,5 +162,44 @@ describe("env parsing", () => {
     await expect(loadEnv({ OTEL_EXPORTER_OTLP_ENDPOINT: "not-a-url" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
+  });
+
+  it("defaults MCP_SERVERS to an empty array and MCP_TOOL_TIMEOUT_MS to 30000", async () => {
+    const { env } = await loadEnv({ MCP_SERVERS: undefined, MCP_TOOL_TIMEOUT_MS: undefined });
+    expect(env.MCP_SERVERS).toEqual([]);
+    expect(env.MCP_TOOL_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it("parses a valid MCP_SERVERS JSON array", async () => {
+    const { env } = await loadEnv({
+      MCP_SERVERS: JSON.stringify([
+        { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+      ]),
+    });
+    expect(env.MCP_SERVERS).toEqual([
+      { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+    ]);
+  });
+
+  it("rejects malformed MCP_SERVERS JSON", async () => {
+    await expect(loadEnv({ MCP_SERVERS: "{not json" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects MCP_SERVERS with duplicate server names", async () => {
+    await expect(
+      loadEnv({
+        MCP_SERVERS: JSON.stringify([
+          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+        ]),
+      }),
+    ).rejects.toThrow(/Invalid environment configuration/i);
+  });
+
+  it("coerces MCP_TOOL_TIMEOUT_MS to a positive integer", async () => {
+    const { env } = await loadEnv({ MCP_TOOL_TIMEOUT_MS: "5000" });
+    expect(env.MCP_TOOL_TIMEOUT_MS).toBe(5000);
   });
 });
