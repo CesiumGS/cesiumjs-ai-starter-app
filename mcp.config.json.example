@@ -1,0 +1,20 @@
+[
+  {
+    "name": "docs",
+    "transport": {
+      "type": "http",
+      "url": "https://example.com/mcp"
+    },
+    "allowedTools": ["search"]
+  },
+  {
+    "name": "ion",
+    "transport": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp/",
+      "oauth": {
+        "clientId": "<your Cesium ion OAuth application's client ID>"
+      }
+    }
+  }
+]

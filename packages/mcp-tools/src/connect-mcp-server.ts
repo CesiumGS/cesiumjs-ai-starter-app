@@ -1,6 +1,7 @@
-import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
+import { createMCPClient, type MCPClient, type OAuthClientProvider } from "@ai-sdk/mcp";
 import type { Tool } from "ai";
 import type { McpToolsLogger } from "./logger.js";
+import { isUnauthorizedMcpError } from "./mcp-error.js";
 import type { McpServerConfig, McpTransportConfig } from "./types.js";
 
 function namespacedToolName(serverName: string, toolName: string): string {
@@ -16,7 +17,7 @@ function namespacedToolName(serverName: string, toolName: string): string {
  * — a form of MCP "tool poisoning" / rug-pull — is visible even for a tool
  * that ends up filtered out by `allowedTools`.
  */
-function selectToolEntries(
+export function selectToolEntries(
   discovered: Awaited<ReturnType<MCPClient["tools"]>>,
   server: McpServerConfig,
   logger: McpToolsLogger,
@@ -40,29 +41,49 @@ function selectToolEntries(
   return toolEntries;
 }
 
-function buildTransport(transport: McpTransportConfig) {
-  return { type: transport.type, url: transport.url, headers: transport.headers };
+export function buildTransport(transport: McpTransportConfig, authProvider?: OAuthClientProvider) {
+  return {
+    type: transport.type,
+    url: transport.url,
+    headers: transport.headers,
+    authProvider,
+  };
 }
 
 /**
  * Connects to one MCP server and discovers + allowlist-filters + namespaces
  * its tools. Never throws — a connection/discovery failure is reported back
- * as `{ error }` so callers can isolate it from other servers.
+ * as `{ error, authRequired? }` so callers can isolate it from other
+ * servers.
+ *
+ * Deliberately connects WITHOUT an `authProvider` — there's no static "needs
+ * OAuth" config flag. A server requiring per-user auth returns a plain 401,
+ * detected via `isUnauthorizedMcpError`; the caller (`createMcpTools`) uses
+ * that to route it into `authRequiredServers` instead of a hard failure. The
+ * actual interactive OAuth flow is handled separately by `session-oauth-connect.ts`.
  */
 export async function connectMcpServer(
   server: McpServerConfig,
   logger: McpToolsLogger,
-): Promise<{ client: MCPClient; toolEntries: [string, Tool][] } | { error: string }> {
+): Promise<
+  { client: MCPClient; toolEntries: [string, Tool][] } | { error: string; authRequired?: boolean }
+> {
   try {
     const client = await createMCPClient({
       transport: buildTransport(server.transport),
       clientName: "cesium-ai-mcp-tools",
     });
+
     const toolEntries = selectToolEntries(await client.tools(), server, logger);
     return { client, toolEntries };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error(`Failed to connect to MCP server`, { server: server.name, error: message });
-    return { error: message };
+    const authRequired = isUnauthorizedMcpError(err);
+    logger.error(`Failed to connect to MCP server`, {
+      server: server.name,
+      error: message,
+      authRequired,
+    });
+    return authRequired ? { error: message, authRequired: true } : { error: message };
   }
 }

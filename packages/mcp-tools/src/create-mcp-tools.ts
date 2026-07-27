@@ -28,6 +28,12 @@ export interface McpServerStatus {
   toolNames: readonly string[];
   /** Present only when `connected` is `false`. */
   error?: string;
+  /**
+   * Present (and `true`) only when `connected` is `false` AND the failure
+   * looks like "this server requires per-user authentication" (a 401 with no
+   * static credentials configured) — see {@link McpToolsHandle.authRequiredServers}.
+   */
+  authRequired?: boolean;
 }
 
 export interface McpToolsHandle {
@@ -35,6 +41,14 @@ export interface McpToolsHandle {
   tools: ToolSet;
   /** Connection outcome per configured server, for startup logs / `/health` reporting. */
   servers: readonly McpServerStatus[];
+  /**
+   * Servers whose startup connection attempt failed specifically because they
+   * need per-user authentication (a 401 response, no static credentials
+   * configured) — auto-detected, no config flag required. Feed these into
+   * `createSessionMcpManager` so they're offered via the interactive
+   * "Connect" UI instead of just logged as a hard failure.
+   */
+  authRequiredServers: readonly McpServerConfig[];
   /** Closes every underlying MCP client connection. Call once on process shutdown. */
   close: () => Promise<void>;
 }
@@ -48,7 +62,13 @@ async function registerServer(
   const result = await connectMcpServer(server, logger);
   if ("error" in result) {
     return {
-      status: { name: server.name, connected: false, toolNames: [], error: result.error },
+      status: {
+        name: server.name,
+        connected: false,
+        toolNames: [],
+        error: result.error,
+        ...(result.authRequired ? { authRequired: true } : {}),
+      },
       tools: {},
     };
   }
@@ -76,10 +96,15 @@ async function registerServer(
  * Connection failures are isolated per server — one unreachable/misbehaving
  * server never prevents the others (or the rest of the app) from starting;
  * check {@link McpToolsHandle.servers} to see which servers actually
- * connected. Call {@link McpToolsHandle.close} once on process shutdown.
+ * connected. A failure that looks like a 401 (no static credentials
+ * configured) is ALSO collected into {@link McpToolsHandle.authRequiredServers}
+ * — no manual "this server needs OAuth" flag needed, it's detected from the
+ * real connection attempt. Call {@link McpToolsHandle.close} once on process
+ * shutdown.
  *
  *   const mcp = await createMcpTools({ servers: [...] });
  *   const tools = { ...createCesiumTools(), ...mcp.tools };
+ *   // offer mcp.authRequiredServers via createSessionMcpManager for interactive connect
  *   // ...
  *   process.on("SIGTERM", () => mcp.close());
  */
@@ -88,18 +113,21 @@ export async function createMcpTools(options: CreateMcpToolsOptions): Promise<Mc
 
   const clients: MCPClient[] = [];
   const statuses: McpServerStatus[] = [];
+  const authRequiredServers: McpServerConfig[] = [];
   const tools: ToolSet = {};
 
   for (const server of servers) {
     const registered = await registerServer(server, logger, timeoutMs);
     statuses.push(registered.status);
     if (registered.client) clients.push(registered.client);
+    if (registered.status.authRequired) authRequiredServers.push(server);
     Object.assign(tools, registered.tools);
   }
 
   return {
     tools,
     servers: statuses,
+    authRequiredServers,
     close: async () => {
       const results = await Promise.allSettled(clients.map((client) => client.close()));
       for (const result of results) {

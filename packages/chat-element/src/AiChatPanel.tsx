@@ -6,6 +6,7 @@ import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "./chat-client";
 import type { ToolExecutionOutcome } from "./chat-client";
 import { MessageItem } from "./MessageItem";
+import { RegisteredTools } from "./RegisteredTools";
 import { spanVariantMapping } from "./ui-constants";
 import styles from "./AiChatPanel.module.css";
 
@@ -15,6 +16,21 @@ const DEFAULT_WIDTH = 380;
 
 export interface AiChatPanelProps {
   apiEndpoint?: string;
+  /**
+   * Endpoint reporting the host's full registered tool set (built-in tools
+   * plus any dynamically-connected MCP tools), shaped `{ tools:
+   * RegisteredTool[] }` — see `fetchRegisteredTools`/`backend/src/app.ts`'s
+   * `GET /api/tools` for this repo's own implementation. When omitted, the
+   * tools disclosure in the panel header isn't rendered at all.
+   */
+  toolsApiEndpoint?: string;
+  /**
+   * Base URL for session-scoped, user-initiated MCP OAuth connect routes
+   * (e.g. "Connect to Cesium ion"), shaped `${apiBase}/api/mcp` — see this
+   * repo's backend's `mcp-session-router.ts`. When omitted (or the host
+   * reports no session-connectable servers), no connect UI is rendered.
+   */
+  mcpConnectApiBase?: string;
   onToolCall?: (toolName: string, args: unknown) => Promise<unknown>;
   /**
    * Fired whenever a server-resolved tool result (`tool-output-available`)
@@ -123,6 +139,8 @@ function useChatClient(
 
 export function AiChatPanel({
   apiEndpoint = "/api/chat",
+  toolsApiEndpoint,
+  mcpConnectApiBase,
   onToolCall,
   onServerToolResult,
   onApprovalRequired,
@@ -231,11 +249,19 @@ export function AiChatPanel({
             AI Assistant
           </Typography>
         </div>
-        <Tooltip title="Close chat panel">
-          <IconButton aria-label="Close chat panel" size="small" onClick={() => setIsOpen(false)}>
-            <Icon href={svgDismiss} />
-          </IconButton>
-        </Tooltip>
+        <div className={styles.headerActions}>
+          {(toolsApiEndpoint || mcpConnectApiBase) && (
+            <RegisteredTools
+              toolsApiEndpoint={toolsApiEndpoint}
+              mcpConnectApiBase={mcpConnectApiBase}
+            />
+          )}
+          <Tooltip title="Close chat panel">
+            <IconButton aria-label="Close chat panel" size="small" onClick={() => setIsOpen(false)}>
+              <Icon href={svgDismiss} />
+            </IconButton>
+          </Tooltip>
+        </div>
       </div>
 
       <div className={styles.messages} ref={messagesRef}>
@@ -260,29 +286,31 @@ export function AiChatPanel({
 
       <div className={styles.inputArea}>
         <form className={styles.inputForm} onSubmit={handleSubmit}>
-          <div className={styles.chatInput} data-testid="chat-input-wrapper">
-            <TextField
-              value={client.input}
-              onChange={(e) => {
-                client.input = e.target.value;
-                forceUpdate();
-              }}
-              placeholder="Ask about the map…"
-              disabled={client.isLoading}
-              aria-label="Chat message"
-              size="small"
-              fullWidth
-              className={styles.textField}
-            />
+          <div className={styles.chatInputBox} data-testid="chat-input-wrapper">
+            <div className={styles.chatInputRow}>
+              <TextField
+                value={client.input}
+                onChange={(e) => {
+                  client.input = e.target.value;
+                  forceUpdate();
+                }}
+                placeholder="Ask about the map…"
+                disabled={client.isLoading}
+                aria-label="Chat message"
+                size="small"
+                fullWidth
+                className={styles.textField}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={client.isLoading || !client.input.trim()}
+                className={styles.sendButton}
+              >
+                {client.isLoading ? "…" : "Send"}
+              </Button>
+            </div>
           </div>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={client.isLoading || !client.input.trim()}
-            className={styles.sendButton}
-          >
-            {client.isLoading ? "…" : "Send"}
-          </Button>
         </form>
       </div>
     </div>

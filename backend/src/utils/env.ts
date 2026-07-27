@@ -1,11 +1,8 @@
 import { resolve } from "node:path";
-import {
-  DEFAULT_MCP_TOOL_TIMEOUT_MS,
-  McpServerConfigsSchema,
-  type McpServerConfig,
-} from "@cesium-ai/mcp-tools";
+import { DEFAULT_MCP_TOOL_TIMEOUT_MS, type McpServerConfig } from "@cesium-ai/mcp-tools";
 import dotenv from "dotenv";
 import { z } from "zod";
+import { resolveMcpServersConfig } from "./mcp-servers-config.js";
 
 // Loads .env files when present (local dev). quiet: true silently skips missing
 // files, so this is a no-op in production where env vars come from the runtime.
@@ -30,29 +27,6 @@ const boolEnv = (defaultValue: boolean) =>
       if (!v || !v.trim()) return defaultValue;
       return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
     });
-
-// MCP_SERVERS is a JSON array of McpServerConfig — trusted, operator-supplied
-// config only (never derived from a chat request). Blank/unset -> no MCP
-// servers configured, a zero-behavior-change default.
-const mcpServersEnv = z
-  .string()
-  .optional()
-  .transform((value, ctx): McpServerConfig[] => {
-    if (!value || !value.trim()) return [];
-    let json: unknown;
-    try {
-      json = JSON.parse(value);
-    } catch {
-      ctx.addIssue({ code: "custom", message: "MCP_SERVERS must be valid JSON." });
-      return z.NEVER;
-    }
-    const result = McpServerConfigsSchema.safeParse(json);
-    if (!result.success) {
-      ctx.addIssue({ code: "custom", message: `MCP_SERVERS is invalid: ${result.error.message}` });
-      return z.NEVER;
-    }
-    return result.data as McpServerConfig[];
-  });
 
 const EnvSchema = z.object({
   PUBLIC_URL: z.url().default("http://localhost:3001"),
@@ -86,23 +60,43 @@ const EnvSchema = z.object({
   TELEMETRY_ENABLED: boolEnv(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
 
-  // Optional MCP (Model Context Protocol) servers to connect to — see
-  // @cesium-ai/mcp-tools. JSON array of { name, transport, allowedTools? }.
-  // Empty/unset means MCP support stays fully off.
-  MCP_SERVERS: mcpServersEnv,
-  // Per-tool-call timeout for MCP tools (ms).
+  // Per-tool-call timeout for MCP tools (ms). The server list is resolved
+  // separately below from `mcp.config.json`, not as a plain zod field here.
   MCP_TOOL_TIMEOUT_MS: z.coerce.number().int().positive().default(DEFAULT_MCP_TOOL_TIMEOUT_MS),
+
+  // Signs the session-ID cookie used to key any auto-detected, auth-required
+  // MCP server's connection (a server whose startup attempt failed with a
+  // 401 — see `createMcpTools`'s `authRequiredServers`). Falls back to a
+  // fixed, publicly-known dev-only value — MUST be overridden with a real
+  // secret before deploying with any auth-required MCP server.
+  SESSION_SECRET: z.preprocess(blankToUndefined, z.string().optional()),
 });
 
-export type Env = z.infer<typeof EnvSchema>;
+export type Env = z.infer<typeof EnvSchema> & { mcpServers: McpServerConfig[] };
 
 const parsed = EnvSchema.safeParse(process.env);
+const mcpConfig = resolveMcpServersConfig();
 
+const issues: string[] = [];
 if (!parsed.success) {
-  const issues = parsed.error.issues
-    .map((issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`)
-    .join("\n");
-  throw new Error(`Invalid environment configuration:\n${issues}`);
+  issues.push(
+    ...parsed.error.issues.map(
+      (issue) => `  - ${issue.path.join(".") || "(root)"}: ${issue.message}`,
+    ),
+  );
+}
+if ("issues" in mcpConfig) {
+  issues.push(...mcpConfig.issues.map((message) => `  - MCP configuration: ${message}`));
+}
+if (issues.length > 0) {
+  throw new Error(`Invalid environment configuration:\n${issues.join("\n")}`);
 }
 
-export const env: Env = parsed.data;
+// Both branches above throw before reaching here, so `parsed.success` and
+// `mcpConfig.result` are both guaranteed — narrow explicitly rather than an
+// unchecked `as` cast on the exported `env` object itself.
+const baseEnv = (parsed as Extract<typeof parsed, { success: true }>).data;
+const { servers: mcpServers } = (mcpConfig as Extract<typeof mcpConfig, { result: unknown }>)
+  .result as { servers: McpServerConfig[] };
+
+export const env: Env = { ...baseEnv, mcpServers };

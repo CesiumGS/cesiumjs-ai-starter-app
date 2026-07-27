@@ -1,6 +1,6 @@
 # @cesium-ai/mcp-tools
 
-Optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](../tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
+Server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](../tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
 
 ```ts
 import { createMcpTools } from "@cesium-ai/mcp-tools";
@@ -38,13 +38,14 @@ MCP tool calls run arbitrary code you don't control, so this package is delibera
 
 | Risk                                                                                                                                                                                                                                                                                               | Mitigation                                                                                                                                                                                                                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Config is attacker-influenceable** — a server URL controls what code runs.                                                                                                                                                                                                                       | `McpServerConfig[]` is a plain, host-supplied argument, exactly like the LLM API key — it must come from trusted operator config (e.g. an `MCP_SERVERS` env var, see the backend's `env.ts`), **never** from a chat request.                                                                                           |
+| **Config is attacker-influenceable** — a server URL controls what code runs.                                                                                                                                                                                                                       | `McpServerConfig[]` is a plain, host-supplied argument, exactly like the LLM API key — it must come from trusted operator config (e.g. an `mcp.config.json` file, see the backend's `env.ts`), **never** from a chat request.                                                                                          |
 | **A locally-spawned process is a larger attack surface than a URL.**                                                                                                                                                                                                                               | `stdio` transport (spawning an arbitrary local executable) is deliberately unsupported — `McpTransportConfig` only allows `sse`/`http`, and `McpServerConfigsSchema` rejects any other `type` at parse time. Only network transports this app merely calls are supported.                                              |
 | **[Tool poisoning](https://owasp.org/www-community/attacks/MCP_Tool_Poisoning) / silent "rug pull"** — an MCP server can change a tool's `name`/`description` (which the model reads to decide what to call) at any time, including after your app has been reviewed against the original wording. | Every discovered tool's name + description is logged via the `logger` option (`createConsoleMcpToolsLogger("info")` or higher) at connect time — review these logs whenever an MCP server updates. Prefer `allowedTools` (an explicit per-server allowlist) over accepting a server's full, unreviewed tool catalogue. |
 | **Name collisions across servers.**                                                                                                                                                                                                                                                                | Every tool is namespaced `mcp__<serverName>__<toolName>` before merging, so two servers can never silently shadow each other's tools.                                                                                                                                                                                  |
 | **A stalled or malicious server hangs the agent loop.**                                                                                                                                                                                                                                            | Every tool call is wrapped with a timeout (`timeoutMs`, default {@link DEFAULT_MCP_TOOL_TIMEOUT_MS} = 30s) that rejects the call — it can't block the request indefinitely.                                                                                                                                            |
 | **One bad server takes the whole app down.**                                                                                                                                                                                                                                                       | Each server connects independently — a connection failure is recorded in `McpToolsHandle.servers` and logged, but never thrown; the other servers (and the rest of the app) start normally. Check `servers` at startup / in `/health`.                                                                                 |
 | **Credentials/URLs leaking to the browser.**                                                                                                                                                                                                                                                       | `McpServerConfig` (which may carry auth headers) is consumed entirely server-side — never serialize it into any response sent to the client.                                                                                                                                                                           |
+| **Per-user OAuth credentials must not leak across users or persist unexpectedly.**                                                                                                                                                                                                                 | Session OAuth creates one in-memory provider per browser session. Tokens never reach the browser or disk and are discarded when the connection/session is closed or the process restarts.                                                                                                                              |
 | **A model calling an MCP tool without a human in the loop.**                                                                                                                                                                                                                                       | This package doesn't gate approval itself (that's a `streamText`/`toolApproval` concern — see `@cesium-ai/server`), but the host app should default every MCP tool to `"user-approval"` (this repo's `backend/src/app.ts` does exactly that for every tool `createMcpTools` returns).                                  |
 
 ## API
@@ -61,6 +62,7 @@ interface CreateMcpToolsOptions {
 interface McpToolsHandle {
   tools: ToolSet; // merged, namespaced — spread into your registry
   servers: readonly McpServerStatus[]; // per-server connect outcome
+  authRequiredServers: readonly McpServerConfig[]; // auto-detected as needing per-user OAuth
   close(): Promise<void>; // closes every underlying MCP client
 }
 ```
@@ -69,28 +71,176 @@ interface McpToolsHandle {
 
 ### `McpServerConfig`
 
+One array, one schema, no manual "does this need OAuth" flag:
+
 ```ts
 interface McpServerConfig {
   name: string; // unique; used for namespacing + logs
-  transport: { type: "sse" | "http"; url: string; headers?: Record<string, string> };
+  transport: {
+    type: "sse" | "http";
+    url: string;
+    headers?: Record<string, string>;
+    oauth?: McpOAuthConfig; // optional overrides, only consulted if auth turns out to be needed
+  };
   allowedTools?: readonly string[]; // omit = expose every tool the server advertises
 }
 ```
 
+`createMcpTools` attempts every server the same way, with no `authProvider` attached. Per server, the outcome is one of:
+
+- **Connects successfully** — shared by every visitor from then on (tools merged into `McpToolsHandle.tools`).
+- **Fails with a 401** — auto-detected as needing per-user authentication (`isUnauthorizedMcpError`, see `mcp-error.ts`) and collected into `McpToolsHandle.authRequiredServers` instead of a hard failure. Feed that list into `createSessionMcpManager` (below) to offer it through an interactive "Connect" flow.
+- **Fails any other way** (network unreachable, bad URL, ...) — recorded as a genuine failure in `McpToolsHandle.servers`, isolated from other servers.
+
+```ts
+const mcp = await createMcpTools({ servers });
+const sessionMcp =
+  mcp.authRequiredServers.length > 0
+    ? createSessionMcpManager({
+        servers: mcp.authRequiredServers,
+        buildRedirectUrl: () => "https://app.example.com/api/mcp/callback",
+      })
+    : undefined;
+```
+
+### Session-scoped OAuth
+
+Interactive OAuth is intentionally handled by a separate function from startup-connected servers, even though both share one config type. Use `createSessionMcpManager` for user-initiated connections (pass it the servers `createMcpTools` reported in `authRequiredServers`, above) so each browser session gets its own identity and in-memory credentials:
+
+```ts
+const sessionMcp = createSessionMcpManager({
+  servers: [
+    {
+      name: "ion",
+      transport: {
+        type: "http",
+        url: "http://localhost:3000/mcp/",
+        oauth: {
+          clientId: "<optional default client_id>",
+        },
+      },
+    },
+  ],
+  buildRedirectUrl: () => "https://app.example.com/api/mcp/callback",
+});
+```
+
+`oauth` is an optional override bag with `clientId`, `clientSecret`, and `clientName` — omit it to use RFC 7591 dynamic client registration. OAuth scope is never taken from config; it's always resolved dynamically at connect time from the server's RFC 9728 Protected Resource Metadata `scopes_supported` field. `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `backend/src/mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
+
+`@ai-sdk/mcp` handles dynamic client registration, PKCE (S256), authorization-code exchange, and refresh. This package keeps provider state in memory only — the host must call `disconnect`, `disconnectSession`, and `closeAll` at the appropriate lifecycle boundaries.
+
 ### `parseMcpServerConfigs(value)`
 
-Validates a `McpServerConfig[]` (e.g. `JSON.parse()`'d from an env var) — checks transport shape and rejects duplicate server names. Throws a `ZodError` on invalid input. `McpServerConfigSchema` / `McpServerConfigsSchema` are also exported directly for hosts that want to compose their own env-parsing pipeline (see `backend/src/utils/env.ts`'s `MCP_SERVERS` handling for a worked example).
+Validates a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.config.json` file) — checks transport shape and rejects duplicate server names. Throws a descriptive error on any violation.
 
 ### Logging
 
 `noopMcpToolsLogger` (default) and `createConsoleMcpToolsLogger(level)` (`"debug" | "info" | "warn" | "error" | "silent"`, `[mcp-tools]`-prefixed) are exported. `"info"` or louder is recommended in any environment where you want to catch tool-poisoning-style changes — it logs every discovered tool's name and description at connect time.
 
+## Request flows
+
+Three flows this package participates in. All are simplified — `@ai-sdk/mcp`'s own `auth()` may perform additional metadata-discovery round trips not shown here.
+
+### Startup: connecting operator-configured servers
+
+Every server is attempted the same way, with no `authProvider` attached — a protected server's plain 401 is what routes it to `authRequiredServers` instead of a hard failure:
+
+```mermaid
+sequenceDiagram
+    participant Backend as Backend process (index.ts)
+    participant MCP as MCP Server
+
+    Note over Backend: createMcpTools({ servers }) at startup
+    loop for each configured server
+        Backend->>MCP: connect (no authProvider attached)
+        alt succeeds
+            MCP-->>Backend: 200 OK
+            Backend->>MCP: tools()
+            MCP-->>Backend: tool list
+            Note over Backend: merged into McpToolsHandle.tools —<br/>shared by every visitor from then on
+        else 401 Unauthorized
+            MCP-->>Backend: 401
+            Note over Backend: isUnauthorizedMcpError() → true<br/>added to authRequiredServers instead of a hard failure
+        else other failure
+            MCP-->>Backend: network error / non-200
+            Note over Backend: recorded as a failed server in McpToolsHandle.servers,<br/>isolated from the rest
+        end
+    end
+```
+
+### Session-scoped interactive OAuth connect
+
+Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are this repo's own `backend/src/mcp-session-router.ts`:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Backend as Backend (mcp-session-router.ts)
+    participant MCP as MCP Server (protected resource)
+    participant AuthServer as Authorization Server
+
+    User->>Browser: clicks "Connect" for a server
+    Browser->>Backend: POST /api/mcp/:server/connect
+    Backend->>MCP: GET .well-known/oauth-protected-resource<path> (RFC 9728)
+    MCP-->>Backend: metadata (optional scopes_supported)
+    Backend->>AuthServer: discover metadata (.well-known/openid-configuration or oauth-authorization-server)
+    AuthServer-->>Backend: authorization_endpoint, token_endpoint, registration_endpoint, ...
+    opt no clientId configured for this server
+        Backend->>AuthServer: POST registration_endpoint (RFC 7591 dynamic client registration)
+        AuthServer-->>Backend: client_id (+ client_secret)
+    end
+    Note over Backend: builds a PKCE (S256) verifier/challenge,<br/>generates + stores an OAuth "state",<br/>stores a PendingEntry keyed by that state
+    Backend-->>Browser: { authorizationUrl }
+    Browser->>User: opens a popup at authorizationUrl
+    User->>AuthServer: logs in / grants consent
+    AuthServer-->>Browser: redirects the popup to /api/mcp/callback?code=...&state=...
+    Browser->>Backend: GET /api/mcp/callback?code=...&state=...
+    Note over Backend: looks up the pending flow by "state" alone —<br/>the callback route is server-name-agnostic
+    Backend->>AuthServer: POST token_endpoint (code + code_verifier + client_id)
+    AuthServer-->>Backend: access_token (+ refresh_token)
+    Backend->>MCP: connect with "Authorization: Bearer <access_token>"
+    MCP-->>Backend: 200 OK
+    Backend->>MCP: tools()
+    MCP-->>Backend: tool list
+    Note over Backend: namespaced (mcp__<server>__<tool>) + timeout-wrapped,<br/>stored keyed by this browser session's sessionId
+    Backend-->>Browser: self-closing HTML page → postMessage({ok:true}) → window.close()
+    Browser->>Browser: McpConnect.tsx receives the postMessage,<br/>refetches /api/tools to show the newly connected tools
+```
+
+### Calling a connected MCP tool during chat
+
+Applies equally to an operator-configured server's tool and a session-connected one — the only difference is where `getSessionTools` merges its tools into the request's tool registry:
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Backend as Backend (/api/chat)
+    participant MCP as MCP Server
+
+    User->>Browser: sends a chat message
+    Browser->>Backend: POST /api/chat
+    Note over Backend: tool registry = static tools<br/>+ sessionMcp.getSessionTools(sessionID)
+    Backend-->>Browser: stream: tool-input-available + tool-approval-request
+    Note over Browser: every MCP tool defaults to<br/>toolApproval: "user-approval"
+    Browser->>User: shows Approve / Reject
+    User->>Browser: clicks Approve
+    Browser->>Backend: POST /api/chat (approval-responded)
+    Backend->>MCP: call the underlying MCP tool<br/>(Bearer token attached for a session-connected server)
+    MCP-->>Backend: tool result
+    Backend-->>Browser: stream: tool-output-available
+    Browser->>User: renders the result
+```
+
 ## Limitations / follow-ups
 
 This package only calls the MCP client's `tools()` method — the one capability this app's `streamText` agent loop can consume. A few other things `@ai-sdk/mcp`'s client exposes are deliberately **not** wired up:
 
-- **Elicitation** (`client.onElicitationRequest(...)`) — a server can ask the client to gather more input from the user mid tool-call. No handler is registered, so a bridged tool that triggers elicitation will fail rather than surface a UI prompt. This app's MCP tool calls run headless, server-side, with no live "ask the user and wait" channel at that point — supporting this would mean threading a request through the SSE stream back to the browser and pausing the call for a response.
-- **OAuth-authenticated servers** (`OAuthClientProvider`/`auth()`) — only static `headers` are supported for `sse`/`http` transports, not the full OAuth token-refresh flow.
-- **Resources / Prompts** (`listResources`, `readResource`, `experimental_listPrompts`, `experimental_getPrompt`) — not fetched at all. A server whose real value is resources/prompts rather than tools will connect successfully but contribute zero tools (visible as `toolNames: []` in `McpToolsHandle.servers`).
-- Per-tool-call timeout is enforced with a `Promise.race` wrapper around `execute()`; it can't cancel work already in flight on the MCP server itself, only stop waiting for its result.
-- Requires Node.js ≥ 22 (`@ai-sdk/mcp`'s own engine requirement) — higher than this repo's overall `>=20` floor. Only relevant if you actually configure an MCP server.
+- **Elicitation** (`client.onElicitationRequest(...)`) — a server can ask the client to gather more input mid tool-call. No handler is registered, so a bridged tool that triggers elicitation fails rather than surfacing a UI prompt; this app's MCP calls run headless, server-side, with no live "ask the user and wait" channel.
+- **Resources / Prompts** (`listResources`, `readResource`, `experimental_listPrompts`, `experimental_getPrompt`) — not fetched at all. A server whose real value is resources/prompts rather than tools connects successfully but contributes zero tools (`toolNames: []` in `McpToolsHandle.servers`).
+- Per-tool-call timeout wraps `execute()` in a `Promise.race`; it can't cancel work already in flight on the MCP server, only stop waiting for its result.
+- Requires Node.js ≥ 22 (`@ai-sdk/mcp`'s own requirement) — higher than this repo's overall `>=20` floor. Only relevant if you configure an MCP server.
+- **`SessionMcpManager` keeps all state in memory in the process that created it** — connected `MCPClient` instances, in-flight OAuth state/PKCE verifiers, pending-connection bookkeeping. A live MCP client connection can only exist in one process, so running more than one backend instance requires routing a given browser session consistently to the SAME instance (sticky sessions / instance affinity) — swapping just the session-ID store does not make this multi-instance-safe. There's no idle-connection sweep either; a connected session's `MCPClient` stays open until `disconnect`/`disconnectSession`/`closeAll` is called or the process exits.
+
+This package has no opinion on how the host establishes a `sessionId` — `createSessionMcpManager` just takes one as a plain string, so any session-identity mechanism (an `express-session` cookie, a signed JWT, etc.) works.

@@ -74,6 +74,8 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
   return (
     <AiChatPanel
       apiEndpoint={config.chatApiEndpoint}
+      toolsApiEndpoint={config.toolsApiEndpoint}
+      mcpConnectApiBase={config.mcpConnectApiBase}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
     />

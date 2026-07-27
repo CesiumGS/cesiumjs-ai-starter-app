@@ -15,6 +15,17 @@ export {
   McpServerConfigSchema,
   McpServerConfigsSchema,
   parseMcpServerConfigs,
+  type McpOAuthConfig,
   type McpServerConfig,
   type McpTransportConfig,
 } from "./types.js";
+export {
+  createSessionMcpManager,
+  type SessionMcpManager,
+  type SessionMcpManagerOptions,
+} from "./session/session-mcp-manager.js";
+export type { ConnectedMcpConnection, PendingMcpConnection } from "./storage/models.js";
+export type {
+  McpConnectedConnectionRepository,
+  McpPendingConnectionRepository,
+} from "./storage/repositories.js";

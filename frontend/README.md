@@ -9,13 +9,15 @@ src/
 ├── App.tsx                     # Root component — mounts the globe + chat panel
 ├── components/
 │   ├── CesiumGlobe.tsx          # CesiumJS Viewer lifecycle wrapper
-│   └── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
+│   ├── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
+│   └── RegisteredToolsList.tsx  # "Tools (N)" disclosure listing the backend's full tool registry
 ├── tools/
 │   ├── camera.ts                 # flyToLocation — client-side flyTo executor
 │   └── execute-cesium-code.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
 ├── utils/
 │   ├── cesium-loader.ts          # Viewer initialization (terrain, imagery, defaults)
-│   └── config.ts                 # Reads VITE_* env vars (Ion token, chat API base URL)
+│   ├── config.ts                 # Reads VITE_* env vars (Ion token, chat/tools API base URL)
+│   └── fetch-registered-tools.ts # Fetches + validates the backend's GET /api/tools response
 └── main.tsx                     # React entry point
 ```
 

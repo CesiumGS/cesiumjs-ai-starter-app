@@ -42,4 +42,54 @@ describe("parseMcpServerConfigs", () => {
       parseMcpServerConfigs([{ name: "docs", transport: { type: "stdio", command: "node" } }]),
     ).toThrow();
   });
+
+  it("accepts oauth overrides on any server — there's no static mode flag to gate them on", () => {
+    const parsed = parseMcpServerConfigs([
+      {
+        name: "ion",
+        transport: {
+          type: "http",
+          url: "http://localhost:3000/mcp/",
+          oauth: {
+            clientId: "abc123",
+            clientName: "Cesium AI",
+          },
+        },
+      },
+    ]);
+    expect(parsed[0]?.transport.oauth).toEqual({
+      clientId: "abc123",
+      clientName: "Cesium AI",
+    });
+  });
+
+  it("rejects unrecognized oauth fields", () => {
+    expect(() =>
+      parseMcpServerConfigs([
+        {
+          name: "ion",
+          transport: {
+            type: "http",
+            url: "http://localhost:3000/mcp/",
+            oauth: { tokenStorePath: "tokens.json" },
+          },
+        },
+      ]),
+    ).toThrow();
+  });
+
+  it("rejects a config-supplied oauth scope — scope is always resolved dynamically", () => {
+    expect(() =>
+      parseMcpServerConfigs([
+        {
+          name: "ion",
+          transport: {
+            type: "http",
+            url: "http://localhost:3000/mcp/",
+            oauth: { scope: "assets:read" },
+          },
+        },
+      ]),
+    ).toThrow();
+  });
 });

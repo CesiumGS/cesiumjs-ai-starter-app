@@ -8,12 +8,13 @@ See the [top-level README](../README.md) for architecture, quick start, and the 
 
 ```
 src/
-├── app.ts                 # Express app: CORS, JSON body parsing, /health, rate limiter, chat router
+├── app.ts                 # Express app: CORS, JSON body parsing, /health, /api/tools, rate limiter, chat router
 ├── tools/
 │   ├── flyto-tool.ts       # This app's model-facing flyTo input schema (extends the shared shape with descriptions)
 │   └── execute-cesium-code-tool.ts # This app's server-executed executeCesiumCode tool (wraps @cesium-ai/codegen-cesium)
 └── utils/
     ├── env.ts              # Zod-validated, typed environment config (loads .env)
+    ├── mcp-servers-config.ts # Resolves MCP servers from mcp.config.json
     ├── providers.ts        # LLM provider factory — resolves an AI SDK LanguageModel from Env
     └── rate-limit.ts        # In-process per-IP sliding-window rate limiter
 ```
@@ -31,6 +32,10 @@ The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sa
 ## Environment
 
 Environment variables are parsed and validated by `src/utils/env.ts` (Zod). See the [Environment Variables](../README.md#environment-variables) table in the top-level README for the full list (`AI_PROVIDER`, provider API keys, `RATE_LIMIT_RPM`, `ALLOWED_ORIGIN`, etc.).
+
+## Session middleware (MCP OAuth "Connect" flow)
+
+`src/utils/session.ts`'s `createSessionMiddleware` is only mounted when `sessionMcp` is configured (see [Enabling MCP tools](../README.md#enabling-mcp-tools)). It defaults to `express-session`'s in-memory `MemoryStore` \u2014 fine for local dev / a single instance, but sessions (and any MCP connections tied to them) are lost on restart and aren't shared across replicas. `createBackendApp`'s `sessionStore` option accepts any real `express-session`-compatible `Store` (e.g. `connect-redis`) for production; construct it in `src/index.ts` and pass it through. Note this only replaces the session-ID/cookie layer \u2014 `@cesium-ai/mcp-tools`'s `SessionMcpManager` keeps its own in-memory state (live MCP client connections), so a multi-instance deployment still needs sticky sessions / instance affinity for the "Connect" flow to keep working; see that package's README for details.
 
 ## Scripts
 

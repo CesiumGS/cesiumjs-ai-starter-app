@@ -8,6 +8,8 @@ const { createMCPClientMock } = vi.hoisted(() => ({
 
 vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: createMCPClientMock,
+  auth: vi.fn(),
+  UnauthorizedError: class UnauthorizedError extends Error {},
 }));
 
 const { createMcpTools, DEFAULT_MCP_TOOL_TIMEOUT_MS } = await import("./create-mcp-tools.js");
@@ -83,6 +85,34 @@ describe("createMcpTools", () => {
       { name: "healthy", connected: true, toolNames: ["mcp__healthy__ping"] },
     ]);
     expect(Object.keys(handle.tools)).toEqual(["mcp__healthy__ping"]);
+    expect(handle.authRequiredServers).toEqual([]);
+  });
+
+  it("routes a server whose connection fails with a 401 into authRequiredServers instead of a hard failure", async () => {
+    class FakeMcpClientError extends Error {
+      statusCode: number;
+      constructor(message: string, statusCode: number) {
+        super(message);
+        this.name = "MCPClientError";
+        this.statusCode = statusCode;
+      }
+    }
+    const ionServer = mcpServer("ion");
+    createMCPClientMock
+      .mockRejectedValueOnce(new FakeMcpClientError("(HTTP 401): unauthorized", 401))
+      .mockResolvedValueOnce({
+        tools: vi.fn(async () => ({ search: fakeTool() })),
+        close: vi.fn(async () => {}),
+      });
+
+    const handle = await createMcpTools({
+      servers: [ionServer, mcpServer("docs")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.servers[0]).toMatchObject({ name: "ion", connected: false, authRequired: true });
+    expect(handle.authRequiredServers).toEqual([ionServer]);
+    expect(Object.keys(handle.tools)).toEqual(["mcp__docs__search"]);
   });
 
   it("prefixes tool names so identical tool names from two servers never collide", async () => {

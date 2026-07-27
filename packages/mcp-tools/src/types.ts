@@ -1,6 +1,40 @@
 import { z } from "zod";
 
 /**
+ * Optional overrides for a session-scoped OAuth 2.0/2.1 authorization-code +
+ * PKCE connection. If `clientId` is omitted, RFC 7591 dynamic client
+ * registration is attempted automatically; if set, it's used as-is and
+ * never overwritten. PKCE (S256) and token storage are handled by
+ * `@ai-sdk/mcp`'s `auth()` — credentials stay in memory for the browser
+ * session only.
+ *
+ * There's no static "this server needs OAuth" flag — whether a server needs
+ * interactive auth is auto-detected from its startup connection attempt
+ * (see `createMcpTools`'s `authRequiredServers`); `oauth` only supplies
+ * overrides once that fires. Scope is deliberately not configurable here —
+ * it's always resolved dynamically at connect time from the server's RFC
+ * 9728 Protected Resource Metadata `scopes_supported` field (see
+ * `discoverProtectedResourceScope`); a server that omits it connects with no
+ * scope requested.
+ */
+export type McpOAuthConfig = {
+  /** Pre-registered client_id — skips RFC 7591 dynamic client registration. */
+  clientId?: string;
+  /** Pre-registered client_secret, only meaningful alongside `clientId`. */
+  clientSecret?: string;
+  /** `client_name` sent during dynamic registration. Ignored when `clientId` is set. */
+  clientName?: string;
+};
+
+const McpOAuthConfigSchema = z
+  .object({
+    clientId: z.string().optional(),
+    clientSecret: z.string().optional(),
+    clientName: z.string().optional(),
+  })
+  .strict();
+
+/**
  * How to connect to one MCP server. Mirrors `@ai-sdk/mcp`'s network transport
  * shapes — stdio (spawning a local executable) is deliberately unsupported,
  * since a config-driven `command` to spawn is a much larger attack surface
@@ -12,13 +46,18 @@ export type McpTransportConfig = {
   /** MCP server URL. Must come from trusted, server-only config. */
   url: string;
   headers?: Record<string, string>;
+  /** Optional overrides for the interactive OAuth flow, if this server ever needs one. */
+  oauth?: McpOAuthConfig;
 };
 
-const McpTransportConfigSchema = z.object({
-  type: z.enum(["sse", "http"]),
-  url: z.url(),
-  headers: z.record(z.string(), z.string()).optional(),
-});
+const McpTransportConfigSchema = z
+  .object({
+    type: z.enum(["sse", "http"]),
+    url: z.url(),
+    headers: z.record(z.string(), z.string()).optional(),
+    oauth: McpOAuthConfigSchema.optional(),
+  })
+  .strict();
 
 /** One MCP server this app trusts and should connect to. */
 export interface McpServerConfig {
@@ -39,13 +78,16 @@ export interface McpServerConfig {
   allowedTools?: readonly string[];
 }
 
-export const McpServerConfigSchema = z.object({
+const serverFields = {
   name: z.string().min(1),
-  transport: McpTransportConfigSchema,
   allowedTools: z.array(z.string()).optional(),
-});
+};
 
-export const McpServerConfigsSchema = z.array(McpServerConfigSchema).superRefine((servers, ctx) => {
+export const McpServerConfigSchema = z
+  .object({ ...serverFields, transport: McpTransportConfigSchema })
+  .strict();
+
+function uniqueServerNames<T extends { name: string }>(servers: T[], ctx: z.RefinementCtx): void {
   const seen = new Set<string>();
   for (const [index, server] of servers.entries()) {
     if (seen.has(server.name)) {
@@ -57,11 +99,15 @@ export const McpServerConfigsSchema = z.array(McpServerConfigSchema).superRefine
     }
     seen.add(server.name);
   }
-});
+}
+
+export const McpServerConfigsSchema = z.array(McpServerConfigSchema).superRefine(uniqueServerNames);
 
 /**
- * Validates a list of MCP server configs (e.g. parsed from an `MCP_SERVERS`
- * env var). Throws a descriptive error on invalid shape or duplicate names.
+ * Validates a list of MCP server configs (e.g. parsed from an
+ * `mcp.config.json` file). Throws a descriptive error on invalid shape or
+ * duplicate names. One flat list, no manual "does this need OAuth" flag —
+ * see `createMcpTools`'s `authRequiredServers`.
  */
 export function parseMcpServerConfigs(value: unknown): McpServerConfig[] {
   return McpServerConfigsSchema.parse(value) as McpServerConfig[];
