@@ -95,7 +95,9 @@ export function createMcpSessionRouter(sessionMcp: SessionMcpManager): Router {
     const code = req.query.code;
     if (typeof code !== "string") {
       const serverName = await sessionMcp.cancelPending(req.sessionID, state);
-      res.status(400).send(callbackResultPage(serverName ?? "unknown", false, "Missing authorization code."));
+      res
+        .status(400)
+        .send(callbackResultPage(serverName ?? "unknown", false, "Missing authorization code."));
       return;
     }
 

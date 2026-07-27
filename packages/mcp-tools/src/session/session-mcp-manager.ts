@@ -5,10 +5,7 @@ import type {
   McpConnectedConnectionRepository,
   McpPendingConnectionRepository,
 } from "../storage/repositories.js";
-import {
-  beginSessionOAuthConnect,
-  completeSessionOAuthConnect,
-} from "./session-oauth-connect.js";
+import { beginSessionOAuthConnect, completeSessionOAuthConnect } from "./session-oauth-connect.js";
 import { withTimeout } from "../tool-timeout.js";
 import type { McpServerConfig } from "../types.js";
 
@@ -217,7 +214,8 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
   }
 
   async function completeCallback(sessionId: string, code: string, state: string | undefined) {
-    const entry = typeof state === "string" ? await pendingRepository.findByState(state) : undefined;
+    const entry =
+      typeof state === "string" ? await pendingRepository.findByState(state) : undefined;
     if (!entry || entry.sessionId !== sessionId) {
       return { error: "No pending OAuth connection matches the given state for this session." };
     }
@@ -243,7 +241,8 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     sessionId: string,
     state: string | undefined,
   ): Promise<string | undefined> {
-    const entry = typeof state === "string" ? await pendingRepository.findByState(state) : undefined;
+    const entry =
+      typeof state === "string" ? await pendingRepository.findByState(state) : undefined;
     if (!entry || entry.sessionId !== sessionId) return undefined;
     await pendingRepository.delete(connectionId(entry.sessionId, entry.serverName));
     return entry.serverName;
@@ -328,4 +327,3 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     closeAll,
   };
 }
-

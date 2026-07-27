@@ -21,7 +21,9 @@ import type { ConnectedMcpConnection, PendingMcpConnection } from "./models.js";
  * Postgres, ...) is expected to be async.
  */
 export interface McpPendingConnectionRepository {
-  findById(id: string): PendingMcpConnection | undefined | Promise<PendingMcpConnection | undefined>;
+  findById(
+    id: string,
+  ): PendingMcpConnection | undefined | Promise<PendingMcpConnection | undefined>;
   findByState(
     state: string,
   ): PendingMcpConnection | undefined | Promise<PendingMcpConnection | undefined>;

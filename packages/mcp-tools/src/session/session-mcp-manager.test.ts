@@ -235,7 +235,9 @@ describe("createSessionMcpManager", () => {
       noopMcpToolsLogger,
     );
     expect(await manager.isConnected("session-1", "ion")).toBe(true);
-    expect(Object.keys(await manager.getSessionTools("session-1"))).toEqual(["mcp__ion__listAssets"]);
+    expect(Object.keys(await manager.getSessionTools("session-1"))).toEqual([
+      "mcp__ion__listAssets",
+    ]);
 
     // A different session never sees another session's connected tools.
     expect(await manager.getSessionTools("session-2")).toEqual({});
@@ -430,4 +432,3 @@ describe("createSessionMcpManager", () => {
     expect(manager.serverNames).toEqual(["ion", "docs"]);
   });
 });
-
