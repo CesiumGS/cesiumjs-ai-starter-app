@@ -46,8 +46,6 @@ export interface BackendAppOptions {
    * Omit to run with no session-connectable MCP servers — a no-op default.
    */
   sessionMcp?: SessionMcpManager;
-  /** Cookie-signing secret for session middleware. Only meaningful alongside `sessionMcp`. */
-  sessionSecret?: string;
   /**
    * `express-session` store for session middleware. Only meaningful alongside
    * `sessionMcp`. Defaults to the in-memory `MemoryStore` — pass a real store
@@ -73,7 +71,6 @@ export function createBackendApp({
   model,
   mcp,
   sessionMcp,
-  sessionSecret,
   sessionStore,
 }: BackendAppOptions): Express {
   const app = express();
@@ -82,7 +79,12 @@ export function createBackendApp({
   app.use(express.json({ limit: "256kb" }));
 
   if (sessionMcp) {
-    app.use(createSessionMiddleware({ secret: sessionSecret, store: sessionStore }));
+    if (!env.SESSION_SECRET) {
+      throw new Error(
+        "SESSION_SECRET must be set when session-scoped MCP connections are enabled.",
+      );
+    }
+    app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, store: sessionStore }));
     app.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
     app.use(createMcpSessionRouter(sessionMcp));
   }
@@ -162,7 +164,7 @@ export function createBackendApp({
   // every route otherwise.
   if (mcp || sessionMcp) {
     app.use("/api/mcp-app", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
-    app.use(createMcpAppRouter({ mcp, sessionMcp }));
+    app.use(createMcpAppRouter({ mcp, sessionMcp, timeoutMs: env.MCP_TOOL_TIMEOUT_MS }));
   }
 
   app.use(

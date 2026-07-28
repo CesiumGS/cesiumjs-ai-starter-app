@@ -41,6 +41,7 @@ function fakeEnv(overrides: Partial<Env> = {}): Env {
     AI_PROVIDER: "anthropic",
     ALLOWED_ORIGIN: ["http://localhost:5173"],
     RATE_LIMIT_RPM: 20,
+    SESSION_SECRET: "integration-test-session-secret",
     ...overrides,
   } as Env;
 }
@@ -265,6 +266,16 @@ function fakeMcpToolsHandle(overrides: Partial<McpToolsHandle> = {}): McpToolsHa
 }
 
 describe("backend app — /api/mcp session routes", () => {
+  it("requires SESSION_SECRET when session-scoped MCP is enabled", () => {
+    expect(() =>
+      createBackendApp({
+        env: fakeEnv({ SESSION_SECRET: undefined }),
+        model: flyToModel(),
+        sessionMcp: fakeSessionMcpManager(),
+      }),
+    ).toThrow(/SESSION_SECRET must be set/);
+  });
+
   it("is not mounted at all when sessionMcp is not provided", async () => {
     const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel() }));
 
@@ -439,7 +450,42 @@ describe("backend app — /api/mcp-app routes", () => {
         },
       ],
     });
-    expect(readResource).toHaveBeenCalledWith({ uri: "ui://ion/importer" });
+    expect(readResource).toHaveBeenCalledWith({
+      uri: "ui://ion/importer",
+      options: { timeout: 30_000, maxTotalTimeout: 30_000 },
+    });
+  });
+
+  it("returns 502 when the MCP server rejects a resource read", async () => {
+    const readResource = vi.fn(async () => {
+      throw new Error("resource unavailable");
+    });
+    const mcp = fakeMcpToolsHandle({
+      getClient: () => ({ readResource }) as never,
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({ error: "resource unavailable" });
+  });
+
+  it("warns when a resource changes between reads", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const readResource = vi
+      .fn()
+      .mockResolvedValueOnce({ contents: [{ uri: "ui://ion/importer", text: "first" }] })
+      .mockResolvedValueOnce({ contents: [{ uri: "ui://ion/importer", text: "changed" }] });
+    const mcp = fakeMcpToolsHandle({
+      getClient: () => ({ readResource }) as never,
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
+    await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("changed since it was first loaded"));
   });
 
   it("rejects a non-ui:// resource uri", async () => {
@@ -478,7 +524,11 @@ describe("backend app — /api/mcp-app routes", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ content: [{ type: "text", text: "done" }] });
-    expect(callTool).toHaveBeenCalledWith({ name: "launch_importer", arguments: { id: 1 } });
+    expect(callTool).toHaveBeenCalledWith({
+      name: "launch_importer",
+      arguments: { id: 1 },
+      options: { timeout: 30_000, maxTotalTimeout: 30_000 },
+    });
   });
 
   it("rejects a tool call for a tool not in this request's resolved tool registry", async () => {

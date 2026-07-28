@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Button, Typography } from "@mui/material";
-import { AppRenderer, type AppRendererHandle } from "@mcp-ui/client";
+import { AppRenderer } from "@mcp-ui/client";
 import type {
   CallToolRequest,
   CallToolResult,
@@ -90,7 +90,6 @@ export function McpAppWidget({
   // the container can shrink/grow to fit it instead of sitting at a fixed
   // placeholder height regardless of how tall the widget's actual content is.
   const [contentHeight, setContentHeight] = useState<number | null>(null);
-  const appRef = useRef<AppRendererHandle>(null);
   const resolvedSandboxUrl = sandboxUrl ?? new URL("/sandbox_proxy.html", window.location.origin);
 
   const onReadResource = useCallback(
@@ -164,7 +163,6 @@ export function McpAppWidget({
       style={{ height: contentHeight ? `${contentHeight}px` : DEFAULT_LOADING_HEIGHT }}
     >
       <AppRenderer
-        ref={appRef}
         toolName={toolName}
         toolResourceUri={resourceUri}
         sandbox={{ url: resolvedSandboxUrl }}

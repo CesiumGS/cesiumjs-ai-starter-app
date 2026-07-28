@@ -2,7 +2,11 @@ import type { MCPClient } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
 import type { McpAppToolInfo } from "../create-mcp-tools.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
-import type { ConnectedMcpConnection, PendingMcpConnection } from "../storage/models.js";
+import type { ConnectedMcpConnection } from "../storage/models.js";
+import {
+  createInMemoryConnectedRepository,
+  createInMemoryPendingRepository,
+} from "../storage/in-memory-repositories.js";
 import type {
   McpConnectedConnectionRepository,
   McpPendingConnectionRepository,
@@ -43,8 +47,9 @@ export interface SessionMcpManagerOptions {
   pendingTtlMs?: number;
   /**
    * Storage for in-flight OAuth connection attempts. Defaults to a private
-   * in-memory implementation. Pass your own (e.g. Redis-backed) to share
-   * this state across multiple backend instances.
+   * in-memory implementation. The stored OAuth provider is process-local;
+   * alternate implementations are useful for lifecycle observation/testing,
+   * not cross-process persistence.
    */
   pendingRepository?: McpPendingConnectionRepository;
   /**
@@ -101,48 +106,6 @@ export interface SessionMcpManager {
 const DEFAULT_PENDING_TTL_MS = 2 * 60 * 1000;
 
 /**
- * Private, unexported in-memory default for {@link McpPendingConnectionRepository},
- * used when the host doesn't supply its own. This package ships no
- * concrete implementation as part of its public API — a host wanting a
- * distributed store implements the interface itself and passes it in.
- */
-function createDefaultPendingRepository(): McpPendingConnectionRepository {
-  const byId = new Map<string, PendingMcpConnection>();
-  const byState = new Map<string, PendingMcpConnection>();
-
-  return {
-    findById: (id) => byId.get(id),
-    findByState: (state) => byState.get(state),
-    save(id, entry) {
-      byId.set(id, entry);
-      byState.set(entry.state, entry);
-    },
-    delete(id) {
-      const entry = byId.get(id);
-      if (!entry) return;
-      byId.delete(id);
-      byState.delete(entry.state);
-    },
-  };
-}
-
-/** Private, unexported in-memory default for {@link McpConnectedConnectionRepository} — see {@link createDefaultPendingRepository}. */
-function createDefaultConnectedRepository(): McpConnectedConnectionRepository {
-  const byId = new Map<string, ConnectedMcpConnection>();
-
-  return {
-    findById: (id) => byId.get(id),
-    save(id, entry) {
-      byId.set(id, entry);
-    },
-    delete(id) {
-      byId.delete(id);
-    },
-    listAll: () => [...byId.values()],
-  };
-}
-
-/**
  * Manages per-browser-session, user-initiated OAuth connections to MCP
  * servers — unlike `createMcpTools` (one shared set of servers connected
  * once at startup), every credential/connection here is in-memory by
@@ -155,8 +118,8 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     buildRedirectUrl,
     timeoutMs = 30_000,
     pendingTtlMs = DEFAULT_PENDING_TTL_MS,
-    pendingRepository = createDefaultPendingRepository(),
-    connectedRepository = createDefaultConnectedRepository(),
+    pendingRepository = createInMemoryPendingRepository(),
+    connectedRepository = createInMemoryConnectedRepository(),
     logger = noopMcpToolsLogger,
   } = options;
   const serverByName = new Map(servers.map((server) => [server.name, server]));

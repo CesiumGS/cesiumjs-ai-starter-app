@@ -122,7 +122,7 @@ describe("beginSessionOAuthConnect", () => {
     expect(result).toEqual({ error: "ECONNREFUSED" });
   });
 
-  it("always resolves scope dynamically \u2014 there's no config-level override to short-circuit it", async () => {
+  it("discovers scope dynamically when no config override is supplied", async () => {
     discoverProtectedResourceScopeMock.mockResolvedValueOnce("assets:list assets:read");
     createMCPClientMock.mockImplementationOnce(async ({ transport }) => {
       await transport.authProvider.redirectToAuthorization(
@@ -144,6 +144,33 @@ describe("beginSessionOAuthConnect", () => {
       noopMcpToolsLogger,
     );
     expect(result.pending.provider.clientMetadata.scope).toBe("assets:list assets:read");
+  });
+
+  it("prefers an explicit scope override without performing discovery", async () => {
+    const server = ionServer();
+    server.transport.oauth = {
+      ...server.transport.oauth,
+      scope: "assets:list assets:read assets:write",
+    };
+    createMCPClientMock.mockImplementationOnce(async ({ transport }) => {
+      await transport.authProvider.redirectToAuthorization(
+        new URL("https://auth.example.com/authorize?x=1"),
+      );
+      throw new FakeUnauthorizedError("auth required");
+    });
+
+    const result = await beginSessionOAuthConnect({
+      server,
+      redirectUrl: "https://backend.example.com/api/mcp/callback",
+      logger: noopMcpToolsLogger,
+    });
+
+    expect("error" in result).toBe(false);
+    if ("error" in result) throw new Error("unreachable");
+    expect(discoverProtectedResourceScopeMock).not.toHaveBeenCalled();
+    expect(result.pending.provider.clientMetadata.scope).toBe(
+      "assets:list assets:read assets:write",
+    );
   });
 });
 

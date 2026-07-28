@@ -7,11 +7,10 @@ import type { PendingSessionOAuth } from "../session/session-oauth-connect.js";
  * One in-flight, not-yet-completed OAuth connection attempt for one browser
  * session + MCP server. Mostly plain data — `sessionId`, `serverName`,
  * `state`, `startedAt` are all serializable — EXCEPT `oauth.provider`, which
- * is currently a live `OAuthClientProvider` object (closures over its own
- * token/PKCE-verifier state), not plain data. A store wanting to persist
- * this to something like Azure Table Storage would need to decompose that
- * provider's underlying state into plain fields and reconstruct a provider
- * from them on read - not done by this package today.
+ * is a live `OAuthClientProvider` object (closures over its own token/PKCE
+ * state), not plain data. Pending connections are therefore process-local;
+ * persistence would require a separate serializable model and provider
+ * reconstruction API that this package does not currently expose.
  */
 export interface PendingMcpConnection {
   sessionId: string;

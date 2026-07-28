@@ -15,6 +15,7 @@ export function MessageItem({
   codeResultToolName,
   mcpAppByToolName,
   mcpAppApiBase,
+  mcpAppSandboxUrl,
 }: {
   message: Message;
   approval?: PendingApprovalHandlers;
@@ -24,6 +25,8 @@ export function MessageItem({
   mcpAppByToolName?: ReadonlyMap<string, RegisteredToolMcpApp>;
   /** Forwarded straight through to {@link ToolCard} — see its `mcpAppApiBase` prop. */
   mcpAppApiBase?: string;
+  /** Forwarded straight through to {@link ToolCard} as the host-served sandbox proxy URL. */
+  mcpAppSandboxUrl?: URL;
 }) {
   const isUser = message.role === "user";
   const isError = message.error === true;
@@ -64,6 +67,7 @@ export function MessageItem({
           codeResultToolName={codeResultToolName}
           mcpApp={mcpAppByToolName?.get(inv.toolName)}
           mcpAppApiBase={mcpAppApiBase}
+          mcpAppSandboxUrl={mcpAppSandboxUrl}
         />
       ))}
     </div>

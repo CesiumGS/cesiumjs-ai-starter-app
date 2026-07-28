@@ -46,9 +46,8 @@ if (mcp) {
 // No `pendingRepository`/`connectedRepository` is passed, so state stays in
 // this process's memory (single-instance deployment model, matching
 // `utils/session.ts`'s `MemoryStore` default). To scale to multiple backend
-// instances, implement `@cesium-ai/mcp-tools`' `McpPendingConnectionRepository`
-// (a distributed store, e.g. Redis) and pass it here — `McpConnectedConnectionRepository`
-// can only ever be in-memory, since it holds live MCP client connections.
+// instances, use sticky sessions so each browser consistently reaches the
+// process holding its live OAuth provider and MCP client connection.
 const sessionMcp =
   mcp && mcp.authRequiredServers.length > 0
     ? createSessionMcpManager({
@@ -68,7 +67,7 @@ if (sessionMcp) {
 // warning). A production deployment needing sessions to survive a restart
 // or be shared across replicas should construct a real store here (e.g.
 // `connect-redis`) and pass it through as `sessionStore` below.
-const app = createBackendApp({ env, model, mcp, sessionMcp, sessionSecret: env.SESSION_SECRET });
+const app = createBackendApp({ env, model, mcp, sessionMcp });
 
 const url = new URL(env.PUBLIC_URL);
 const port = url.port ? Number(url.port) : url.protocol === "https:" ? 443 : 80;

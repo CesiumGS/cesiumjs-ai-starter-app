@@ -89,9 +89,8 @@ const EnvSchema = z.object({
 
   // Signs the session-ID cookie used to key any auto-detected, auth-required
   // MCP server's connection (a server whose startup attempt failed with a
-  // 401 — see `createMcpTools`'s `authRequiredServers`). Falls back to a
-  // fixed, publicly-known dev-only value — MUST be overridden with a real
-  // secret before deploying with any auth-required MCP server.
+  // 401 — see `createMcpTools`'s `authRequiredServers`). Required whenever
+  // session-scoped MCP connections are enabled.
   SESSION_SECRET: z.preprocess(blankToUndefined, z.string().optional()),
 });
 

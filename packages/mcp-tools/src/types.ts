@@ -11,11 +11,9 @@ import { z } from "zod";
  * There's no static "this server needs OAuth" flag — whether a server needs
  * interactive auth is auto-detected from its startup connection attempt
  * (see `createMcpTools`'s `authRequiredServers`); `oauth` only supplies
- * overrides once that fires. Scope is deliberately not configurable here —
- * it's always resolved dynamically at connect time from the server's RFC
- * 9728 Protected Resource Metadata `scopes_supported` field (see
- * `discoverProtectedResourceScope`); a server that omits it connects with no
- * scope requested.
+ * overrides once that fires. Scope is normally resolved dynamically from the
+ * server's RFC 9728 Protected Resource Metadata, but can be supplied for
+ * providers that require it while omitting `scopes_supported`.
  */
 export type McpOAuthConfig = {
   /** Pre-registered client_id — skips RFC 7591 dynamic client registration. */
@@ -24,6 +22,8 @@ export type McpOAuthConfig = {
   clientSecret?: string;
   /** `client_name` sent during dynamic registration. Ignored when `clientId` is set. */
   clientName?: string;
+  /** Space-separated OAuth scopes. Overrides RFC 9728 scope discovery when provided. */
+  scope?: string;
 };
 
 const McpOAuthConfigSchema = z
@@ -31,6 +31,7 @@ const McpOAuthConfigSchema = z
     clientId: z.string().optional(),
     clientSecret: z.string().optional(),
     clientName: z.string().optional(),
+    scope: z.string().min(1).optional(),
   })
   .strict();
 
@@ -79,7 +80,12 @@ export interface McpServerConfig {
 }
 
 const serverFields = {
-  name: z.string().min(1),
+  name: z
+    .string()
+    .min(1)
+    .refine((name) => !name.includes("__"), {
+      message: 'MCP server names cannot contain "__" because it is the tool namespace delimiter.',
+    }),
   allowedTools: z.array(z.string()).optional(),
 };
 

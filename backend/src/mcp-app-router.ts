@@ -1,5 +1,6 @@
 import { type MCPClient } from "@ai-sdk/mcp";
 import {
+  DEFAULT_MCP_TOOL_TIMEOUT_MS,
   namespacedToolName,
   type McpToolsHandle,
   type SessionMcpManager,
@@ -12,7 +13,13 @@ export interface McpAppRouterOptions {
   mcp?: McpToolsHandle;
   /** Per-browser-session, user-initiated MCP OAuth connections — see `createSessionMcpManager`. */
   sessionMcp?: SessionMcpManager;
+  /** Maximum duration for each proxied MCP resource read or tool call. */
+  timeoutMs?: number;
+  /** Maximum resource fingerprints retained for drift detection. */
+  maxTrackedResources?: number;
 }
+
+const DEFAULT_MAX_TRACKED_RESOURCES = 256;
 
 /**
  * Resolves the live `MCPClient` for `server`, checking the operator-configured
@@ -59,23 +66,116 @@ async function isKnownServerTool(
  * `@ai-sdk/mcp`'s `readMCPAppResource`) so this never costs a second round
  * trip to the MCP server.
  */
-function createResourceDriftTracker() {
+function createResourceDriftTracker(maxEntries: number) {
   const baselines = new Map<string, string>();
   return function checkDrift(key: string, result: unknown): void {
     const fingerprint = createHash("sha256").update(JSON.stringify(result)).digest("base64url");
     const baseline = baselines.get(key);
     if (baseline === undefined) {
+      if (baselines.size >= maxEntries) {
+        const oldestKey = baselines.keys().next().value as string | undefined;
+        if (oldestKey !== undefined) baselines.delete(oldestKey);
+      }
       baselines.set(key, fingerprint);
       return;
     }
+    baselines.delete(key);
+    baselines.set(key, fingerprint);
     if (fingerprint !== baseline) {
       console.warn(
         `[mcp-app-router] MCP App resource "${key}" changed since it was first loaded — ` +
           `possible content update or a rug-pull from the MCP server. Re-review before trusting it.`,
       );
-      baselines.set(key, fingerprint);
     }
   };
+}
+
+async function handleResourceRequest(
+  req: Request,
+  res: Response,
+  options: McpAppRouterOptions,
+  timeoutMs: number,
+  checkDrift: (key: string, result: unknown) => void,
+): Promise<void> {
+  const server = typeof req.query.server === "string" ? req.query.server : undefined;
+  const uri = typeof req.query.uri === "string" ? req.query.uri : undefined;
+  if (!server || !uri) {
+    res.status(400).json({ error: "Both `server` and `uri` query parameters are required." });
+    return;
+  }
+  if (!uri.startsWith("ui://")) {
+    res.status(400).json({ error: 'Only "ui://" resource URIs may be read.' });
+    return;
+  }
+
+  const client = await resolveClient(server, req, options);
+  if (!client) {
+    res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
+    return;
+  }
+
+  try {
+    const result = await client.readResource({
+      uri,
+      options: { timeout: timeoutMs, maxTotalTimeout: timeoutMs },
+    });
+    checkDrift(`${server}:${uri}`, result);
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+async function handleToolCallRequest(
+  req: Request,
+  res: Response,
+  options: McpAppRouterOptions,
+  timeoutMs: number,
+): Promise<void> {
+  const {
+    server,
+    toolName,
+    arguments: toolArguments,
+  } = req.body as {
+    server?: unknown;
+    toolName?: unknown;
+    arguments?: unknown;
+  };
+  if (typeof server !== "string" || typeof toolName !== "string") {
+    res.status(400).json({ error: "`server` and `toolName` must be strings." });
+    return;
+  }
+  if (
+    toolArguments !== undefined &&
+    (typeof toolArguments !== "object" || toolArguments === null)
+  ) {
+    res.status(400).json({ error: "`arguments`, if present, must be a JSON object." });
+    return;
+  }
+
+  if (!(await isKnownServerTool(server, toolName, req, options))) {
+    res.status(404).json({
+      error: `"${toolName}" is not a known tool on MCP server "${server}" for this request.`,
+    });
+    return;
+  }
+
+  const client = await resolveClient(server, req, options);
+  if (!client) {
+    res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
+    return;
+  }
+
+  try {
+    const result = await client.callTool({
+      name: toolName,
+      arguments: (toolArguments as Record<string, unknown> | undefined) ?? {},
+      options: { timeout: timeoutMs, maxTotalTimeout: timeoutMs },
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /**
@@ -105,80 +205,19 @@ function createResourceDriftTracker() {
  */
 export function createMcpAppRouter(options: McpAppRouterOptions): Router {
   const router = Router();
-  const checkDrift = createResourceDriftTracker();
+  const timeoutMs = options.timeoutMs ?? DEFAULT_MCP_TOOL_TIMEOUT_MS;
+  const maxTrackedResources = Math.max(
+    1,
+    options.maxTrackedResources ?? DEFAULT_MAX_TRACKED_RESOURCES,
+  );
+  const checkDrift = createResourceDriftTracker(maxTrackedResources);
 
-  router.get("/api/mcp-app/resource", async (req: Request, res: Response) => {
-    const server = typeof req.query.server === "string" ? req.query.server : undefined;
-    const uri = typeof req.query.uri === "string" ? req.query.uri : undefined;
-    if (!server || !uri) {
-      res.status(400).json({ error: "Both `server` and `uri` query parameters are required." });
-      return;
-    }
-    if (!uri.startsWith("ui://")) {
-      res.status(400).json({ error: 'Only "ui://" resource URIs may be read.' });
-      return;
-    }
-
-    const client = await resolveClient(server, req, options);
-    if (!client) {
-      res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
-      return;
-    }
-
-    try {
-      const result = await client.readResource({ uri });
-      checkDrift(`${server}:${uri}`, result);
-      res.json(result);
-    } catch (err) {
-      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
-
-  router.post("/api/mcp-app/tool-call", async (req: Request, res: Response) => {
-    const {
-      server,
-      toolName,
-      arguments: toolArguments,
-    } = req.body as {
-      server?: unknown;
-      toolName?: unknown;
-      arguments?: unknown;
-    };
-    if (typeof server !== "string" || typeof toolName !== "string") {
-      res.status(400).json({ error: "`server` and `toolName` must be strings." });
-      return;
-    }
-    if (
-      toolArguments !== undefined &&
-      (typeof toolArguments !== "object" || toolArguments === null)
-    ) {
-      res.status(400).json({ error: "`arguments`, if present, must be a JSON object." });
-      return;
-    }
-
-    if (!(await isKnownServerTool(server, toolName, req, options))) {
-      res.status(404).json({
-        error: `"${toolName}" is not a known tool on MCP server "${server}" for this request.`,
-      });
-      return;
-    }
-
-    const client = await resolveClient(server, req, options);
-    if (!client) {
-      res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
-      return;
-    }
-
-    try {
-      const result = await client.callTool({
-        name: toolName,
-        arguments: (toolArguments as Record<string, unknown> | undefined) ?? {},
-      });
-      res.json(result);
-    } catch (err) {
-      res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
-    }
-  });
+  router.get("/api/mcp-app/resource", (req, res) =>
+    handleResourceRequest(req, res, options, timeoutMs, checkDrift),
+  );
+  router.post("/api/mcp-app/tool-call", (req, res) =>
+    handleToolCallRequest(req, res, options, timeoutMs),
+  );
 
   return router;
 }

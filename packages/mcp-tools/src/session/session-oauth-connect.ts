@@ -37,15 +37,15 @@ export async function beginSessionOAuthConnect(options: {
   const { server, redirectUrl, logger } = options;
   // Every server passed here is inherently OAuth-gated, so `oauth` is just an
   // optional bag of overrides. Omitting it falls back to RFC 7591 dynamic
-  // client registration. Scope is never taken from config; it's resolved
-  // dynamically below.
+  // client registration. Explicit scope supports providers that require it
+  // while omitting scopes_supported from their RFC 9728 metadata.
   const oauth = server.transport.oauth ?? {};
 
   const clientId = oauth.clientId;
   const clientSecret = oauth.clientSecret;
 
   let capturedUrl: URL | undefined;
-  const scope = await discoverProtectedResourceScope(server.transport.url, logger);
+  const scope = oauth.scope ?? (await discoverProtectedResourceScope(server.transport.url, logger));
 
   const provider = createOAuthClientProvider({
     redirectUrl,

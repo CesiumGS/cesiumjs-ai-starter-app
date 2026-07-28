@@ -9,16 +9,10 @@ import type { ConnectedMcpConnection, PendingMcpConnection } from "./models.js";
  * callback route back to the right attempt). An implementation must keep
  * both lookups in sync for the same entry.
  *
- * This package ships NO concrete implementation of this interface - it's
- * pure abstraction, so a host app can supply whatever's appropriate for its
- * own deployment (in-memory for a single instance, a real distributed store
- * for multiple instances) without this package needing to know or care.
- * `createSessionMcpManager` falls back to a private in-memory default if
- * none is supplied, purely so it still works with zero configuration.
- *
- * All methods may return their value directly or as a `Promise` - a real
- * distributed-store-backed implementation (Azure Table Storage, Redis,
- * Postgres, ...) is expected to be async.
+ * `createSessionMcpManager` uses an internal in-memory implementation by
+ * default. Because `PendingMcpConnection` contains a live OAuth provider,
+ * this interface is process-local; methods may still be asynchronous so a
+ * host can instrument or coordinate lifecycle operations.
  */
 export interface McpPendingConnectionRepository {
   findById(

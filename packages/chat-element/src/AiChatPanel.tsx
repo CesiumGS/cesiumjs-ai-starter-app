@@ -42,6 +42,11 @@ export interface AiChatPanelProps {
    * its plain JSON result, same as any other tool.
    */
   mcpAppApiBase?: string;
+  /**
+   * URL of the host-served MCP Apps sandbox proxy. Defaults to
+   * `/sandbox_proxy.html` on the current origin.
+   */
+  mcpAppSandboxUrl?: URL;
   onToolCall?: (toolName: string, args: unknown) => Promise<unknown>;
   /**
    * Fired whenever a server-resolved tool result (`tool-output-available`)
@@ -163,6 +168,7 @@ export function AiChatPanel({
   toolsApiEndpoint,
   mcpConnectApiBase,
   mcpAppApiBase,
+  mcpAppSandboxUrl,
   onToolCall,
   onServerToolResult,
   onApprovalRequired,
@@ -314,6 +320,7 @@ export function AiChatPanel({
               codeResultToolName={codeResultToolName}
               mcpAppByToolName={mcpAppByToolName}
               mcpAppApiBase={mcpAppApiBase}
+              mcpAppSandboxUrl={mcpAppSandboxUrl}
             />
           ))
         )}

@@ -37,6 +37,7 @@ export function ToolCard({
   codeResultToolName,
   mcpApp,
   mcpAppApiBase,
+  mcpAppSandboxUrl,
 }: {
   invocation: ToolInvocation;
   isPendingApproval: boolean;
@@ -58,6 +59,8 @@ export function ToolCard({
   mcpApp?: RegisteredToolMcpApp;
   /** Base URL for the MCP Apps widget bridge routes — see `McpAppWidget`'s `appApiBase` prop. */
   mcpAppApiBase?: string;
+  /** Host-served sandbox proxy URL forwarded to {@link McpAppWidget}. */
+  mcpAppSandboxUrl?: URL;
 }) {
   const argsText = JSON.stringify(invocation.args, null, 2);
   const hasResult = invocation.state === "result" && invocation.result !== undefined;
@@ -101,6 +104,7 @@ export function ToolCard({
             resourceUri={mcpApp.resourceUri}
             toolInput={invocation.args as Record<string, unknown> | undefined}
             toolResult={hasResult ? (invocation.result as unknown as CallToolResult) : undefined}
+            sandboxUrl={mcpAppSandboxUrl}
           />
         )}
         {hasResult &&

@@ -1,17 +1,9 @@
 import session, { type SessionOptions } from "express-session";
 import type { RequestHandler } from "express";
 
-/**
- * Fixed, publicly-known fallback so local dev works with zero config. Never
- * use this in a real deployment — anyone who reads this source can forge a
- * session cookie signed with it, riding a stolen/guessed session ID onto
- * another user's connected MCP tools.
- */
-const DEV_ONLY_DEFAULT_SESSION_SECRET = "cesium-ai-starter-app-dev-only-session-secret-change-me";
-
 export interface CreateSessionMiddlewareOptions {
-  /** Cookie-signing secret. Falls back to a dev-only constant (with a startup warning) when unset. */
-  secret?: string;
+  /** Cookie-signing secret loaded from `SESSION_SECRET`. */
+  secret: string;
   /** Marks the session cookie `Secure` (HTTPS-only). Set `true` in production. */
   secure?: boolean;
   /**
@@ -41,16 +33,11 @@ export interface CreateSessionMiddlewareOptions {
  * an MCP-connect endpoint — required so the OAuth callback redirect (a
  * separate top-level navigation) carries the same ID.
  */
-export function createSessionMiddleware(
-  options: CreateSessionMiddlewareOptions = {},
-): RequestHandler {
-  const { secret = DEV_ONLY_DEFAULT_SESSION_SECRET, secure = false, store } = options;
+export function createSessionMiddleware(options: CreateSessionMiddlewareOptions): RequestHandler {
+  const { secret, secure = false, store } = options;
 
-  if (secret === DEV_ONLY_DEFAULT_SESSION_SECRET) {
-    console.warn(
-      "[session] SESSION_SECRET is not set \u2014 using a fixed, publicly-known development secret. " +
-        "Set a real SESSION_SECRET before deploying with an auth-required MCP server detected.",
-    );
+  if (!secret.trim()) {
+    throw new Error("SESSION_SECRET must be set when session-scoped MCP connections are enabled.");
   }
   if (!store) {
     console.warn(

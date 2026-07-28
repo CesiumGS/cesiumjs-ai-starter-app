@@ -31,6 +31,14 @@ describe("parseMcpServerConfigs", () => {
     ).toThrow(/Duplicate MCP server name/);
   });
 
+  it("rejects server names containing the namespace delimiter", () => {
+    expect(() =>
+      parseMcpServerConfigs([
+        { name: "my__server", transport: { type: "http", url: "https://example.com/mcp" } },
+      ]),
+    ).toThrow(/cannot contain/);
+  });
+
   it("rejects an http transport with an invalid URL", () => {
     expect(() =>
       parseMcpServerConfigs([{ name: "weather", transport: { type: "http", url: "not-a-url" } }]),
@@ -78,18 +86,18 @@ describe("parseMcpServerConfigs", () => {
     ).toThrow();
   });
 
-  it("rejects a config-supplied oauth scope — scope is always resolved dynamically", () => {
-    expect(() =>
-      parseMcpServerConfigs([
-        {
-          name: "ion",
-          transport: {
-            type: "http",
-            url: "http://localhost:3000/mcp/",
-            oauth: { scope: "assets:read" },
-          },
+  it("accepts a config-supplied oauth scope when provider metadata omits it", () => {
+    const parsed = parseMcpServerConfigs([
+      {
+        name: "ion",
+        transport: {
+          type: "http",
+          url: "http://localhost:3000/mcp/",
+          oauth: { scope: "assets:list assets:read" },
         },
-      ]),
-    ).toThrow();
+      },
+    ]);
+
+    expect(parsed[0]?.transport.oauth?.scope).toBe("assets:list assets:read");
   });
 });
