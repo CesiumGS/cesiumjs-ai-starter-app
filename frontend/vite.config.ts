@@ -6,6 +6,14 @@ const cesiumSource = "../node_modules/cesium/Build/Cesium";
 const cesiumBaseUrl = "cesium";
 
 export default defineConfig({
+  // This is an npm-workspace package (repo root has the real `.env`/`.env.example`, see
+  // ../README.md and ../compose.yaml). Vite's default `envDir` is this package's own root
+  // (the directory containing this config file), so without this override `npm run dev`/
+  // `vite build` here would silently read a nonexistent/stale `frontend/.env` instead of
+  // the repo root one — the same file Docker Compose's `${VITE_CESIUM_ION_ACCESS_TOKEN}`
+  // build-arg substitution already reads (see ../compose.yaml). Pointing both at the same
+  // file keeps local dev and the Docker build using one source of truth.
+  envDir: "..",
   define: {
     // Required so CesiumJS web workers can resolve their own asset paths at runtime
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}/`),

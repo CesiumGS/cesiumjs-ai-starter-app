@@ -1,11 +1,32 @@
-import { createMCPClient, type MCPClient, type OAuthClientProvider } from "@ai-sdk/mcp";
+import {
+  createMCPClient,
+  mcpAppClientCapabilities,
+  type MCPClient,
+  type OAuthClientProvider,
+} from "@ai-sdk/mcp";
 import type { Tool } from "ai";
 import type { McpToolsLogger } from "./logger.js";
 import { isUnauthorizedMcpError } from "./mcp-error.js";
+import { getMcpAppToolMeta, type McpAppToolMeta } from "./mcp-app-meta.js";
 import type { McpServerConfig, McpTransportConfig } from "./types.js";
 
-function namespacedToolName(serverName: string, toolName: string): string {
+/** `mcp__<server>__<tool>` — the namespace every discovered tool is exposed under, everywhere in this app. */
+export function namespacedToolName(serverName: string, toolName: string): string {
   return `mcp__${serverName}__${toolName}`;
+}
+
+/** One discovered, allowlist-surviving tool from a connected MCP server. */
+export interface SelectedMcpTool {
+  /**
+   * Raw tool name exactly as advertised by the MCP server (no namespace
+   * prefix) — what `MCPClient.callTool`/`readResource` bridge calls must use.
+   */
+  rawName: string;
+  /** `mcp__<server>__<tool>` name this tool is registered under everywhere else in this app. */
+  namespacedName: string;
+  tool: Tool;
+  /** Present only if this tool declared a `_meta.ui` MCP Apps widget resource. */
+  appMeta?: McpAppToolMeta;
 }
 
 /**
@@ -21,10 +42,10 @@ export function selectToolEntries(
   discovered: Awaited<ReturnType<MCPClient["tools"]>>,
   server: McpServerConfig,
   logger: McpToolsLogger,
-): [string, Tool][] {
+): SelectedMcpTool[] {
   const allowed = server.allowedTools ? new Set(server.allowedTools) : undefined;
 
-  const toolEntries: [string, Tool][] = [];
+  const selected: SelectedMcpTool[] = [];
   for (const [toolName, toolDef] of Object.entries(discovered)) {
     logger.info(`Discovered MCP tool`, {
       server: server.name,
@@ -36,9 +57,22 @@ export function selectToolEntries(
       logger.debug(`Skipping tool not in allowedTools`, { server: server.name, tool: toolName });
       continue;
     }
-    toolEntries.push([namespacedToolName(server.name, toolName), toolDef as Tool]);
+    const appMeta = getMcpAppToolMeta((toolDef as { _meta?: unknown })._meta);
+    if (appMeta) {
+      logger.info(`Discovered MCP App widget for tool`, {
+        server: server.name,
+        tool: toolName,
+        resourceUri: appMeta.resourceUri,
+      });
+    }
+    selected.push({
+      rawName: toolName,
+      namespacedName: namespacedToolName(server.name, toolName),
+      tool: toolDef as Tool,
+      ...(appMeta ? { appMeta } : {}),
+    });
   }
-  return toolEntries;
+  return selected;
 }
 
 export function buildTransport(transport: McpTransportConfig, authProvider?: OAuthClientProvider) {
@@ -56,6 +90,13 @@ export function buildTransport(transport: McpTransportConfig, authProvider?: OAu
  * as `{ error, authRequired? }` so callers can isolate it from other
  * servers.
  *
+ * Always advertises `mcpAppClientCapabilities` (the "MCP Apps" extension,
+ * `io.modelcontextprotocol/ui`) during initialization — this is purely a
+ * capability announcement (lets a server that supports MCP Apps know it's
+ * safe to include `_meta.ui`/serve `ui://` resources); it never obligates
+ * this app to render anything, and a server that doesn't implement the
+ * extension simply ignores it.
+ *
  * Deliberately connects WITHOUT an `authProvider` — there's no static "needs
  * OAuth" config flag. A server requiring per-user auth returns a plain 401,
  * detected via `isUnauthorizedMcpError`; the caller (`createMcpTools`) uses
@@ -66,12 +107,13 @@ export async function connectMcpServer(
   server: McpServerConfig,
   logger: McpToolsLogger,
 ): Promise<
-  { client: MCPClient; toolEntries: [string, Tool][] } | { error: string; authRequired?: boolean }
+  { client: MCPClient; toolEntries: SelectedMcpTool[] } | { error: string; authRequired?: boolean }
 > {
   try {
     const client = await createMCPClient({
       transport: buildTransport(server.transport),
       clientName: "cesium-ai-mcp-tools",
+      capabilities: mcpAppClientCapabilities,
     });
 
     const toolEntries = selectToolEntries(await client.tools(), server, logger);

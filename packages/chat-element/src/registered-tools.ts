@@ -1,13 +1,30 @@
+/** MCP Apps widget metadata for a tool that declared a `ui://` resource — see `McpAppWidget`. */
+export interface RegisteredToolMcpApp {
+  resourceUri: string;
+}
+
 /** One tool a host's `toolsApiEndpoint` reports as currently registered. */
 export interface RegisteredTool {
   name: string;
   description?: string;
+  /** Present only for MCP tools that declared an MCP Apps widget resource. */
+  mcpApp?: RegisteredToolMcpApp;
+}
+
+function isRegisteredToolMcpApp(value: unknown): value is RegisteredToolMcpApp {
+  if (typeof value !== "object" || value === null) return false;
+  const { resourceUri } = value as Record<string, unknown>;
+  return typeof resourceUri === "string" && resourceUri.startsWith("ui://");
 }
 
 function isRegisteredTool(value: unknown): value is RegisteredTool {
   if (typeof value !== "object" || value === null) return false;
-  const { name, description } = value as Record<string, unknown>;
-  return typeof name === "string" && (description === undefined || typeof description === "string");
+  const { name, description, mcpApp } = value as Record<string, unknown>;
+  return (
+    typeof name === "string" &&
+    (description === undefined || typeof description === "string") &&
+    (mcpApp === undefined || isRegisteredToolMcpApp(mcpApp))
+  );
 }
 
 /**

@@ -13,6 +13,7 @@ vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: createMCPClientMock,
   auth: authMock,
   UnauthorizedError: FakeUnauthorizedError,
+  mcpAppClientCapabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } } },
 }));
 
 const { discoverProtectedResourceScopeMock } = vi.hoisted(() => ({
@@ -164,7 +165,9 @@ describe("completeSessionOAuthConnect", () => {
 
     expect("error" in result).toBe(false);
     if ("error" in result) throw new Error("unreachable");
-    expect(result.toolEntries.map(([name]) => name)).toEqual(["mcp__ion__listAssets"]);
+    expect(result.toolEntries.map((entry) => entry.namespacedName)).toEqual([
+      "mcp__ion__listAssets",
+    ]);
     expect(authMock).toHaveBeenCalledWith(pending.provider, {
       serverUrl: ionServer().transport.url,
       authorizationCode: "auth-code",

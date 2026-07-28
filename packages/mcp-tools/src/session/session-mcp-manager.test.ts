@@ -213,7 +213,9 @@ describe("createSessionMcpManager", () => {
     const close = vi.fn(async () => {});
     completeSessionOAuthConnectMock.mockResolvedValueOnce({
       client: { close },
-      toolEntries: [["mcp__ion__listAssets", fakeTool()]],
+      toolEntries: [
+        { rawName: "listAssets", namespacedName: "mcp__ion__listAssets", tool: fakeTool() },
+      ],
     });
 
     const manager = createSessionMcpManager({
@@ -244,6 +246,50 @@ describe("createSessionMcpManager", () => {
     expect(await manager.isConnected("session-2", "ion")).toBe(false);
   });
 
+  it("exposes a connected session's live client via getSessionClient, and its MCP Apps tool metadata via getSessionAppTools", async () => {
+    beginSessionOAuthConnectMock.mockResolvedValueOnce({
+      authorizationUrl: "https://auth.example.com/authorize",
+      pending: FAKE_PENDING,
+    });
+    const client = { close: vi.fn(async () => {}) };
+    completeSessionOAuthConnectMock.mockResolvedValueOnce({
+      client,
+      toolEntries: [
+        {
+          rawName: "launch_importer",
+          namespacedName: "mcp__ion__launch_importer",
+          tool: fakeTool(),
+          appMeta: { resourceUri: "ui://ion/importer" },
+        },
+        { rawName: "list_assets", namespacedName: "mcp__ion__list_assets", tool: fakeTool() },
+      ],
+    });
+
+    const manager = createSessionMcpManager({
+      servers: [mcpServer("ion")],
+      buildRedirectUrl: () => REDIRECT_URL,
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(await manager.getSessionClient("session-1", "ion")).toBeUndefined();
+    expect(await manager.getSessionAppTools("session-1")).toEqual({});
+
+    await manager.connect("session-1", "ion");
+    await manager.completeCallback("session-1", "auth-code", "state-value");
+
+    expect(await manager.getSessionClient("session-1", "ion")).toBe(client);
+    expect(await manager.getSessionAppTools("session-1")).toEqual({
+      mcp__ion__launch_importer: {
+        resourceUri: "ui://ion/importer",
+        serverName: "ion",
+        rawToolName: "launch_importer",
+      },
+    });
+    // A different session sees neither the client nor the app tools.
+    expect(await manager.getSessionClient("session-2", "ion")).toBeUndefined();
+    expect(await manager.getSessionAppTools("session-2")).toEqual({});
+  });
+
   it("routes a shared callback to the right one of TWO concurrently pending servers via their distinct state values", async () => {
     beginSessionOAuthConnectMock
       .mockResolvedValueOnce({
@@ -257,11 +303,13 @@ describe("createSessionMcpManager", () => {
     completeSessionOAuthConnectMock
       .mockResolvedValueOnce({
         client: { close: vi.fn(async () => {}) },
-        toolEntries: [["mcp__docs__search", fakeTool()]],
+        toolEntries: [{ rawName: "search", namespacedName: "mcp__docs__search", tool: fakeTool() }],
       })
       .mockResolvedValueOnce({
         client: { close: vi.fn(async () => {}) },
-        toolEntries: [["mcp__ion__listAssets", fakeTool()]],
+        toolEntries: [
+          { rawName: "listAssets", namespacedName: "mcp__ion__listAssets", tool: fakeTool() },
+        ],
       });
 
     const manager = createSessionMcpManager({
@@ -333,7 +381,9 @@ describe("createSessionMcpManager", () => {
     const close = vi.fn(async () => {});
     completeSessionOAuthConnectMock.mockResolvedValueOnce({
       client: { close },
-      toolEntries: [["mcp__ion__listAssets", fakeTool()]],
+      toolEntries: [
+        { rawName: "listAssets", namespacedName: "mcp__ion__listAssets", tool: fakeTool() },
+      ],
     });
 
     const manager = createSessionMcpManager({
@@ -362,11 +412,11 @@ describe("createSessionMcpManager", () => {
     completeSessionOAuthConnectMock
       .mockResolvedValueOnce({
         client: { close: firstClose },
-        toolEntries: [["mcp__ion__first", fakeTool()]],
+        toolEntries: [{ rawName: "first", namespacedName: "mcp__ion__first", tool: fakeTool() }],
       })
       .mockResolvedValueOnce({
         client: { close: secondClose },
-        toolEntries: [["mcp__ion__second", fakeTool()]],
+        toolEntries: [{ rawName: "second", namespacedName: "mcp__ion__second", tool: fakeTool() }],
       });
     const manager = createSessionMcpManager({
       servers: [mcpServer("ion")],
@@ -396,11 +446,11 @@ describe("createSessionMcpManager", () => {
     completeSessionOAuthConnectMock
       .mockResolvedValueOnce({
         client: { close: closeA },
-        toolEntries: [["mcp__ion__a", fakeTool()]],
+        toolEntries: [{ rawName: "a", namespacedName: "mcp__ion__a", tool: fakeTool() }],
       })
       .mockResolvedValueOnce({
         client: { close: closeB },
-        toolEntries: [["mcp__ion__b", fakeTool()]],
+        toolEntries: [{ rawName: "b", namespacedName: "mcp__ion__b", tool: fakeTool() }],
       });
 
     const manager = createSessionMcpManager({

@@ -1,12 +1,12 @@
 import {
   auth,
   createMCPClient,
+  mcpAppClientCapabilities,
   UnauthorizedError,
   type MCPClient,
   type OAuthClientProvider,
 } from "@ai-sdk/mcp";
-import type { Tool } from "ai";
-import { buildTransport, selectToolEntries } from "../connect-mcp-server.js";
+import { buildTransport, selectToolEntries, type SelectedMcpTool } from "../connect-mcp-server.js";
 import type { McpToolsLogger } from "../logger.js";
 import { discoverProtectedResourceScope } from "./oauth/discover-protected-resource-scope.js";
 import { createOAuthClientProvider } from "./oauth/oauth-client-provider.js";
@@ -62,6 +62,7 @@ export async function beginSessionOAuthConnect(options: {
     await createMCPClient({
       transport: buildTransport(server.transport, provider),
       clientName: "cesium-ai-mcp-tools",
+      capabilities: mcpAppClientCapabilities,
     });
     // A brand-new in-memory store has no cached tokens, so reaching here (no
     // UnauthorizedError) means this server doesn't require authorization on
@@ -90,7 +91,7 @@ export async function completeSessionOAuthConnect(
   code: string,
   state: string | undefined,
   logger: McpToolsLogger,
-): Promise<{ client: MCPClient; toolEntries: [string, Tool][] } | { error: string }> {
+): Promise<{ client: MCPClient; toolEntries: SelectedMcpTool[] } | { error: string }> {
   const { provider, server } = pending;
   try {
     const result = await auth(provider, {
@@ -105,6 +106,7 @@ export async function completeSessionOAuthConnect(
     const client = await createMCPClient({
       transport: buildTransport(server.transport, provider),
       clientName: "cesium-ai-mcp-tools",
+      capabilities: mcpAppClientCapabilities,
     });
     const toolEntries = selectToolEntries(await client.tools(), server, logger);
     return { client, toolEntries };

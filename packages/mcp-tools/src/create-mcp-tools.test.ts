@@ -10,6 +10,7 @@ vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: createMCPClientMock,
   auth: vi.fn(),
   UnauthorizedError: class UnauthorizedError extends Error {},
+  mcpAppClientCapabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } } },
 }));
 
 const { createMcpTools, DEFAULT_MCP_TOOL_TIMEOUT_MS } = await import("./create-mcp-tools.js");
@@ -212,6 +213,50 @@ describe("createMcpTools", () => {
         headers: { Authorization: "Bearer secret" },
       },
       clientName: "cesium-ai-mcp-tools",
+      capabilities: expect.any(Object),
     });
+  });
+
+  it("exposes a connected server's live client via getClient, and undefined for one that never connected", async () => {
+    const close = vi.fn(async () => {});
+    const client = { tools: vi.fn(async () => ({ search: fakeTool() })), close };
+    createMCPClientMock.mockResolvedValueOnce(client);
+    createMCPClientMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const handle = await createMcpTools({
+      servers: [mcpServer("docs"), mcpServer("broken")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.getClient("docs")).toBe(client);
+    expect(handle.getClient("broken")).toBeUndefined();
+    expect(handle.getClient("unknown-server")).toBeUndefined();
+  });
+
+  it("collects MCP Apps widget metadata into appTools, keyed by the namespaced tool name", async () => {
+    createMCPClientMock.mockResolvedValueOnce({
+      tools: vi.fn(async () => ({
+        launch_importer: fakeTool({
+          _meta: { ui: { resourceUri: "ui://ion/importer", visibility: ["model", "app"] } },
+        } as Partial<Tool>),
+        plain_tool: fakeTool(),
+      })),
+      close: vi.fn(async () => {}),
+    });
+
+    const handle = await createMcpTools({
+      servers: [mcpServer("ion")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.appTools).toEqual({
+      mcp__ion__launch_importer: {
+        resourceUri: "ui://ion/importer",
+        visibility: ["model", "app"],
+        serverName: "ion",
+        rawToolName: "launch_importer",
+      },
+    });
+    expect(handle.appTools["mcp__ion__plain_tool"]).toBeUndefined();
   });
 });

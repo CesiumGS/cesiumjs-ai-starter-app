@@ -144,6 +144,83 @@
   color: var(--stratakit-color-text-neutral-primary);
 }
 
+/* Rendered markdown for assistant/error text — overrides the plain
+   `pre-wrap` text handling above since markdown elements (paragraphs,
+   lists, etc.) already carry their own spacing. */
+.markdown {
+  white-space: normal;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre {
+  margin: 0 0 0.6em;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+
+.markdown li {
+  margin: 0.15em 0;
+}
+
+.markdown li > p {
+  margin: 0;
+}
+
+.markdown a {
+  color: var(--stratakit-color-text-info-base);
+}
+
+.markdown code {
+  font-family: var(--stratakit-font-family-mono);
+  font-size: 12px;
+  background: var(--stratakit-color-bg-elevation-overlay);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+.markdown pre {
+  background: var(--stratakit-color-bg-elevation-overlay);
+  border-radius: 4px;
+  padding: 0.5em 0.65em;
+  overflow: auto;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--stratakit-color-border-neutral-muted);
+  padding-left: 0.7em;
+  color: var(--stratakit-color-text-neutral-tertiary);
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 0 0 0.6em;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--stratakit-color-border-neutral-muted);
+  padding: 0.25em 0.5em;
+}
+
 .toolCard {
   background: var(--stratakit-color-bg-info-muted);
   border: 1px solid var(--stratakit-color-border-info-muted);
@@ -199,6 +276,21 @@
   margin-top: 0.5rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+/*
+ * MCP Apps widget container (see McpAppWidget.tsx). `margin-top` adds
+ * deliberate breathing room below the tool's args `<pre>` beyond the
+ * `.toolCard`'s own small flex `gap` — the widget's iframe content has its
+ * own padding/chrome, so it reads as visually cramped against the args block
+ * without this extra space. `height` is set inline per-instance (tracks the
+ * widget's real reported content size instead of a fixed placeholder).
+ */
+.mcpAppWidget {
+  width: 100%;
+  margin-top: 0.75rem;
+  transition: height 0.15s ease-out;
+  overflow: hidden;
 }
 
 .codeBlock {

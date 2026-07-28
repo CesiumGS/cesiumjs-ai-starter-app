@@ -2,11 +2,24 @@ import type { MCPClient } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
 import { connectMcpServer } from "./connect-mcp-server.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "./logger.js";
+import type { McpAppToolMeta } from "./mcp-app-meta.js";
 import { withTimeout } from "./tool-timeout.js";
 import type { McpServerConfig } from "./types.js";
 
 /** Default per-tool-call timeout, applied to every MCP tool unless overridden. */
 export const DEFAULT_MCP_TOOL_TIMEOUT_MS = 30_000;
+
+/**
+ * MCP Apps widget metadata for one discovered tool, keyed by its NAMESPACED
+ * (`mcp__<server>__<tool>`) name in {@link McpToolsHandle.appTools} — carries
+ * enough to route a browser-rendered widget's bridge requests (resource
+ * reads, tool calls) back to the right underlying `MCPClient` and RAW tool
+ * name.
+ */
+export interface McpAppToolInfo extends McpAppToolMeta {
+  serverName: string;
+  rawToolName: string;
+}
 
 export interface CreateMcpToolsOptions {
   /** MCP servers to connect to. Server-only, trusted config — never derived from a chat request. */
@@ -49,6 +62,19 @@ export interface McpToolsHandle {
    * "Connect" UI instead of just logged as a hard failure.
    */
   authRequiredServers: readonly McpServerConfig[];
+  /**
+   * MCP Apps widget metadata for every discovered tool that declared a
+   * `ui://` resource (see `mcp-app-meta.ts`), keyed by its NAMESPACED
+   * (`mcp__<server>__<tool>`) name — used to serve `/api/mcp-app/*` bridge
+   * requests for a rendered widget.
+   */
+  appTools: Record<string, McpAppToolInfo>;
+  /**
+   * The live `MCPClient` for one connected server, keyed by server name —
+   * needed to serve MCP App resource-reads/tool-calls a rendered widget's
+   * bridge requests. `undefined` if that server never connected.
+   */
+  getClient: (serverName: string) => MCPClient | undefined;
   /** Closes every underlying MCP client connection. Call once on process shutdown. */
   close: () => Promise<void>;
 }
@@ -58,7 +84,12 @@ async function registerServer(
   server: McpServerConfig,
   logger: McpToolsLogger,
   timeoutMs: number,
-): Promise<{ status: McpServerStatus; client?: MCPClient; tools: ToolSet }> {
+): Promise<{
+  status: McpServerStatus;
+  client?: MCPClient;
+  tools: ToolSet;
+  appTools: Record<string, McpAppToolInfo>;
+}> {
   const result = await connectMcpServer(server, logger);
   if ("error" in result) {
     return {
@@ -70,22 +101,32 @@ async function registerServer(
         ...(result.authRequired ? { authRequired: true } : {}),
       },
       tools: {},
+      appTools: {},
     };
   }
 
   const tools: ToolSet = {};
-  for (const [namespaced, toolDef] of result.toolEntries) {
-    tools[namespaced] = withTimeout(toolDef, timeoutMs, namespaced, logger);
+  const appTools: Record<string, McpAppToolInfo> = {};
+  for (const entry of result.toolEntries) {
+    tools[entry.namespacedName] = withTimeout(entry.tool, timeoutMs, entry.namespacedName, logger);
+    if (entry.appMeta) {
+      appTools[entry.namespacedName] = {
+        ...entry.appMeta,
+        serverName: server.name,
+        rawToolName: entry.rawName,
+      };
+    }
   }
 
   return {
     status: {
       name: server.name,
       connected: true,
-      toolNames: result.toolEntries.map(([namespaced]) => namespaced),
+      toolNames: result.toolEntries.map((entry) => entry.namespacedName),
     },
     client: result.client,
     tools,
+    appTools,
   };
 }
 
@@ -111,25 +152,31 @@ async function registerServer(
 export async function createMcpTools(options: CreateMcpToolsOptions): Promise<McpToolsHandle> {
   const { servers, timeoutMs = DEFAULT_MCP_TOOL_TIMEOUT_MS, logger = noopMcpToolsLogger } = options;
 
-  const clients: MCPClient[] = [];
+  const clientsByServer = new Map<string, MCPClient>();
   const statuses: McpServerStatus[] = [];
   const authRequiredServers: McpServerConfig[] = [];
   const tools: ToolSet = {};
+  const appTools: Record<string, McpAppToolInfo> = {};
 
   for (const server of servers) {
     const registered = await registerServer(server, logger, timeoutMs);
     statuses.push(registered.status);
-    if (registered.client) clients.push(registered.client);
+    if (registered.client) clientsByServer.set(server.name, registered.client);
     if (registered.status.authRequired) authRequiredServers.push(server);
     Object.assign(tools, registered.tools);
+    Object.assign(appTools, registered.appTools);
   }
 
   return {
     tools,
     servers: statuses,
     authRequiredServers,
+    appTools,
+    getClient: (serverName) => clientsByServer.get(serverName),
     close: async () => {
-      const results = await Promise.allSettled(clients.map((client) => client.close()));
+      const results = await Promise.allSettled(
+        [...clientsByServer.values()].map((client) => client.close()),
+      );
       for (const result of results) {
         if (result.status === "rejected") {
           logger.error(`Error while closing an MCP client connection`, {

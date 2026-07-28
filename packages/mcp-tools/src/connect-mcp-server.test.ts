@@ -7,6 +7,7 @@ const { createMCPClientMock } = vi.hoisted(() => ({
 
 vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: createMCPClientMock,
+  mcpAppClientCapabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } } },
 }));
 
 const { connectMcpServer } = await import("./connect-mcp-server.js");
@@ -38,7 +39,7 @@ describe("connectMcpServer", () => {
 
     expect("error" in result).toBe(false);
     if ("error" in result) throw new Error("unreachable");
-    expect(result.toolEntries.map(([name]) => name)).toEqual(["mcp__docs__search"]);
+    expect(result.toolEntries.map((entry) => entry.namespacedName)).toEqual(["mcp__docs__search"]);
     expect(createMCPClientMock).toHaveBeenCalledTimes(1);
     expect(createMCPClientMock).toHaveBeenCalledWith({
       transport: {
@@ -48,6 +49,7 @@ describe("connectMcpServer", () => {
         authProvider: undefined,
       },
       clientName: "cesium-ai-mcp-tools",
+      capabilities: expect.any(Object),
     });
   });
 

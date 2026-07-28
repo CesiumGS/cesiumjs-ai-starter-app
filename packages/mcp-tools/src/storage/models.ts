@@ -1,5 +1,6 @@
 import type { MCPClient } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
+import type { McpAppToolInfo } from "../create-mcp-tools.js";
 import type { PendingSessionOAuth } from "../session/session-oauth-connect.js";
 
 /**
@@ -36,4 +37,6 @@ export interface ConnectedMcpConnection {
   serverName: string;
   client: MCPClient;
   tools: ToolSet;
+  /** MCP Apps widget metadata for this connection's tools, keyed by NAMESPACED tool name — see `McpToolsHandle.appTools`. */
+  appTools: Record<string, McpAppToolInfo>;
 }

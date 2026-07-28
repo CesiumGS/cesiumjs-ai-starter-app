@@ -11,6 +11,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "@ai-sdk/mcp": "^2.0.0",
     "@ai-sdk/openai": "^4.0.0",
     "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/mcp-tools": "*",

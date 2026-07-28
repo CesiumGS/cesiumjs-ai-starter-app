@@ -1,4 +1,6 @@
+import type { MCPClient } from "@ai-sdk/mcp";
 import type { ToolSet } from "ai";
+import type { McpAppToolInfo } from "../create-mcp-tools.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
 import type { ConnectedMcpConnection, PendingMcpConnection } from "../storage/models.js";
 import type {
@@ -80,6 +82,10 @@ export interface SessionMcpManager {
   cancelPending: (sessionId: string, state: string | undefined) => Promise<string | undefined>;
   /** Namespaced, timeout-wrapped tools from every server `sessionId` has connected, merged into one `ToolSet`. */
   getSessionTools: (sessionId: string) => Promise<ToolSet>;
+  /** MCP Apps widget metadata (keyed by namespaced tool name) from every server `sessionId` has connected, merged — mirrors `McpToolsHandle.appTools`. */
+  getSessionAppTools: (sessionId: string) => Promise<Record<string, McpAppToolInfo>>;
+  /** The live `MCPClient` for `sessionId`'s connection to `serverName`, or `undefined` if not connected — mirrors `McpToolsHandle.getClient`. */
+  getSessionClient: (sessionId: string, serverName: string) => Promise<MCPClient | undefined>;
   /** Whether `sessionId` currently has a live connection to `serverName`. */
   isConnected: (sessionId: string, serverName: string) => Promise<boolean>;
   /** The session-connectable servers this manager was configured with, for UI/introspection. */
@@ -225,14 +231,28 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     if ("error" in result) return { error: result.error, serverName: entry.serverName };
 
     const tools: ToolSet = {};
-    for (const [namespaced, toolDef] of result.toolEntries) {
-      tools[namespaced] = withTimeout(toolDef, timeoutMs, namespaced, logger);
+    const appTools: Record<string, McpAppToolInfo> = {};
+    for (const toolEntry of result.toolEntries) {
+      tools[toolEntry.namespacedName] = withTimeout(
+        toolEntry.tool,
+        timeoutMs,
+        toolEntry.namespacedName,
+        logger,
+      );
+      if (toolEntry.appMeta) {
+        appTools[toolEntry.namespacedName] = {
+          ...toolEntry.appMeta,
+          serverName: entry.serverName,
+          rawToolName: toolEntry.rawName,
+        };
+      }
     }
     await replaceConnection({
       sessionId: entry.sessionId,
       serverName: entry.serverName,
       client: result.client,
       tools,
+      appTools,
     });
     return { connected: true as const, serverName: entry.serverName };
   }
@@ -255,6 +275,20 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
       if (entry) Object.assign(tools, entry.tools);
     }
     return tools;
+  }
+
+  async function getSessionAppTools(sessionId: string): Promise<Record<string, McpAppToolInfo>> {
+    const appTools: Record<string, McpAppToolInfo> = {};
+    for (const server of servers) {
+      const entry = await connectedRepository.findById(connectionId(sessionId, server.name));
+      if (entry) Object.assign(appTools, entry.appTools);
+    }
+    return appTools;
+  }
+
+  async function getSessionClient(sessionId: string, serverName: string) {
+    const entry = await connectedRepository.findById(connectionId(sessionId, serverName));
+    return entry?.client;
   }
 
   async function isConnected(sessionId: string, serverName: string): Promise<boolean> {
@@ -320,6 +354,8 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     completeCallback,
     cancelPending,
     getSessionTools,
+    getSessionAppTools,
+    getSessionClient,
     isConnected,
     serverNames: servers.map((server) => server.name),
     disconnect,

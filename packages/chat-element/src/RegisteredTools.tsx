@@ -1,30 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { IconButton, Popover, TextField, Tooltip, Typography } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgCesium from "@stratakit/icons/cesium.svg";
 import svgConfiguration from "@stratakit/icons/configuration.svg";
 import svgMcpServer from "@stratakit/icons/mcp-server.svg";
-import { fetchRegisteredTools, type RegisteredTool } from "./registered-tools";
+import { MCP_TOOL_PREFIX, parseMcpToolName } from "./mcp-tool-name";
+import type { RegisteredTool } from "./registered-tools";
 import { McpConnect } from "./McpConnect";
 import { ToolGroup, filterToolsForGroup } from "./ToolGroup";
 import { spanVariantMapping } from "./ui-constants";
 import styles from "./AiChatPanel.module.css";
-
-/** Every dynamically-connected MCP tool is namespaced `mcp__<server>__<tool>`. */
-const MCP_TOOL_PREFIX = "mcp__";
-
-/**
- * Splits an `mcp__<server>__<tool>`-namespaced tool name into its `server`
- * and bare `displayName` (the part after the server segment) parts, or
- * `null` if `name` doesn't match that shape (defensive only — every tool
- * passed here has already been filtered by {@link MCP_TOOL_PREFIX}).
- */
-function parseMcpToolName(name: string): { server: string; displayName: string } | null {
-  const rest = name.slice(MCP_TOOL_PREFIX.length);
-  const separatorIndex = rest.indexOf("__");
-  if (separatorIndex === -1) return null;
-  return { server: rest.slice(0, separatorIndex), displayName: rest.slice(separatorIndex + 2) };
-}
 
 /**
  * Groups MCP tools by their originating server, preserving first-seen order.
@@ -52,11 +37,18 @@ function groupMcpToolsByServer(tools: RegisteredTool[]): Map<string, RegisteredT
 
 export interface RegisteredToolsProps {
   /**
-   * Endpoint reporting `{ tools: RegisteredTool[] }` — see `fetchRegisteredTools`.
-   * When omitted, no built-in/MCP-server tool groups are fetched or shown —
-   * useful for a host that only wants the `mcpConnectApiBase` "Connect" group.
+   * The currently registered tool set (see `useRegisteredTools`/
+   * `fetchRegisteredTools`) — owned by the host (`AiChatPanel`) rather than
+   * fetched internally, so it can be shared with other consumers (e.g. the
+   * MCP Apps widget lookup in `ToolCard`) without fetching it twice.
    */
-  toolsApiEndpoint?: string;
+  tools: RegisteredTool[];
+  /**
+   * Re-fetches `tools` — called on `McpConnect`'s `onConnectionChange` so a
+   * newly-connected session server's tools show up immediately, without
+   * waiting for the panel to be closed and reopened.
+   */
+  refetchTools: () => void;
   /**
    * Base URL for session-scoped, user-initiated MCP OAuth connect routes
    * (e.g. "Connect to Cesium ion") — see this repo's backend's
@@ -76,29 +68,17 @@ export interface RegisteredToolsProps {
  * user-initiated MCP OAuth servers — see `McpConnect`) renders in the same
  * popover/list.
  *
- * `tools` is refetched on mount AND whenever `McpConnect` reports a session
- * server's connection state changed, so a newly-connected server's tools
- * show up immediately. Session-connectable server names (via `McpConnect`'s
- * `onServerNames`) are excluded from this component's own MCP-group
- * rendering — `McpConnect` renders those itself — so each server appears
- * only once. Renders nothing if there are no tools and no session-connectable
- * servers.
+ * `tools`/`refetchTools` are owned by the host — see `RegisteredToolsProps`.
+ * Session-connectable server names (via `McpConnect`'s `onServerNames`) are
+ * excluded from this component's own MCP-group rendering — `McpConnect`
+ * renders those itself — so each server appears only once. Renders nothing
+ * if there are no tools and no session-connectable servers.
  */
-export function RegisteredTools({ toolsApiEndpoint, mcpConnectApiBase }: RegisteredToolsProps) {
-  const [tools, setTools] = useState<RegisteredTool[]>([]);
+export function RegisteredTools({ tools, refetchTools, mcpConnectApiBase }: RegisteredToolsProps) {
   const [sessionServerNames, setSessionServerNames] = useState<string[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const anchorRef = useRef<HTMLButtonElement>(null);
-
-  const refetchTools = useCallback(() => {
-    if (!toolsApiEndpoint) return;
-    fetchRegisteredTools(toolsApiEndpoint).then((fetched) => setTools(fetched));
-  }, [toolsApiEndpoint]);
-
-  useEffect(() => {
-    refetchTools();
-  }, [refetchTools]);
 
   if (tools.length === 0 && !mcpConnectApiBase) return null;
 

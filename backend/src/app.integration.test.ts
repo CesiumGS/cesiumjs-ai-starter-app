@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Express } from "express";
 import { simulateReadableStream, type LanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import type { SessionMcpManager } from "@cesium-ai/mcp-tools";
+import type { McpToolsHandle, SessionMcpManager } from "@cesium-ai/mcp-tools";
 import { createBackendApp } from "./app.js";
 import type { Env } from "./utils/env.js";
 
@@ -149,6 +149,29 @@ describe("backend app — /api/tools", () => {
     expect(statuses[1]).toBe(200);
     expect(statuses[2]).toBe(429);
   });
+
+  it("reports mcpApp widget metadata for a tool that declared one", async () => {
+    const mcp = fakeMcpToolsHandle({
+      tools: { mcp__ion__launch_importer: { description: "Launches the importer" } as never },
+      appTools: {
+        mcp__ion__launch_importer: {
+          resourceUri: "ui://ion/importer",
+          serverName: "ion",
+          rawToolName: "launch_importer",
+        },
+      },
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/tools`);
+    const body = (await res.json()) as {
+      tools: { name: string; mcpApp?: { resourceUri: string } }[];
+    };
+
+    const ionTool = body.tools.find((t) => t.name === "mcp__ion__launch_importer");
+    expect(ionTool?.mcpApp).toEqual({ resourceUri: "ui://ion/importer" });
+    expect(body.tools.find((t) => t.name === "flyTo")?.mcpApp).toBeUndefined();
+  });
 });
 
 describe("backend app — CORS", () => {
@@ -217,11 +240,26 @@ function fakeSessionMcpManager(overrides: Partial<SessionMcpManager> = {}): Sess
     completeCallback: async () => ({ connected: true, serverName: "ion" }),
     cancelPending: async () => undefined,
     getSessionTools: async () => ({}),
+    getSessionAppTools: async () => ({}),
+    getSessionClient: async () => undefined,
     isConnected: async () => false,
     serverNames: ["ion"],
     disconnect: async () => {},
     disconnectSession: async () => {},
     closeAll: async () => {},
+    ...overrides,
+  };
+}
+
+/** Minimal {@link McpToolsHandle} stub — the real implementation is unit-tested separately (create-mcp-tools.test.ts). */
+function fakeMcpToolsHandle(overrides: Partial<McpToolsHandle> = {}): McpToolsHandle {
+  return {
+    tools: {},
+    servers: [],
+    authRequiredServers: [],
+    appTools: {},
+    getClient: () => undefined,
+    close: async () => {},
     ...overrides,
   };
 }
@@ -362,5 +400,115 @@ describe("backend app — /api/mcp session routes", () => {
 
     expect(await res.json()).toEqual({ connected: false });
     expect(disconnect).toHaveBeenCalledWith(expect.any(String), "ion");
+  });
+});
+
+describe("backend app — /api/mcp-app routes", () => {
+  it("is not mounted at all when neither mcp nor sessionMcp is provided", async () => {
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel() }));
+
+    const res = await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("fetches a widget's ui:// resource via the resolved MCPClient", async () => {
+    const readResource = vi.fn(async () => ({
+      contents: [
+        {
+          uri: "ui://ion/importer",
+          mimeType: "text/html;profile=mcp-app",
+          text: "<html><body>Importer</body></html>",
+        },
+      ],
+    }));
+    const mcp = fakeMcpToolsHandle({
+      getClient: (server) => (server === "ion" ? ({ readResource } as never) : undefined),
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      contents: [
+        {
+          uri: "ui://ion/importer",
+          mimeType: "text/html;profile=mcp-app",
+          text: "<html><body>Importer</body></html>",
+        },
+      ],
+    });
+    expect(readResource).toHaveBeenCalledWith({ uri: "ui://ion/importer" });
+  });
+
+  it("rejects a non-ui:// resource uri", async () => {
+    const mcp = fakeMcpToolsHandle();
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(
+      `${url}/api/mcp-app/resource?server=ion&uri=${encodeURIComponent("https://evil.example.com")}`,
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("404s a resource request for an unknown/unconnected server", async () => {
+    const mcp = fakeMcpToolsHandle();
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/resource?server=unknown&uri=ui://unknown/x`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it("calls a known tool on the resolved server via the widget bridge", async () => {
+    const callTool = vi.fn(async () => ({ content: [{ type: "text", text: "done" }] }));
+    const mcp = fakeMcpToolsHandle({
+      tools: { mcp__ion__launch_importer: {} as never },
+      getClient: (server) => (server === "ion" ? ({ callTool } as never) : undefined),
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/tool-call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server: "ion", toolName: "launch_importer", arguments: { id: 1 } }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ content: [{ type: "text", text: "done" }] });
+    expect(callTool).toHaveBeenCalledWith({ name: "launch_importer", arguments: { id: 1 } });
+  });
+
+  it("rejects a tool call for a tool not in this request's resolved tool registry", async () => {
+    const callTool = vi.fn();
+    const mcp = fakeMcpToolsHandle({
+      tools: { mcp__ion__launch_importer: {} as never },
+      getClient: () => ({ callTool }) as never,
+    });
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/tool-call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server: "ion", toolName: "delete_everything" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(callTool).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed tool-call request body", async () => {
+    const mcp = fakeMcpToolsHandle();
+    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+
+    const res = await fetch(`${url}/api/mcp-app/tool-call`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ server: "ion" }),
+    });
+
+    expect(res.status).toBe(400);
   });
 });

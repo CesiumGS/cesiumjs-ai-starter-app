@@ -1,4 +1,4 @@
-import { useReducer, useState, useRef, useEffect, useCallback } from "react";
+import { useReducer, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button, Fab, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
@@ -6,7 +6,9 @@ import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "./chat-client";
 import type { ToolExecutionOutcome } from "./chat-client";
 import { MessageItem } from "./MessageItem";
+import type { RegisteredToolMcpApp } from "./registered-tools";
 import { RegisteredTools } from "./RegisteredTools";
+import { useRegisteredTools } from "./use-registered-tools";
 import { spanVariantMapping } from "./ui-constants";
 import styles from "./AiChatPanel.module.css";
 
@@ -31,6 +33,15 @@ export interface AiChatPanelProps {
    * reports no session-connectable servers), no connect UI is rendered.
    */
   mcpConnectApiBase?: string;
+  /**
+   * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
+   * resource, and calling tools back on its own server from inside the
+   * rendered widget), shaped `${apiBase}/api/mcp-app` — see this repo's
+   * backend's `mcp-app-router.ts`. When omitted, a tool result that declares
+   * an MCP Apps widget (via `toolsApiEndpoint`'s `mcpApp` field) renders only
+   * its plain JSON result, same as any other tool.
+   */
+  mcpAppApiBase?: string;
   onToolCall?: (toolName: string, args: unknown) => Promise<unknown>;
   /**
    * Fired whenever a server-resolved tool result (`tool-output-available`)
@@ -151,6 +162,7 @@ export function AiChatPanel({
   apiEndpoint = "/api/chat",
   toolsApiEndpoint,
   mcpConnectApiBase,
+  mcpAppApiBase,
   onToolCall,
   onServerToolResult,
   onApprovalRequired,
@@ -161,6 +173,14 @@ export function AiChatPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const { tools: registeredTools, refetchTools } = useRegisteredTools(toolsApiEndpoint);
+  const mcpAppByToolName = useMemo(() => {
+    const map = new Map<string, RegisteredToolMcpApp>();
+    for (const tool of registeredTools) {
+      if (tool.mcpApp) map.set(tool.name, tool.mcpApp);
+    }
+    return map;
+  }, [registeredTools]);
   const { client, forceUpdate } = useChatClient(
     apiEndpoint,
     onToolCall,
@@ -263,7 +283,8 @@ export function AiChatPanel({
         <div className={styles.headerActions}>
           {(toolsApiEndpoint || mcpConnectApiBase) && (
             <RegisteredTools
-              toolsApiEndpoint={toolsApiEndpoint}
+              tools={registeredTools}
+              refetchTools={refetchTools}
               mcpConnectApiBase={mcpConnectApiBase}
             />
           )}
@@ -291,6 +312,8 @@ export function AiChatPanel({
                 onReject: handleReject,
               }}
               codeResultToolName={codeResultToolName}
+              mcpAppByToolName={mcpAppByToolName}
+              mcpAppApiBase={mcpAppApiBase}
             />
           ))
         )}

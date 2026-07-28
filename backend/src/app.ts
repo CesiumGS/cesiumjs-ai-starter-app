@@ -8,6 +8,7 @@ import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
 import type { Env } from "./utils/env.js";
+import { createMcpAppRouter } from "./mcp-app-router.js";
 import { createMcpSessionRouter } from "./mcp-session-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
@@ -138,13 +139,31 @@ export function createBackendApp({
   // server's tool count/descriptions could otherwise be scraped freely.
   app.get("/api/tools", async (req, res) => {
     const tools = await buildTools(req);
+    const appTools = {
+      ...(mcp?.appTools ?? {}),
+      ...(sessionMcp ? await sessionMcp.getSessionAppTools(req.sessionID) : {}),
+    };
     res.json({
       tools: Object.entries(tools).map(([name, tool]) => ({
         name,
         description: tool.description,
+        // Present only for MCP tools that declared an MCP Apps `ui://` widget
+        // resource (see @cesium-ai/mcp-tools' `mcp-app-meta.ts`) — lets the
+        // frontend render that widget inline instead of the plain JSON result.
+        ...(appTools[name] ? { mcpApp: { resourceUri: appTools[name].resourceUri } } : {}),
       })),
     });
   });
+
+  // Bridge for a rendered MCP App widget's own host<->iframe postMessage
+  // protocol: fetching its `ui://` HTML resource and (after the frontend's
+  // own inline user-approval step) calling tools back on its own MCP server.
+  // Mounted whenever either kind of MCP connection exists — a no-op 404 for
+  // every route otherwise.
+  if (mcp || sessionMcp) {
+    app.use("/api/mcp-app", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+    app.use(createMcpAppRouter({ mcp, sessionMcp }));
+  }
 
   app.use(
     createChatRouter({

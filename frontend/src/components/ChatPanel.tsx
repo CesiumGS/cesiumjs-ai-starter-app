@@ -101,6 +101,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       apiEndpoint={config.chatApiEndpoint}
       toolsApiEndpoint={config.toolsApiEndpoint}
       mcpConnectApiBase={config.mcpConnectApiBase}
+      mcpAppApiBase={config.mcpAppApiBase}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
       codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}

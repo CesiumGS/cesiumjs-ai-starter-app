@@ -9,6 +9,8 @@ See the [top-level README](../README.md) for architecture, quick start, and the 
 ```
 src/
 ├── app.ts                 # Express app: CORS, JSON body parsing, /health, /api/tools, rate limiter, chat router
+├── mcp-session-router.ts   # /api/mcp/* routes: per-session, user-initiated MCP OAuth connect/disconnect/status
+├── mcp-app-router.ts       # /api/mcp-app/* routes: MCP Apps widget bridge (ui:// resource fetch + approved tool calls)
 ├── tools/
 │   ├── flyto-tool.ts       # This app's model-facing flyTo input schema (extends the shared shape with descriptions)
 │   └── execute-cesium-code-tool.ts # This app's server-executed executeCesiumCode tool (wraps @cesium-ai/codegen-cesium)
