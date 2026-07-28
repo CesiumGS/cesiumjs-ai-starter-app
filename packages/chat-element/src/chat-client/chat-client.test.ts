@@ -359,6 +359,14 @@ describe("ChatClient — server-resolved tool results", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(client.isLoading).toBe(false);
+    // The stream carried only `tool-output-available` (no text, no new
+    // `tool-input-available`) — it must not have created an extra, empty
+    // placeholder assistant message alongside the pre-seeded one and the new
+    // user message (see `applyToolResult`/`fireServerToolResult`'s doc
+    // comments: they only ever update an already-recorded invocation and
+    // never create a message of their own).
+    expect(client.messages).toHaveLength(2);
+    expect(client.messages.map((m) => m.role)).toEqual(["assistant", "user"]);
   });
 
   it("does not throw when onServerToolResult is omitted", async () => {

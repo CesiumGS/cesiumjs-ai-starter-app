@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { expandToolCard, readExecuteCesiumCodeResult } from "./helpers/tool-card";
 
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 
@@ -57,15 +58,21 @@ test.describe("executeCesiumCode tool — end-to-end against the live backend", 
     // generation + AST-verification pipeline.
     await page.getByRole("button", { name: "Approve" }).click();
 
-    const resultBlock = page
-      .locator("pre")
-      .filter({ hasText: /"code"|"error"/ })
-      .last();
-    await expect(resultBlock).toBeVisible({ timeout: 60_000 });
+    // Force the tool card open — `MessageItem.tsx`'s `ToolCard` auto-collapses once resolved if
+    // its combined args/result text exceeds a length threshold, which real generated code
+    // routinely does, hiding the result <pre>s below from Playwright's visibility checks.
+    const toolCard = await expandToolCard(page, "executeCesiumCode");
 
-    const result = JSON.parse((await resultBlock.textContent()) ?? "{}");
+    // The result is either a `.codeBlock` (verified) or a `[data-testid="generation-error-panel"]`
+    // (rejected by AST verification/generation failure) — see `readExecuteCesiumCodeResult`'s doc
+    // comment for how each field is rendered.
+    const codeBlock = toolCard.locator('pre[class*="codeBlock"]');
+    const generationErrorPanel = page.locator('[data-testid="generation-error-panel"]');
+    await expect(codeBlock.or(generationErrorPanel)).toBeVisible({ timeout: 60_000 });
 
-    if ("error" in result) {
+    const result = await readExecuteCesiumCodeResult(toolCard);
+
+    if (result.error !== undefined) {
       // The generated snippet was rejected by the real AST verifier (or
       // generation itself failed) — a legitimate outcome for this test: the
       // gate did its job and nothing executed against the Viewer.
@@ -73,7 +80,7 @@ test.describe("executeCesiumCode tool — end-to-end against the live backend", 
     } else {
       // Verified: the code ran against the live Viewer with no runtime
       // failure surfaced back to the transcript and no page crash.
-      expect(typeof result.code).toBe("string");
+      expect(result.hasCode).toBe(true);
       await expect(page.locator('[data-testid="error-text"]')).toHaveCount(0);
     }
 

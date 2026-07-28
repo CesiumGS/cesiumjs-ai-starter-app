@@ -5,6 +5,7 @@ import {
   type ToolApprovalConfiguration,
   type ToolSet,
   type UIMessage,
+  type UIMessageChunk,
 } from "ai";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
@@ -12,6 +13,76 @@ import { runAgent } from "./agent.js";
 
 /** Default cap on the number of messages accepted in a single request. */
 const DEFAULT_MAX_MESSAGES = 100;
+
+/**
+ * UI message chunk types that carry visible assistant prose. See
+ * {@link suppressTextChunks}.
+ */
+const TEXT_CHUNK_TYPES: ReadonlySet<string> = new Set(["text-start", "text-delta", "text-end"]);
+
+/**
+ * True if any message in this request carries a just-approved, not-yet-
+ * resolved approval response for a tool named in `toolNames` — i.e. this is
+ * the request in which the AI SDK will execute that tool's `execute` for the
+ * first time (after a prior request emitted its `tool-approval-request` and
+ * paused). Scans the raw, not-yet-validated request body: a pending-approved
+ * invocation's wire part looks like `{ type: "tool-<name>", state:
+ * "approval-responded", approval: { approved: true, ... } }` (see
+ * `packages/chat-element/src/chat-client/protocol.ts`'s `toRequestParts`).
+ */
+function hasPendingApprovedToolCall(
+  messages: ReadonlyArray<Record<string, unknown>>,
+  toolNames: readonly string[],
+): boolean {
+  for (const message of messages) {
+    const parts = message.parts;
+    if (!Array.isArray(parts)) continue;
+
+    for (const part of parts) {
+      if (typeof part !== "object" || part === null) continue;
+      const p = part as Record<string, unknown>;
+
+      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) continue;
+      if (p.state !== "approval-responded") continue;
+      if (!toolNames.includes(p.type.slice("tool-".length))) continue;
+
+      const approval = p.approval as { approved?: unknown } | undefined;
+      if (approval?.approved === true) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Drops assistant text chunks from a UI message stream. Used when this
+ * request resolves a `stopAfterTools`-gated tool's approval: the AI SDK still
+ * has to invoke the model once for this request (there's no hook to skip that
+ * first call), but at that point the model can only be reacting to a
+ * preliminary/non-final tool result (e.g. `executeCesiumCode`'s server-side
+ * verification, before the client has actually run anything) — so any text it
+ * writes is real but premature, and would otherwise render as a confident
+ * "I did X" the user hasn't actually seen confirmed. Dropping it here means
+ * that text never reaches the client transcript at all (so it also never
+ * becomes conversation history for a later request). The tool's own result
+ * chunk (`tool-result`/`tool-output-available`) is untouched, so the frontend
+ * still learns the tool ran and can act on it — the model gets its one real
+ * chance to reply once a follow-up request reports the true, later-known
+ * outcome (see `ChatClient`'s `onServerToolResult`/`continueConversation`).
+ */
+function suppressTextChunks(
+  stream: ReadableStream<UIMessageChunk>,
+): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        if (!TEXT_CHUNK_TYPES.has(chunk.type)) {
+          controller.enqueue(chunk);
+        }
+      },
+    }),
+  );
+}
 
 export interface ChatRouterOptions {
   /**
@@ -31,6 +102,8 @@ export interface ChatRouterOptions {
   maxMessages?: number;
   /** Per-tool human-in-the-loop approval gating — see {@link RunAgentOptions.toolApproval}. */
   toolApproval?: ToolApprovalConfiguration<ToolSet, never>;
+  /** Tool names to stop the loop after — see {@link RunAgentOptions.stopAfterTools}. */
+  stopAfterTools?: readonly string[];
 }
 
 /**
@@ -51,6 +124,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     maxSteps,
     maxMessages = DEFAULT_MAX_MESSAGES,
     toolApproval,
+    stopAfterTools,
   } = options;
 
   const router = Router();
@@ -91,11 +165,22 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         system,
         maxSteps,
         toolApproval,
+        stopAfterTools,
       });
+
+      // If this request is resolving a `stopAfterTools` tool's approval, the
+      // model's unavoidable first reply this turn can only be based on that
+      // tool's preliminary result — strip its text so a premature confirmation
+      // never reaches the client (see `suppressTextChunks`'s doc comment).
+      const suppressReply =
+        (stopAfterTools?.length ?? 0) > 0 &&
+        hasPendingApprovedToolCall(parsed.data.messages, stopAfterTools!);
+
+      const uiMessageStream = toUIMessageStream({ stream: result.stream });
 
       pipeUIMessageStreamToResponse({
         response: res,
-        stream: toUIMessageStream({ stream: result.stream }),
+        stream: suppressReply ? suppressTextChunks(uiMessageStream) : uiMessageStream,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
