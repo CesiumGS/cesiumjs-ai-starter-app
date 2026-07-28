@@ -111,11 +111,120 @@ function flyToModel(): LanguageModel {
   });
 }
 
+/**
+ * Same as {@link flyToModel}, but tracks how many times `doStream` ran and
+ * would reply with plain text "Done" if the agent loop ever invoked the model
+ * again in the same request. Used to prove that a pure client-side tool (no
+ * server-side `execute`, like `flyTo`) never gets a same-turn reply chance —
+ * unlike a server-executed tool such as `codegenTool` above, its call simply
+ * has no result for the loop to continue on within this request at all,
+ * regardless of `stopAfterTools`.
+ */
+function flyToThenTextModel(calls: { count: number }): LanguageModel {
+  return new MockLanguageModelV4({
+    doStream: async () => {
+      calls.count++;
+      if (calls.count === 1) {
+        return {
+          stream: simulateReadableStream({
+            initialDelayInMs: null,
+            chunkDelayInMs: null,
+            chunks: [
+              { type: "stream-start", warnings: [] },
+              {
+                type: "tool-call",
+                toolCallId: "call-1",
+                toolName: "flyTo",
+                input: JSON.stringify({ latitude: 48.8566, longitude: 2.3522 }),
+              },
+              {
+                type: "finish",
+                finishReason: { unified: "tool-calls", raw: "tool-calls" },
+                usage: USAGE,
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        stream: simulateReadableStream({
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+          chunks: [
+            { type: "stream-start", warnings: [] },
+            { type: "text-start", id: "0" },
+            { type: "text-delta", id: "0", delta: "Done" },
+            { type: "text-end", id: "0" },
+            { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: USAGE },
+          ],
+        }),
+      };
+    },
+  });
+}
+
 const flyTo = tool({
   description: "Fly the camera to a location.",
   inputSchema: z.object({ latitude: z.number(), longitude: z.number() }),
   // No `execute`: a client-side tool, exactly like the real app's flyTo.
 });
+
+/** A server-executed tool standing in for something like `executeCesiumCode`. */
+const codegenTool = tool({
+  description: "A server-executed tool whose result is not the final outcome.",
+  inputSchema: z.object({}),
+  execute: async () => ({ code: "ok" }),
+});
+
+/**
+ * A mock model that calls `codegenTool` on its first `doStream` invocation,
+ * then (if the agent loop lets it run again) replies with plain text "Done"
+ * on any subsequent invocation. `calls` tracks how many times `doStream` ran,
+ * so a test can assert whether the loop stopped after the tool call or
+ * continued into a same-turn reply.
+ */
+function codegenToolThenTextModel(calls: { count: number }): LanguageModel {
+  return new MockLanguageModelV4({
+    doStream: async () => {
+      calls.count++;
+      if (calls.count === 1) {
+        return {
+          stream: simulateReadableStream({
+            initialDelayInMs: null,
+            chunkDelayInMs: null,
+            chunks: [
+              { type: "stream-start", warnings: [] },
+              {
+                type: "tool-call",
+                toolCallId: "call-1",
+                toolName: "codegenTool",
+                input: JSON.stringify({}),
+              },
+              {
+                type: "finish",
+                finishReason: { unified: "tool-calls", raw: "tool-calls" },
+                usage: USAGE,
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        stream: simulateReadableStream({
+          initialDelayInMs: null,
+          chunkDelayInMs: null,
+          chunks: [
+            { type: "stream-start", warnings: [] },
+            { type: "text-start", id: "0" },
+            { type: "text-delta", id: "0", delta: "Done" },
+            { type: "text-end", id: "0" },
+            { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: USAGE },
+          ],
+        }),
+      };
+    },
+  });
+}
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((s) => s.close()));
@@ -187,5 +296,100 @@ describe("createChatRouter — streaming the agent loop", () => {
     // The tool name surfaces in the UI message stream (e.g. a `tool-flyTo` part),
     // which is what the chat client keys its client-side executor off.
     expect(res.text).toContain("flyTo");
+  });
+
+  it("a pure client-side tool (no server execute, like flyTo) never gets a same-turn reply, with or without stopAfterTools", async () => {
+    const calls = { count: 0 };
+    const { url } = await startChatServer({
+      model: flyToThenTextModel(calls),
+      tools: { flyTo },
+      // Deliberately omitted from stopAfterTools — proving this isn't what
+      // stops the loop here; a tool with no `execute` never produces a result
+      // for the AI SDK's agent loop to continue on within this request at
+      // all, so the model can't reply prematurely regardless.
+    });
+
+    const res = await postChat(url, oneUserMessage);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("flyTo");
+    expect(res.text).not.toContain("Done");
+    expect(calls.count).toBe(1);
+  });
+
+  it("without stopAfterTools, lets the model reply in the same turn right after a tool result", async () => {
+    const calls = { count: 0 };
+    const { url } = await startChatServer({
+      model: codegenToolThenTextModel(calls),
+      tools: { codegenTool },
+    });
+
+    const res = await postChat(url, oneUserMessage);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Done");
+    // The model was invoked a second time to generate the same-turn reply.
+    expect(calls.count).toBe(2);
+  });
+
+  it("with stopAfterTools, stops the loop right after that tool's result instead of replying", async () => {
+    const calls = { count: 0 };
+    const { url } = await startChatServer({
+      model: codegenToolThenTextModel(calls),
+      tools: { codegenTool },
+      stopAfterTools: ["codegenTool"],
+    });
+
+    const res = await postChat(url, oneUserMessage);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("codegenTool");
+    expect(res.text).not.toContain("Done");
+    // The model was only invoked once — stopAfterTools prevented the second
+    // invocation that would have generated a premature same-turn reply.
+    expect(calls.count).toBe(1);
+  });
+
+  it("with stopAfterTools + toolApproval, suppresses the model's reply when resuming an approved tool's approval, but still streams the tool's result", async () => {
+    const { url } = await startChatServer({
+      model: textModel("Premature success!"),
+      tools: { codegenTool },
+      toolApproval: { codegenTool: "user-approval" },
+      stopAfterTools: ["codegenTool"],
+    });
+
+    // Simulates the client's second request, resuming right after the user
+    // approved a previously-requested `codegenTool` call — the AI SDK's own
+    // pre-loop approval resolution runs `codegenTool.execute` for this
+    // request (not tracked as a `stopWhen`-visible step, per the doc comment
+    // on `suppressTextChunks`), so `hasToolCall`/`stopAfterTools` alone can't
+    // catch this case — the router's own approval-resume detection must.
+    const resumingApproval = {
+      messages: [
+        { role: "user", parts: [{ type: "text", text: "do the thing" }] },
+        {
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-codegenTool",
+              toolCallId: "call-1",
+              state: "approval-responded",
+              input: {},
+              approval: { id: "approval-1", approved: true },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await postChat(url, resumingApproval);
+
+    expect(res.status).toBe(200);
+    // The tool itself still actually ran and its result still streams to the
+    // client, so the frontend can act on it (e.g. run the generated code)...
+    expect(res.text).toContain("call-1");
+    // ...but the model's same-turn reply — based only on that preliminary
+    // result — never reaches the client transcript.
+    expect(res.text).not.toContain("Premature success!");
   });
 });

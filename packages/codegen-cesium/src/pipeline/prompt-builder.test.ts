@@ -69,4 +69,82 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("PrimitiveCollection");
     expect(prompt).toContain(".get(index)");
   });
+
+  it("instructs the model to await async Cesium results and avoid callbacks that outlive the VM", () => {
+    const prompt = buildCodegenPrompt({ intent: "orbit around New York", skills: [cameraSkill] });
+
+    expect(prompt).toContain("await");
+    expect(prompt).toContain("createOsmBuildingsAsync");
+    expect(prompt).toContain("setTimeout");
+    expect(prompt).toContain("callbacks cannot outlive");
+  });
+
+  it('steers indexed array access (e.g. "the last entity") toward .at(...) instead of bracket indexing (regression: a real model reliably wrote `entities[entities.length - 1]`, which static verification always rejects as computed member access)', () => {
+    const prompt = buildCodegenPrompt({
+      intent: "make entity position time-dynamic",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain(".at(-1)");
+    expect(prompt).toContain("array.length - 1");
+  });
+
+  it("warns against .addEventListener(...) on a CesiumJS Event (readyEvent/errorEvent/etc.), since the callback can't outlive the disposed VM (regression: a real model wrote model.readyEvent.addEventListener(() => {...}), rejected at runtime as a guest callback crossing the sandbox boundary)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "load a glTF model and react once it's ready",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain("addEventListener");
+    expect(prompt).toContain("readyEvent");
+  });
+
+  it("steers custom Fabric materials toward `new Cesium.Material({ fabric: {...} })` instead of the internal Material._materialCache (regression: a real model wrote Cesium.Material._materialCache.addMaterial(...), rejected at runtime as blocked internal access)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "define a custom Fabric material",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain("_materialCache");
+    expect(prompt).toContain("new Cesium.Material(");
+  });
+
+  it("warns against .removeAll() (or other _-prefixed access) to clear scene collections before adding new content, unless the intent explicitly asks to clear (regression: a real model called viewer.scene.primitives.removeAll() to 'start clean' with no such ask in the intent)", () => {
+    const prompt = buildCodegenPrompt({
+      intent: "add a rectangle primitive",
+      skills: [cameraSkill],
+    });
+
+    expect(prompt).toContain(".removeAll()");
+    expect(prompt).toContain("start clean");
+  });
+
+  describe("extraInstructions", () => {
+    it("appends extraInstructions to the end of the prompt when provided", () => {
+      const prompt = buildCodegenPrompt({
+        intent: "fly to Paris",
+        skills: [cameraSkill],
+        extraInstructions: "Always use flat, non-3D-tiles styling for this app.",
+      });
+
+      expect(prompt).toContain("Additional instructions from the host application:");
+      expect(prompt).toContain("Always use flat, non-3D-tiles styling for this app.");
+    });
+
+    it("does not add an extra-instructions section when omitted", () => {
+      const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
+
+      expect(prompt).not.toContain("Additional instructions from the host application:");
+    });
+
+    it("does not add an extra-instructions section when blank/whitespace-only", () => {
+      const prompt = buildCodegenPrompt({
+        intent: "fly to Paris",
+        skills: [cameraSkill],
+        extraInstructions: "   ",
+      });
+
+      expect(prompt).not.toContain("Additional instructions from the host application:");
+    });
+  });
 });

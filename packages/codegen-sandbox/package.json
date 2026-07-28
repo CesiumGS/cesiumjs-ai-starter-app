@@ -1,0 +1,41 @@
+{
+  "name": "@cesium-ai/codegen-sandbox",
+  "version": "0.0.1",
+  "description": "Browser-executed QuickJS-wasm sandbox that runs already-verified CesiumJS code directly against a live Viewer's real API surface, plus client-side execution guardrails (entity/collection caps). The execution half of the Code Mode pipeline that @cesium-ai/codegen-cesium generates and statically verifies; frontend-only (depends on cesium + quickjs-emscripten), never imported server-side.",
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate:value-type-registry": "node scripts/generate-value-type-registry.mjs",
+    "generate:cesium-bundle": "node scripts/generate-cesium-core-bundle.mjs",
+    "validate:cesium-compat": "node scripts/validate-cesium-compat.mjs",
+    "build": "npm run clean && npm run validate:cesium-compat && npm run generate:value-type-registry && npm run generate:cesium-bundle && tsc",
+    "prepack": "npm run build",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "cesium": "1.142.0",
+    "quickjs-emscripten": "^0.32.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

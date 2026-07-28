@@ -48,6 +48,16 @@ export interface AiChatPanelProps {
    * {@link ChatClientOptions.maxToolCallRounds} for the default.
    */
   maxToolCallRounds?: number;
+  /**
+   * Name of a tool whose result gets a dedicated code/error rendering in its
+   * `ToolCard` (see `ToolCard.tsx`'s `codeResultToolName` prop) instead of the
+   * generic result view — this app's `executeCesiumCode` tool, in this repo's
+   * case. `chat-element` has no dependency on `@cesium-ai/codegen-cesium`, so
+   * the host passes its canonical `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`
+   * value here rather than the panel importing or hardcoding it. Omitted means
+   * every tool call renders with the generic result view.
+   */
+  codeResultToolName?: string;
 }
 
 /**
@@ -127,6 +137,7 @@ export function AiChatPanel({
   onServerToolResult,
   onApprovalRequired,
   maxToolCallRounds,
+  codeResultToolName,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
@@ -253,6 +264,7 @@ export function AiChatPanel({
                 onApprove: handleApprove,
                 onReject: handleReject,
               }}
+              codeResultToolName={codeResultToolName}
             />
           ))
         )}

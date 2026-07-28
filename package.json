@@ -9,15 +9,15 @@
     "backend"
   ],
   "scripts": {
-    "dev": "npm run build:packages && concurrently -n tools,config,codegen,mcp,server,frontend,backend -c magenta,yellow,gray,white,cyan,blue,green \"npm run dev -w @cesium-ai/tools-schemas\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/codegen-cesium\" \"npm run dev -w @cesium-ai/mcp-tools\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev": "npm run build:packages && concurrently -n tools,config,codegen,sandbox,mcp,server,frontend,backend -c magenta,yellow,gray,red,white,cyan,blue,green \"npm run dev -w @cesium-ai/tools-schemas\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/codegen-cesium\" \"npm run dev -w @cesium-ai/codegen-sandbox\" \"npm run dev -w @cesium-ai/mcp-tools\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w frontend\" \"npm run dev -w backend\"",
     "dev:frontend": "npm run dev -w frontend",
-    "dev:backend": "npm run build:packages && concurrently -n tools,config,codegen,mcp,server,backend -c magenta,yellow,gray,white,cyan,green \"npm run dev -w @cesium-ai/tools-schemas\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/codegen-cesium\" \"npm run dev -w @cesium-ai/mcp-tools\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w backend\"",
-    "build:packages": "npm run build -w @cesium-ai/tools-schemas && npm run build -w @cesium-ai/codegen-cesium && npm run build -w @cesium-ai/mcp-tools && npm run build -w @cesium-ai/sample-config && npm run build -w @cesium-ai/server",
+    "dev:backend": "npm run build:packages && concurrently -n tools,config,codegen,sandbox,mcp,server,backend -c magenta,yellow,gray,red,white,cyan,green \"npm run dev -w @cesium-ai/tools-schemas\" \"npm run dev -w @cesium-ai/sample-config\" \"npm run dev -w @cesium-ai/codegen-cesium\" \"npm run dev -w @cesium-ai/codegen-sandbox\" \"npm run dev -w @cesium-ai/mcp-tools\" \"npm run dev -w @cesium-ai/server\" \"npm run dev -w backend\"",
+    "build:packages": "npm run build -w @cesium-ai/tools-schemas && npm run build -w @cesium-ai/codegen-cesium && npm run build -w @cesium-ai/codegen-sandbox && npm run build -w @cesium-ai/mcp-tools && npm run build -w @cesium-ai/sample-config && npm run build -w @cesium-ai/server",
     "build": "npm run build:packages && npm run build -w frontend && npm run build -w backend",
     "preview": "npm run preview -w frontend",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck:test": "npm run typecheck:test -w @cesium-ai/tools-schemas -w @cesium-ai/sample-config -w @cesium-ai/codegen-cesium -w @cesium-ai/mcp-tools -w @cesium-ai/server -w @cesium-ai/chat-element -w backend -w frontend",
+    "typecheck:test": "npm run typecheck:test -w @cesium-ai/tools-schemas -w @cesium-ai/sample-config -w @cesium-ai/codegen-cesium -w @cesium-ai/codegen-sandbox -w @cesium-ai/mcp-tools -w @cesium-ai/server -w @cesium-ai/chat-element -w backend -w frontend",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "format": "prettier --write .",
@@ -31,7 +31,7 @@
     "vitest": "^4.1.9"
   },
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "npm": ">=9.0.0"
   }
 }
