@@ -56,6 +56,10 @@ describe("env parsing", () => {
       RATE_LIMIT_RPM: undefined,
       CODEGEN_MAX_SKILLS: undefined,
       CODEGEN_MAX_ATTEMPTS: undefined,
+      CODEGEN_MAX_CODE_LENGTH: undefined,
+      CODEGEN_MAX_CODE_LINES: undefined,
+      CODEGEN_ALLOWED_SYMBOLS: undefined,
+      CODEGEN_EXTRA_INSTRUCTIONS: undefined,
       TELEMETRY_ENABLED: undefined,
     });
 
@@ -65,6 +69,10 @@ describe("env parsing", () => {
     expect(env.RATE_LIMIT_RPM).toBe(20);
     expect(env.CODEGEN_MAX_SKILLS).toBe(1);
     expect(env.CODEGEN_MAX_ATTEMPTS).toBe(3);
+    expect(env.CODEGEN_MAX_CODE_LENGTH).toBe(4000);
+    expect(env.CODEGEN_MAX_CODE_LINES).toBe(100);
+    expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
+    expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
     expect(env.TELEMETRY_ENABLED).toBe(false);
   });
 
@@ -170,6 +178,54 @@ describe("env parsing", () => {
     await expect(loadEnv({ CODEGEN_MAX_ATTEMPTS: "0" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
+  });
+
+  it("coerces CODEGEN_MAX_CODE_LENGTH to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_CODE_LENGTH: "8000" });
+    expect(env.CODEGEN_MAX_CODE_LENGTH).toBe(8000);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_CODE_LENGTH", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_CODE_LENGTH: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("coerces CODEGEN_MAX_CODE_LINES to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_CODE_LINES: "200" });
+    expect(env.CODEGEN_MAX_CODE_LINES).toBe(200);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_CODE_LINES", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_CODE_LINES: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  describe("CODEGEN_ALLOWED_SYMBOLS comma-splitting", () => {
+    it("splits and trims a comma-separated list", async () => {
+      const { env } = await loadEnv({
+        CODEGEN_ALLOWED_SYMBOLS: "viewer, Cartesian3 ,Cartographic",
+      });
+      expect(env.CODEGEN_ALLOWED_SYMBOLS).toEqual(["viewer", "Cartesian3", "Cartographic"]);
+    });
+
+    it("is undefined (no allowlist restriction) when blank", async () => {
+      const { env } = await loadEnv({ CODEGEN_ALLOWED_SYMBOLS: "" });
+      expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
+    });
+  });
+
+  describe("CODEGEN_EXTRA_INSTRUCTIONS", () => {
+    it("keeps a non-blank CODEGEN_EXTRA_INSTRUCTIONS", async () => {
+      const { env } = await loadEnv({ CODEGEN_EXTRA_INSTRUCTIONS: "Prefer flat styling." });
+      expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBe("Prefer flat styling.");
+    });
+
+    it("treats a blank CODEGEN_EXTRA_INSTRUCTIONS as unset", async () => {
+      const { env } = await loadEnv({ CODEGEN_EXTRA_INSTRUCTIONS: "   " });
+      expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
+    });
   });
 
   it("rejects a malformed OTEL_EXPORTER_OTLP_ENDPOINT", async () => {

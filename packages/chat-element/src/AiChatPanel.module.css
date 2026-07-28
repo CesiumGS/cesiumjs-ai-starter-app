@@ -155,10 +155,30 @@
   gap: 0.25rem;
 }
 
-.toolLabel {
+.toolSummary {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
   font-size: 11px;
   font-weight: 600;
   color: var(--stratakit-color-text-info-base);
+  list-style: none;
+}
+
+.toolSummary::-webkit-details-marker {
+  display: none;
+}
+
+.toolSummaryIcon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.toolCard[open] > .toolSummary .toolSummaryIcon {
+  transform: rotate(90deg);
 }
 
 .toolArgs,
@@ -168,14 +188,52 @@
   color: var(--stratakit-color-text-neutral-secondary);
   white-space: pre-wrap;
   word-break: break-word;
-  margin: 0;
+  margin: 0.25rem 0 0;
   line-height: 1.4;
+  max-height: 220px;
+  overflow: auto;
 }
 
 .toolResult {
   color: var(--stratakit-color-text-positive-base);
+  margin-top: 0.5rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+.codeBlock {
+  font-family: var(--stratakit-font-family-mono);
+  font-size: 11px;
+  color: var(--stratakit-color-text-positive-base);
+  white-space: pre;
+  word-break: normal;
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+  padding: 0.4rem;
+  padding-right: 2rem;
+  border-radius: 4px;
+  background: var(--stratakit-color-bg-elevation-overlay);
+  max-height: 260px;
+  overflow: auto;
+}
+
+.codeBlockWrapper {
+  position: relative;
+  margin-top: 0.5rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+.copyButton {
+  position: absolute !important;
+  top: 0.55rem;
+  right: 0.35rem;
+  padding: 0.2rem !important;
+}
+
+.copyButton svg {
+  width: 14px;
+  height: 14px;
 }
 
 .approvalActions {
@@ -200,6 +258,46 @@
 
 .approvalButton {
   padding: 6px 16px !important;
+}
+
+/*
+ * A separate panel (sibling of `.toolCard`, not nested inside it) shown for
+ * `executeCesiumCode` failures — both a `result.error` (rejected by static
+ * AST verification, or generation itself failed) and a `result.executionError`
+ * (code passed verification but threw at runtime) reuse this same styling.
+ * Deliberately styled like the top-level error message bubble (critical
+ * color scheme) rather than the info-colored `.toolCard`, so either kind of
+ * failure is visually distinct from a successful tool call.
+ */
+.executionErrorPanel {
+  background: var(--stratakit-color-bg-critical-muted);
+  border: 1px solid var(--stratakit-color-border-critical-muted);
+  border-radius: var(--chat-radius);
+  padding: 0.5rem 0.65rem;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.executionErrorTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stratakit-color-text-critical-base);
+}
+
+.executionErrorText {
+  font-family: var(--stratakit-font-family-mono);
+  font-size: 11px;
+  color: var(--stratakit-color-text-critical-base);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  line-height: 1.4;
+  max-height: 220px;
+  overflow: auto;
 }
 
 .inputArea {

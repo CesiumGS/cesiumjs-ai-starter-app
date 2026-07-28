@@ -109,6 +109,10 @@ export function createBackendApp({
             model,
             maxSkills: env.CODEGEN_MAX_SKILLS,
             maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
+            maxLength: env.CODEGEN_MAX_CODE_LENGTH,
+            maxLines: env.CODEGEN_MAX_CODE_LINES,
+            allowedSymbols: env.CODEGEN_ALLOWED_SYMBOLS,
+            extraInstructions: env.CODEGEN_EXTRA_INSTRUCTIONS,
           }),
         }
       : {}),
@@ -167,6 +171,14 @@ export function createBackendApp({
             .map((name) => [name, "user-approval"]),
         ),
       }),
+      // executeCesiumCode's server-side result only means the generated code
+      // passed static verification — not that it has actually run
+      // successfully in the browser sandbox yet (that happens client-side,
+      // after this response, and is reported back via a follow-up request —
+      // see `handleServerToolResult`/`continueConversation` in the frontend).
+      // Stop the agent loop right after that tool call so the model can't
+      // generate a premature "done!" reply before the real outcome is known.
+      stopAfterTools: [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode],
     }),
   );
 

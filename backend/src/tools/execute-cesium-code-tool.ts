@@ -2,8 +2,10 @@ import {
   generateVerifiedCesiumCode,
   DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
   defaultExecuteCesiumCodeInputSchema,
+  CODEGEN_CESIUM_TOOL_NAMES,
+  type RuntimeCodegenFeedback,
 } from "@cesium-ai/codegen-cesium";
-import { tool, type LanguageModel, type Tool } from "ai";
+import { tool, type LanguageModel, type ModelMessage, type Tool } from "ai";
 
 /**
  * The structured result posted back to the agent loop (and streamed to the
@@ -20,6 +22,51 @@ export interface CreateExecuteCesiumCodeToolOptions {
   maxSkills?: number;
   /** Max regeneration attempts if a generation fails verification. Passed through to `generateVerifiedCesiumCode`. */
   maxAttempts?: number;
+  /** Hard cap on generated source size in characters. Passed through to `generateVerifiedCesiumCode`. */
+  maxLength?: number;
+  /** Hard cap on generated line count. Passed through to `generateVerifiedCesiumCode`. */
+  maxLines?: number;
+  /** Free-identifier allowlist. Passed through to `generateVerifiedCesiumCode`. */
+  allowedSymbols?: readonly string[];
+  /** Extra instructions appended to the generation prompt. Passed through to `generateVerifiedCesiumCode`. */
+  extraInstructions?: string;
+}
+
+/** Finds the latest browser-sandbox failure returned for an earlier executeCesiumCode call. */
+export function findLatestRuntimeCodegenFeedback(
+  messages: ModelMessage[],
+): RuntimeCodegenFeedback | undefined {
+  for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex--) {
+    const message = messages[messageIndex];
+    if (message.role !== "tool" || !Array.isArray(message.content)) continue;
+
+    for (let partIndex = message.content.length - 1; partIndex >= 0; partIndex--) {
+      const part = message.content[partIndex];
+      if (
+        part.type !== "tool-result" ||
+        part.toolName !== CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode
+      ) {
+        continue;
+      }
+
+      if (
+        part.output.type !== "json" ||
+        !part.output.value ||
+        typeof part.output.value !== "object" ||
+        Array.isArray(part.output.value)
+      ) {
+        return undefined;
+      }
+
+      const value = part.output.value as Record<string, unknown>;
+      if (typeof value.code === "string" && typeof value.executionError === "string") {
+        return { previousCode: value.code, executionError: value.executionError };
+      }
+      return undefined;
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -45,13 +92,31 @@ export function createExecuteCesiumCodeTool({
   model,
   maxSkills,
   maxAttempts,
+  maxLength,
+  maxLines,
+  allowedSymbols,
+  extraInstructions,
 }: CreateExecuteCesiumCodeToolOptions): Tool {
   return tool({
     description: DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
     inputSchema: defaultExecuteCesiumCodeInputSchema,
-    execute: async ({ intent }: { intent: string }): Promise<ExecuteCesiumCodeResult> => {
+    execute: async (
+      { intent }: { intent: string },
+      { messages },
+    ): Promise<ExecuteCesiumCodeResult> => {
       try {
-        const result = await generateVerifiedCesiumCode({ intent, model, maxSkills, maxAttempts });
+        const runtimeFeedback = findLatestRuntimeCodegenFeedback(messages);
+        const result = await generateVerifiedCesiumCode({
+          intent,
+          model,
+          maxSkills,
+          maxAttempts,
+          maxLength,
+          maxLines,
+          allowedSymbols,
+          extraInstructions,
+          ...(runtimeFeedback ? { runtimeFeedback } : {}),
+        });
         return result.verified ? { code: result.code } : { error: result.error };
       } catch (err) {
         return {

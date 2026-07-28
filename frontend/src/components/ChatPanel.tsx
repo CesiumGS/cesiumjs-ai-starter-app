@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
@@ -9,6 +9,7 @@ import {
   handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
+import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
@@ -35,6 +36,17 @@ const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
+  // Defense-in-depth against a runaway/adversarial model calling the sandbox too often —
+  // independent of whether any individual generated snippet is itself safe (see
+  // `sandbox-call-rate-limiter.ts`). One instance per mounted ChatPanel, kept in a ref (rather
+  // than state) so it survives re-renders without triggering any, and lazily constructed here
+  // since passing `new SandboxCallRateLimiter(...)` as `useRef`'s initial value would otherwise
+  // build a fresh limiter on every render.
+  const sandboxRateLimiterRef = useRef<SandboxCallRateLimiter | null>(null);
+  if (!sandboxRateLimiterRef.current) {
+    sandboxRateLimiterRef.current = new SandboxCallRateLimiter(DEFAULT_RATE_LIMIT);
+  }
+
   const handleToolCall = useCallback(
     (toolName: string, args: unknown): Promise<unknown> => {
       const viewer = viewerRef.current;
@@ -50,7 +62,15 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
   );
 
   /**
-   * Executes server-resolved code and reports runtime errors for model feedback.
+   * Executes server-resolved code and reports the real outcome for model
+   * feedback. The backend now always suppresses the model's reply for the
+   * request that resolves `executeCesiumCode`'s approval (see
+   * `packages/server/src/chat-router.ts`'s `suppressTextChunks`) — that
+   * request can only carry a preliminary result (verification passed/failed,
+   * not "actually ran"), so the model's one real chance to reply is always
+   * this follow-up. `continueConversation` must therefore always be `true`
+   * here, whether the outcome is success, a runtime execution failure, or a
+   * verification failure the tool itself already reported as `{ error }`.
    */
   const handleServerToolResult = useCallback(
     async (toolCall: {
@@ -60,11 +80,16 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
     }): Promise<ToolExecutionOutcome | undefined> => {
       if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
 
-      const errorMessage = await handleExecuteCesiumCodeResult(viewerRef.current, toolCall.output);
-      if (!errorMessage) return undefined;
+      const errorMessage = await handleExecuteCesiumCodeResult(
+        viewerRef.current,
+        toolCall.output,
+        () => sandboxRateLimiterRef.current?.checkAndRecord(),
+      );
 
       return {
-        result: { ...(toolCall.output as object), executionError: errorMessage },
+        result: errorMessage
+          ? { ...(toolCall.output as object), executionError: errorMessage }
+          : toolCall.output,
         continueConversation: true,
       };
     },
@@ -78,6 +103,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       mcpConnectApiBase={config.mcpConnectApiBase}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
+      codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}
     />
   );
 }

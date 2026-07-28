@@ -14,7 +14,13 @@ export const DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION =
   "in a sandboxed frontend context. Use this to complement `flyTo` for requests " +
   "that don't fit a simple fly-to-location call, e.g. drawing shapes, adding " +
   "entities, adjusting scene appearance, or animating the camera in ways beyond a " +
-  "single fly-to.";
+  "single fly-to. IMPORTANT: a result containing `code` only means the generated " +
+  "code passed static verification — it does NOT confirm the change actually ran " +
+  "successfully in the browser yet. Do not tell the user the action is done until " +
+  "that is the only result you have seen for this request; if a later result for " +
+  "the same request instead contains `executionError` (or `error`), the change " +
+  "failed — tell the user honestly that it failed and why, do not describe it as " +
+  "having succeeded.";
 
 /** Per-field model-facing `.describe()` hints for the `executeCesiumCode` input schema. */
 export interface ExecuteCesiumCodeFieldDescriptions {
