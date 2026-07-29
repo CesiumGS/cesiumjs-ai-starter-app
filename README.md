@@ -115,20 +115,20 @@ Each configured server's tools are namespaced `mcp__<name>__<toolName>` and merg
 
 ## Environment Variables
 
-| Variable                       | Required          | Description                                                                                                                                                             |
-| ------------------------------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_CESIUM_ION_ACCESS_TOKEN` | Yes               | Cesium Ion token — baked into the client bundle at build time. Intentionally client-visible; scope it in the Ion console to restrict allowed assets and HTTP referrers. |
-| `OPENAI_API_KEY`               | When chat enabled | LLM API key — server-side only, never `VITE_` prefixed. Required when `AI_PROVIDER=openai`.                                                                             |
-| `ANTHROPIC_API_KEY`            | When chat enabled | Required when `AI_PROVIDER=anthropic`.                                                                                                                                  |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                                                                                                                     |
-| `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                                                                                                           |
-| `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                                                                   |
-| `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                  |
-| `CODEGEN_MAX_SKILLS`           | No                | Max BM25-matched `cesiumjs-skills` domains inlined as grounding context in the `executeCesiumCode` tool's generation prompt (default `1`).                              |
-| `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts if a generated `executeCesiumCode` snippet fails static AST verification (default `3`).                                                       |
+| Variable                       | Required          | Description                                                                                                                                                                 |
+| ------------------------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_CESIUM_ION_ACCESS_TOKEN` | Yes               | Cesium Ion token — baked into the client bundle at build time. Intentionally client-visible; scope it in the Ion console to restrict allowed assets and HTTP referrers.     |
+| `OPENAI_API_KEY`               | When chat enabled | LLM API key — server-side only, never `VITE_` prefixed. Required when `AI_PROVIDER=openai`.                                                                                 |
+| `ANTHROPIC_API_KEY`            | When chat enabled | Required when `AI_PROVIDER=anthropic`.                                                                                                                                      |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | When chat enabled | Required when `AI_PROVIDER=google`.                                                                                                                                         |
+| `AI_PROVIDER`                  | No                | `openai` (default) \| `anthropic` \| `google`                                                                                                                               |
+| `AI_MODEL`                     | No                | Override the default model for the selected provider.                                                                                                                       |
+| `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                      |
+| `CODEGEN_MAX_SKILLS`           | No                | Max BM25-matched `cesiumjs-skills` domains inlined as grounding context in the `executeCesiumCode` tool's generation prompt (default `1`).                                  |
+| `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts if a generated `executeCesiumCode` snippet fails static AST verification (default `3`).                                                           |
 | `MCP_SERVERS`                  | No                | JSON array (or a `mcp.config.json` file at the repo root) of MCP servers to connect to (default: none). See [`packages/mcp-tools/README.md`](packages/mcp-tools/README.md). |
-| `MCP_TOOL_TIMEOUT_MS`          | No                | Per-tool-call timeout for MCP tools, in ms (default `30000`).                                                                                                           |
-| `VITE_API_BASE_URL`            | No                | Dev default `http://localhost:3001`. In `compose.yaml` this is built as `""` so the frontend calls relative `/api/chat`, which nginx proxies to the backend.            |
+| `MCP_TOOL_TIMEOUT_MS`          | No                | Per-tool-call timeout for MCP tools, in ms (default `30000`).                                                                                                               |
+| `VITE_API_BASE_URL`            | No                | Dev default `http://localhost:3001`. In `compose.yaml` this is built as `""` so the frontend calls relative `/api/chat`, which nginx proxies to the backend.                |
 
 See [`.env.example`](.env.example) for the complete list.
 

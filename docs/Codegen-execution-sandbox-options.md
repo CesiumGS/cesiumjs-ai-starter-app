@@ -7,7 +7,7 @@ It also summarizes how other real-world systems (SES/Hardened JavaScript, MetaMa
 quickjs-wasi) solve the same guest-code-isolation problem, as external validation for the choice
 made here. It is a reference/architecture document, not an implementation plan — the current
 implementation remains the QuickJS-WASM executor in
-[`@cesium-ai/codegen-sandbox`](../packages/codegen-sandbox/README.md).
+[`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md).
 
 ## Options at a Glance
 
@@ -121,7 +121,8 @@ surface is too large for a hand-curated allowlist without a new, narrower codege
 ## Approach 1: QuickJS-WASM Guarded Bridge (Current)
 
 This is the executor already implemented and running in `@cesium-ai/codegen-sandbox` — see
-[its README](../packages/codegen-sandbox/README.md) for the full marshaling/handle/capability
+[its README](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)
+for the full marshaling/handle/capability
 architecture. In summary: generated code runs inside a separate QuickJS interpreter compiled to
 WASM, with no browser globals at all. Four sync host bridges (`__cesiumSandboxHostGetSync__`,
 `__cesiumSandboxHostSetSync__`, `__cesiumSandboxHostApplySync__`,
@@ -289,8 +290,8 @@ structural families described above:
 
 ## References & Related Material
 
-- [Current QuickJS executor](../packages/codegen-sandbox/README.md)
-- [Codegen security attack vectors](Codegen-tool-security-attacks-vectors.md)
+- [Current QuickJS executor](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)
+- [Codegen security attack vectors](architectures/codegen-tool-security-attacks-vectors.md)
 - [MDN: `<iframe sandbox>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox)
 - [MDN: Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP)
 - [MDN: `MessageChannel`](https://developer.mozilla.org/en-US/docs/Web/API/MessageChannel)

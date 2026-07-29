@@ -49,3 +49,5 @@ npm-debug.log*
 Thumbs.db
 
 site/
+
+mcp.config.json

@@ -28,7 +28,7 @@ Connects to `/api/chat` by default and renders a resizable panel with a message 
 ### Exports
 
 | Export path                      | Description                                                                                                                 |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `@cesium-ai/chat-element`        | `AiChatPanel` (React component, re-exported), `ChatClient`, and the `Message`/`ToolExecutionOutcome`/`ToolInvocation` types |
 | `@cesium-ai/chat-element/react`  | `AiChatPanel` React component and its `AiChatPanelProps` type                                                               |
 | `@cesium-ai/chat-element/client` | The framework-agnostic `ChatClient` (implements the AI SDK v5 UI message stream protocol) and its supporting types          |

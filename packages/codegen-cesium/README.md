@@ -59,7 +59,7 @@ independently validate and execute the code with appropriate isolation — it ca
 as a substitute for its own runtime isolation. This repo's sample app executes verified code in
 the frontend through `@cesium-ai/codegen-sandbox`: a fresh QuickJS-WASM interpreter with
 memory/deadline limits and a guarded bridge to the live Viewer. See
-[`frontend/README.md`](../../frontend/README.md).
+[`frontend/README.md`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/README.md).
 
 Domain grounding comes from [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills). Each `SKILL.md` covers a CesiumJS domain (camera, entities, 3D Tiles, imagery, etc.). [`domain-matcher.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/domain-matcher.ts) uses [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking to select which skill grounds the generation prompt. Updating the dependency version is the entire re-sync process — no manual file copying.
 
