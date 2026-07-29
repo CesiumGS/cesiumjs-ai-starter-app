@@ -196,7 +196,8 @@ export function AiChatPanel({
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const resolvedApiEndpoint = apiEndpoint ?? (apiBase ? `${apiBase}/api/chat` : "/api/chat");
-  const resolvedToolsApiEndpoint = toolsApiEndpoint ?? (apiBase ? `${apiBase}/api/tools` : undefined);
+  const resolvedToolsApiEndpoint =
+    toolsApiEndpoint ?? (apiBase ? `${apiBase}/api/tools` : undefined);
   const resolvedMcpConnectApiBase =
     mcpConnectApiBase ?? (apiBase ? `${apiBase}/api/mcp` : undefined);
   const resolvedMcpAppApiBase = mcpAppApiBase ?? (apiBase ? `${apiBase}/api/mcp-app` : undefined);
