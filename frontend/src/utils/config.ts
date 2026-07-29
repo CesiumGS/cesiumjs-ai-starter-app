@@ -53,21 +53,14 @@ export const config = {
    * token.
    */
   cesiumIonServerUrl: import.meta.env.VITE_CESIUM_ION_SERVER_URL as string | undefined,
-  chatApiEndpoint: `${apiBaseUrl}/api/chat`,
-  toolsApiEndpoint: `${apiBaseUrl}/api/tools`,
   /**
-   * Base URL for session-scoped, user-initiated MCP OAuth connect routes
-   * (e.g. a "Connect to Cesium ion" button) — see `@cesium-ai/server`'s
-   * `mcp-session-router.ts`. Renders no UI when the backend reports no
-   * session-connectable servers configured.
+   * Base URL this app's single backend (`@cesium-ai/server`) is reachable at.
+   * Passed straight through as `AiChatPanel`'s `apiBase` prop, which derives
+   * the chat, tools, MCP connect, and MCP Apps endpoints from it by
+   * convention (`/api/chat`, `/api/tools`, `/api/mcp`, `/api/mcp-app`) — see
+   * `@cesium-ai/chat-element`'s `AiChatPanelProps.apiBase`.
    */
-  mcpConnectApiBase: `${apiBaseUrl}/api/mcp`,
-  /**
-   * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
-   * resource, and calling tools back on its own server from inside the
-   * rendered widget) — see `@cesium-ai/server`'s `mcp-app-router.ts`.
-   */
-  mcpAppApiBase: `${apiBaseUrl}/api/mcp-app`,
+  apiBase: apiBaseUrl,
   logLevel: resolveLogLevel(),
   sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
 };

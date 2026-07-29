@@ -17,29 +17,44 @@ const MAX_WIDTH = 800;
 const DEFAULT_WIDTH = 380;
 
 export interface AiChatPanelProps {
+  /**
+   * Base URL this app's backend is reachable at, e.g. `http://localhost:3001`
+   * (or a relative path). When set, it's joined with each route group's own
+   * REST path to default `apiEndpoint` (`${apiBase}/api/chat`),
+   * `toolsApiEndpoint` (`${apiBase}/api/tools`), `mcpConnectApiBase`
+   * (`${apiBase}/api/mcp`), and `mcpAppApiBase` (`${apiBase}/api/mcp-app`) —
+   * the convention this repo's own `@cesium-ai/server` follows. Pass any of
+   * those four props individually to override just that one endpoint (e.g. a
+   * separate service for MCP connect), or omit `apiBase` and set each one by
+   * hand for a host with no single shared base.
+   */
+  apiBase?: string;
+  /** Defaults to `${apiBase}/api/chat`, or `/api/chat` if neither is set. */
   apiEndpoint?: string;
   /**
    * Endpoint reporting the host's full registered tool set (built-in tools
    * plus any dynamically-connected MCP tools), shaped `{ tools:
    * RegisteredTool[] }` — see `fetchRegisteredTools`/`backend/src/app.ts`'s
-   * `GET /api/tools` for this repo's own implementation. When omitted, the
-   * tools disclosure in the panel header isn't rendered at all.
+   * `GET /api/tools` for this repo's own implementation. Defaults to
+   * `${apiBase}/api/tools`. When neither is set, the tools disclosure in the
+   * panel header isn't rendered at all.
    */
   toolsApiEndpoint?: string;
   /**
    * Base URL for session-scoped, user-initiated MCP OAuth connect routes
-   * (e.g. "Connect to Cesium ion"), shaped `${apiBase}/api/mcp` — see
-   * `@cesium-ai/server`'s `mcp-session-router.ts`. When omitted (or the host
-   * reports no session-connectable servers), no connect UI is rendered.
+   * (e.g. "Connect to Cesium ion") — see `@cesium-ai/server`'s
+   * `mcp-session-router.ts`. Defaults to `${apiBase}/api/mcp`. When neither is
+   * set (or the host reports no session-connectable servers), no connect UI
+   * is rendered.
    */
   mcpConnectApiBase?: string;
   /**
    * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
    * resource, and calling tools back on its own server from inside the
-   * rendered widget), shaped `${apiBase}/api/mcp-app` — see
-   * `@cesium-ai/server`'s `mcp-app-router.ts`. When omitted, a tool result that declares
-   * an MCP Apps widget (via `toolsApiEndpoint`'s `mcpApp` field) renders only
-   * its plain JSON result, same as any other tool.
+   * rendered widget) — see `@cesium-ai/server`'s `mcp-app-router.ts`.
+   * Defaults to `${apiBase}/api/mcp-app`. When neither is set, a tool result
+   * that declares an MCP Apps widget (via `toolsApiEndpoint`'s `mcpApp`
+   * field) renders only its plain JSON result, same as any other tool.
    */
   mcpAppApiBase?: string;
   /**
@@ -164,7 +179,8 @@ function useChatClient(
 }
 
 export function AiChatPanel({
-  apiEndpoint = "/api/chat",
+  apiBase,
+  apiEndpoint,
   toolsApiEndpoint,
   mcpConnectApiBase,
   mcpAppApiBase,
@@ -179,7 +195,12 @@ export function AiChatPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
-  const { tools: registeredTools, refetchTools } = useRegisteredTools(toolsApiEndpoint);
+  const resolvedApiEndpoint = apiEndpoint ?? (apiBase ? `${apiBase}/api/chat` : "/api/chat");
+  const resolvedToolsApiEndpoint = toolsApiEndpoint ?? (apiBase ? `${apiBase}/api/tools` : undefined);
+  const resolvedMcpConnectApiBase =
+    mcpConnectApiBase ?? (apiBase ? `${apiBase}/api/mcp` : undefined);
+  const resolvedMcpAppApiBase = mcpAppApiBase ?? (apiBase ? `${apiBase}/api/mcp-app` : undefined);
+  const { tools: registeredTools, refetchTools } = useRegisteredTools(resolvedToolsApiEndpoint);
   const mcpAppByToolName = useMemo(() => {
     const map = new Map<string, RegisteredToolMcpApp>();
     for (const tool of registeredTools) {
@@ -188,7 +209,7 @@ export function AiChatPanel({
     return map;
   }, [registeredTools]);
   const { client, forceUpdate } = useChatClient(
-    apiEndpoint,
+    resolvedApiEndpoint,
     onToolCall,
     onServerToolResult,
     onApprovalRequired,
@@ -287,11 +308,11 @@ export function AiChatPanel({
           </Typography>
         </div>
         <div className={styles.headerActions}>
-          {(toolsApiEndpoint || mcpConnectApiBase) && (
+          {(resolvedToolsApiEndpoint || resolvedMcpConnectApiBase) && (
             <RegisteredTools
               tools={registeredTools}
               refetchTools={refetchTools}
-              mcpConnectApiBase={mcpConnectApiBase}
+              mcpConnectApiBase={resolvedMcpConnectApiBase}
             />
           )}
           <Tooltip title="Close chat panel">
@@ -319,7 +340,7 @@ export function AiChatPanel({
               }}
               codeResultToolName={codeResultToolName}
               mcpAppByToolName={mcpAppByToolName}
-              mcpAppApiBase={mcpAppApiBase}
+              mcpAppApiBase={resolvedMcpAppApiBase}
               mcpAppSandboxUrl={mcpAppSandboxUrl}
             />
           ))
