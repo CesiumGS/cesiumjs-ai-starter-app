@@ -4,8 +4,8 @@ export {
   type CreateMcpToolsOptions,
   type McpServerStatus,
   type McpToolsHandle,
-} from "./create-mcp-tools.js";
-export { namespacedToolName, type SelectedMcpTool } from "./connect-mcp-server.js";
+} from "./connection/create-mcp-tools.js";
+export { namespacedToolName, type SelectedMcpTool } from "./connection/connect-mcp-server.js";
 export { getMcpAppToolMeta, type McpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
 export {
   createConsoleMcpToolsLogger,
@@ -14,9 +14,7 @@ export {
   type McpToolsLogLevel,
 } from "./logger.js";
 export {
-  McpServerConfigSchema,
   McpServerConfigsSchema,
-  parseMcpServerConfigs,
   type McpOAuthConfig,
   type McpServerConfig,
   type McpTransportConfig,

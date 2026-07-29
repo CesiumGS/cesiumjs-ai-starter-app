@@ -1,6 +1,6 @@
 import type { MCPClient } from "@ai-sdk/mcp";
-import { namespacedToolName } from "./connect-mcp-server.js";
-import type { McpToolsHandle } from "./create-mcp-tools.js";
+import { namespacedToolName } from "./connection/connect-mcp-server.js";
+import type { McpToolsHandle } from "./connection/create-mcp-tools.js";
 import type { McpTool } from "./mcp-app-meta.js";
 import type { SessionMcpManager } from "./session/session-mcp-manager.js";
 

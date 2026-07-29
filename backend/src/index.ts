@@ -40,14 +40,19 @@ if (mcp) {
 // startup connection attempt above, with no static credentials configured)
 // are NOT connected here — each is only ever connected on demand, per
 // browser session, once a user actually initiates it via the interactive
-// "Connect" UI (see `routers/mcp-session-router.ts`). Skipped entirely (sessionMcp
-// stays undefined) when nothing needed auth, a zero-behavior-change default.
+// "Connect" UI (see `@cesium-ai/server/mcp`'s `mcp-session-router.ts`). Skipped
+// entirely (sessionMcp stays undefined) when nothing needed auth, a
+// zero-behavior-change default.
 //
 // No `pendingRepository`/`connectedRepository` is passed, so state stays in
 // this process's memory (single-instance deployment model, matching
 // `utils/session.ts`'s `MemoryStore` default). To scale to multiple backend
 // instances, use sticky sessions so each browser consistently reaches the
-// process holding its live OAuth provider and MCP client connection.
+// process holding its live OAuth provider and MCP client connection. See
+// `@cesium-ai/mcp-tools`'s README "Multi-instance deployment" section for
+// how the manager's pluggable descriptor-repository options can be swapped
+// for an external store (e.g. Redis) if you need cross-instance status
+// visibility on top of that.
 const sessionMcp =
   mcp && mcp.authRequiredServers.length > 0
     ? createSessionMcpManager({

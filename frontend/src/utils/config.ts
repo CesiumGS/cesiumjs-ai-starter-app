@@ -57,7 +57,7 @@ export const config = {
   toolsApiEndpoint: `${apiBaseUrl}/api/tools`,
   /**
    * Base URL for session-scoped, user-initiated MCP OAuth connect routes
-   * (e.g. a "Connect to Cesium ion" button) — see backend's
+   * (e.g. a "Connect to Cesium ion" button) — see `@cesium-ai/server`'s
    * `mcp-session-router.ts`. Renders no UI when the backend reports no
    * session-connectable servers configured.
    */
@@ -65,7 +65,7 @@ export const config = {
   /**
    * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
    * resource, and calling tools back on its own server from inside the
-   * rendered widget) — see backend's `mcp-app-router.ts`.
+   * rendered widget) — see `@cesium-ai/server`'s `mcp-app-router.ts`.
    */
   mcpAppApiBase: `${apiBaseUrl}/api/mcp-app`,
   logLevel: resolveLogLevel(),

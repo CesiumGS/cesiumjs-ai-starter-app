@@ -8,8 +8,8 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
 /**
  * Wraps a tool's `execute` so a stalled MCP server can't hang the agent loop
  * past `timeoutMs`. Generic over `T` (rather than fixed to `Tool`) so any
- * extra properties the caller attached to the tool object \u2014 e.g. `McpTool`'s
- * `mcpApp` widget metadata \u2014 survive the wrap.
+ * extra properties the caller attached to the tool object - e.g. `McpTool`'s
+ * `mcpApp` widget metadata - survive the wrap.
  */
 export function withTimeout<T extends Tool>(
   tool: T,

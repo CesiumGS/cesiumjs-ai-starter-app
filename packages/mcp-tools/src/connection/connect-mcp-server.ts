@@ -4,10 +4,10 @@ import {
   type MCPClient,
   type OAuthClientProvider,
 } from "@ai-sdk/mcp";
-import type { McpToolsLogger } from "./logger.js";
+import type { McpToolsLogger } from "../logger.js";
 import { isUnauthorizedMcpError } from "./mcp-error.js";
-import { getMcpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
-import type { McpServerConfig, McpTransportConfig } from "./types.js";
+import { getMcpAppToolMeta, type McpTool } from "../mcp-app-meta.js";
+import type { McpServerConfig, McpTransportConfig } from "../types.js";
 
 /** `mcp__<server>__<tool>` — the namespace every discovered tool is exposed under, everywhere in this app. */
 export function namespacedToolName(serverName: string, toolName: string): string {

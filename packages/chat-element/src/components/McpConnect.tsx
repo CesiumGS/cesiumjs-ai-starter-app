@@ -37,7 +37,7 @@ interface ServerState {
 export interface McpConnectProps {
   /**
    * Base URL for the session-scoped MCP connect routes, e.g.
-   * `${apiBase}/api/mcp` — see this repo's backend's `mcp-session-router.ts`.
+   * `${apiBase}/api/mcp` — see `@cesium-ai/server`'s `mcp-session-router.ts`.
    * When omitted (or the host reports no session-connectable servers), this
    * component renders nothing.
    */
@@ -169,7 +169,7 @@ export function McpConnect({
   /**
    * Watches for `name`'s connect attempt to resolve: primarily via the
    * `postMessage` push from the OAuth popup itself (backend-rendered — see
-   * `renderMcpCallbackHtml` in `backend/src/routers/mcp-session-router.ts`;
+   * `renderMcpCallbackHtml` in `@cesium-ai/server`'s `mcp-session-router.ts`;
    * near-instant, no network call on this end), with a local `Window.closed`
    * check as a fallback — covers the user closing the popup without
    * completing consent (in which case the popup's own ~1.5s auto-close is

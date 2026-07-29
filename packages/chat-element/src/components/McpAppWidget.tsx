@@ -32,7 +32,7 @@ interface PendingToolCall {
 }
 
 export interface McpAppWidgetProps {
-  /** Base URL for the widget bridge routes, e.g. `${apiBase}/api/mcp-app` — see backend's `mcp-app-router.ts`. */
+  /** Base URL for the widget bridge routes, e.g. `${apiBase}/api/mcp-app` — see `@cesium-ai/server`'s `mcp-app-router.ts`. */
   appApiBase: string;
   /** MCP server this tool/resource belongs to (parsed from the invocation's namespaced tool name). */
   server: string;

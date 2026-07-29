@@ -6,6 +6,11 @@ import {
 } from "@cesium-ai/mcp-tools";
 import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
+// Type-only: pulls in express-session's ambient augmentation of Express's
+// `Request` (adds `sessionID`/`session`) without adding a runtime import —
+// every route below keys off `req.sessionID`, but the host app owns
+// actually mounting `express-session` middleware.
+import type {} from "express-session";
 
 export interface McpAppRouterOptions extends McpScope {
   /** Maximum duration for each proxied MCP resource read or tool call. */
@@ -151,8 +156,8 @@ async function handleToolCallRequest(
  * with a "no such server" 404 for everything (a no-op-safe default rather
  * than a hard crash if this is ever mounted without either configured).
  *
- * Security posture (see `docs/Codegen-tool-security-attacks-vectors.md` for
- * this repo's general threat-modeling conventions):
+ * Security posture (see this repo's `docs/Codegen-tool-security-attacks-vectors.md`
+ * for its general threat-modeling conventions):
  * - `resources/read` is restricted to `ui://` URIs only.
  * - `tools/call` is restricted to `(server, toolName)` pairs already in this
  *   request's OWN resolved tool registry — a widget can never reach a tool on
@@ -161,8 +166,8 @@ async function handleToolCallRequest(
  *   the FRONTEND (an inline Approve/Reject prompt before this endpoint is
  *   ever called) — this router's checks are defense-in-depth, not a
  *   replacement for that UI.
- * - Every route is rate-limited by the caller (see `app.ts`), same as
- *   `/api/chat`/`/api/tools`.
+ * - The host app is expected to rate-limit these routes itself (same as
+ *   `/api/chat`/`/api/tools`) — this router doesn't apply one of its own.
  */
 export function createMcpAppRouter(options: McpAppRouterOptions): Router {
   const router = Router();

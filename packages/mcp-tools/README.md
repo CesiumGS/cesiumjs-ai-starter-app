@@ -91,7 +91,7 @@ interface McpServerConfig {
 `createMcpTools` attempts every server the same way, with no `authProvider` attached. Per server, the outcome is one of:
 
 - **Connects successfully** — shared by every visitor from then on (tools merged into `McpToolsHandle.tools`).
-- **Fails with a 401** — auto-detected as needing per-user authentication (`isUnauthorizedMcpError`, see `mcp-error.ts`) and collected into `McpToolsHandle.authRequiredServers` instead of a hard failure. Feed that list into `createSessionMcpManager` (below) to offer it through an interactive "Connect" flow.
+- **Fails with a 401** — auto-detected as needing per-user authentication (`isUnauthorizedMcpError`, see `src/connection/mcp-error.ts`) and collected into `McpToolsHandle.authRequiredServers` instead of a hard failure. Feed that list into `createSessionMcpManager` (below) to offer it through an interactive "Connect" flow.
 - **Fails any other way** (network unreachable, bad URL, ...) — recorded as a genuine failure in `McpToolsHandle.servers`, isolated from other servers.
 
 ```ts
@@ -127,13 +127,13 @@ const sessionMcp = createSessionMcpManager({
 });
 ```
 
-`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `backend/src/routers/mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
+`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `@cesium-ai/server/mcp`'s `mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
 
 `@ai-sdk/mcp` handles dynamic client registration, PKCE (S256), authorization-code exchange, and refresh. This package keeps provider state in memory only — the host must call `disconnect`, `disconnectSession`, and `closeAll` at the appropriate lifecycle boundaries.
 
-### `parseMcpServerConfigs(value)`
+### `McpServerConfigsSchema`
 
-Validates a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.config.json` file) — checks transport shape and rejects duplicate server names. Throws a descriptive error on any violation.
+A zod schema validating a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.config.json` file) — checks transport shape and rejects duplicate server names. Use `McpServerConfigsSchema.parse(value)` (throws on violation) or `.safeParse(value)` (returns `{success, data | error}`); see `backend/src/utils/mcp-servers-config.ts` for the latter.
 
 ### Logging
 
@@ -143,7 +143,7 @@ Validates a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.co
 
 Both `createMcpTools` and `createSessionMcpManager` always advertise `@ai-sdk/mcp`'s `mcpAppClientCapabilities` during connect — the ["MCP Apps"](https://modelcontextprotocol.io) extension that lets a tool declare an interactive `ui://` HTML widget resource (via `_meta.ui.resourceUri`) instead of/alongside a plain JSON result. This package only discovers that metadata (`getMcpAppToolMeta`) and attaches it directly onto the discovered tool as `tool.mcpApp` (see `McpTool`) — no separate map to look up alongside the tool registry — plus a way to reach the underlying live `MCPClient` (`getClient` / `getSessionClient`). It does **not** fetch resources or call tools on a widget's behalf. That's the host's job:
 
-- `backend/src/routers/mcp-app-router.ts` exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
+- `@cesium-ai/server/mcp`'s `mcp-app-router.ts` exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
 - `packages/chat-element/src/McpAppWidget.tsx` uses `@mcp-ui/client`'s `AppRenderer`, which implements the MCP Apps JSON-RPC/postMessage protocol and isolates widget HTML through a host-served double-iframe sandbox proxy. This repo serves that proxy from `frontend/public/sandbox_proxy.html`; another host can pass its URL through `AiChatPanel`'s `mcpAppSandboxUrl` prop. Widget-initiated tool calls remain approval-gated.
 
 ## Request flows
@@ -179,7 +179,7 @@ sequenceDiagram
 
 ### Session-scoped interactive OAuth connect
 
-Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are this repo's own `backend/src/routers/mcp-session-router.ts`:
+Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are `@cesium-ai/server/mcp`'s own `mcp-session-router.ts`:
 
 ```mermaid
 sequenceDiagram
@@ -254,3 +254,71 @@ This package only calls the MCP client's `tools()` method — the one capability
 - **`SessionMcpManager` keeps all state in memory in the process that created it** — connected `MCPClient` instances, in-flight OAuth state/PKCE verifiers, pending-connection bookkeeping. A live MCP client connection can only exist in one process, so running more than one backend instance requires routing a given browser session consistently to the SAME instance (sticky sessions / instance affinity) — swapping just the session-ID store does not make this multi-instance-safe. There's no idle-connection sweep either; a connected session's `MCPClient` stays open until `disconnect`/`disconnectSession`/`closeAll` is called or the process exits.
 
 This package has no opinion on how the host establishes a `sessionId` — `createSessionMcpManager` just takes one as a plain string, so any session-identity mechanism (an `express-session` cookie, a signed JWT, etc.) works.
+
+## Multi-instance deployment:
+
+`createSessionMcpManager`'s default in-memory repositories are fine for a single backend
+instance (this starter app's own default — it does **not** wire in Redis or any external
+store). If you do scale to more than one instance, `SessionMcpManagerOptions` has two
+purpose-built extension points for this, both optional:
+
+- `connectedDescriptorRepository?: McpConnectionRepository<ConnectedMcpConnectionDescriptor>`
+- `pendingDescriptorRepository?: McpConnectionRepository<PendingMcpConnectionDescriptor>`
+
+These are written to ALONGSIDE (never instead of) the real in-memory
+`connectedRepository`/`pendingRepository` — they only ever receive a plain-data
+_descriptor_ (`{sessionId, serverName, toolNames, connectedAt}` /
+`{sessionId, serverName, state, startedAt}`), never the live `MCPClient`/OAuth provider,
+which genuinely cannot be serialized (see the doc comments on `ConnectedMcpConnection`/
+`PendingMcpConnection` in `storage/models.ts`). That makes them safe to back with an
+external store like Redis (or Azure Table, DynamoDB, etc.) purely for cross-instance
+**status observability** — e.g. answering "is this session connected to `ion`, and since
+when" from any instance, not just the one that created the connection.
+
+Both are just the standard `McpConnectionRepository<T>` interface
+(`findById`/`save`/`delete`/`listAll`, each `T | Promise<T>`) already used by the in-memory
+default (`storage/in-memory-repositories.ts`) — this package doesn't ship a Redis-specific
+implementation itself (no `redis`/`ioredis` dependency), so switching is writing a small
+adapter for whichever store you pick, following that same shape:
+
+```ts
+import { createSessionMcpManager, type McpConnectionRepository } from "@cesium-ai/mcp-tools";
+
+// Sketch only — swap in your own store's client/calls. Every method just
+// needs to round-trip a plain-data descriptor (already JSON-serializable)
+// under a key you choose, e.g. `${keyPrefix}${id}`.
+function createExternalConnectionRepository<T>(/* your store's client, keyPrefix, etc. */) {
+  return {
+    findById: async (id) => {
+      /* store.get(key) → JSON.parse or undefined */
+    },
+    save: async (id, entry) => {
+      /* store.set(key, JSON.stringify(entry)) */
+    },
+    delete: async (id) => {
+      /* store.delete(key) */
+    },
+    listAll: async () => {
+      /* list/scan all entries under keyPrefix, JSON.parse each */
+    },
+  } satisfies McpConnectionRepository<T>;
+}
+
+const sessionMcp = createSessionMcpManager({
+  servers: authRequiredServers,
+  buildRedirectUrl: () => new URL("/api/mcp/callback", env.PUBLIC_URL).href,
+  connectedDescriptorRepository: createExternalConnectionRepository(/* ... */),
+  pendingDescriptorRepository: createExternalConnectionRepository(/* ... */),
+  // connectedRepository/pendingRepository (the LIVE ones) stay the built-in in-memory
+  // default — they can never be backed by an external store, see above.
+});
+```
+
+**Important caveat, worth restating**: this only fixes cross-instance _status_ visibility.
+It does **not** make a session's actual MCP tool calls reachable from a different instance
+than the one holding the live connection — `getSessionTools`/`getSessionClient` still only
+ever look at the LOCAL in-memory `connectedRepository`. Making tool calls themselves
+multi-instance-safe still requires routing a given browser session consistently to the same
+instance (sticky sessions/instance affinity), regardless of whether you've also plugged in
+an external store for the descriptor repositories. See `backend/README.md`'s note on this
+for how it applies to this repo's own starter backend.

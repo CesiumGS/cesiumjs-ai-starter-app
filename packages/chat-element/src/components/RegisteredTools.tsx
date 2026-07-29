@@ -51,7 +51,7 @@ export interface RegisteredToolsProps {
   refetchTools: () => void;
   /**
    * Base URL for session-scoped, user-initiated MCP OAuth connect routes
-   * (e.g. "Connect to Cesium ion") — see this repo's backend's
+   * (e.g. "Connect to Cesium ion") — see `@cesium-ai/server`'s
    * `mcp-session-router.ts`. When provided, a "Connect" group (see
    * `McpConnect`) is rendered inside this SAME popover/list, alongside the
    * tool groups above, rather than as a separate toggle/list of its own.

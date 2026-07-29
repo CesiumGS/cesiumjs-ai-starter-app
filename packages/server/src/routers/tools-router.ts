@@ -1,10 +1,7 @@
 import type { McpTool } from "@cesium-ai/mcp-tools";
 import { Router, type Request } from "express";
-import type { Env } from "../utils/env.js";
-import { rateLimiter } from "../utils/rate-limit.js";
 
 export interface ToolsRouterOptions {
-  env: Env;
   /**
    * Resolves this request's full tool registry (static tools + this
    * session's connected MCP tools). An MCP tool that declared a `ui://` MCP
@@ -15,19 +12,19 @@ export interface ToolsRouterOptions {
 }
 
 /**
- * Builds the rate-limited `GET /api/tools` introspection route — lets the
- * client see the exact tool surface a request would run against, including
- * MCP tools not known statically at build time, and which of them declared
- * an MCP Apps `ui://` widget resource (so the frontend can render that
- * widget inline instead of the plain JSON result).
+ * Builds the `GET /api/tools` introspection route — lets the client see the
+ * exact tool surface a request would run against, including MCP tools not
+ * known statically at build time, and which of them declared an MCP Apps
+ * `ui://` widget resource (so the frontend can render that widget inline
+ * instead of the plain JSON result).
  *
- * Read-only, but still rate-limited the same as `/api/chat` since a
- * third-party MCP server's tool count/descriptions could otherwise be
- * scraped freely.
+ * Read-only, but the host app is expected to rate-limit this route itself
+ * (same as `/api/chat`/`/api/mcp-app`) — this router doesn't apply one of
+ * its own, since a third-party MCP server's tool count/descriptions could
+ * otherwise be scraped freely.
  */
-export function createToolsRouter({ env, buildTools }: ToolsRouterOptions): Router {
+export function createToolsRouter({ buildTools }: ToolsRouterOptions): Router {
   const router = Router();
-  router.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
 
   router.get("/api/tools", async (req, res) => {
     const tools = await buildTools(req);

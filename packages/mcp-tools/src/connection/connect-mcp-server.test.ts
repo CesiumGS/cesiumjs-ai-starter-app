@@ -11,7 +11,7 @@ vi.mock("@ai-sdk/mcp", () => ({
 }));
 
 const { connectMcpServer } = await import("./connect-mcp-server.js");
-const { noopMcpToolsLogger } = await import("./logger.js");
+const { noopMcpToolsLogger } = await import("../logger.js");
 
 function fakeTool(): Tool {
   return {

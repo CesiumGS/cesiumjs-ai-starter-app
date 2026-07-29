@@ -1,5 +1,6 @@
 import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
-import { createChatRouter } from "@cesium-ai/server";
+import { createChatRouter, createToolsRouter } from "@cesium-ai/server";
+import { createMcpAppRouter, createMcpSessionRouter } from "@cesium-ai/server/mcp";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
 import {
@@ -14,9 +15,6 @@ import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
-import { createMcpAppRouter } from "./routers/mcp-app-router.js";
-import { createMcpSessionRouter } from "./routers/mcp-session-router.js";
-import { createToolsRouter } from "./routers/tools-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
@@ -99,10 +97,10 @@ export function createBackendApp({
     app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, secure, store: sessionStore }));
     app.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
     // No `frontendUrl` needed: `/api/mcp/callback` renders its own plain
-    // result page directly (see mcp-session-router.ts) rather than
-    // redirecting back to "the" frontend — this app may be shared by more
-    // than one frontend origin, and there's no single one always correct
-    // to bounce back to.
+    // result page directly (see @cesium-ai/server/mcp's mcp-session-router.ts)
+    // rather than redirecting back to "the" frontend — this app may be
+    // shared by more than one frontend origin, and there's no single one
+    // always correct to bounce back to.
     app.use(createMcpSessionRouter(sessionMcp));
   }
 
@@ -144,7 +142,8 @@ export function createBackendApp({
     ...(await resolveMcpTools({ sessionMcp }, req.sessionID)),
   });
 
-  app.use(createToolsRouter({ env, buildTools }));
+  app.use("/api/tools", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+  app.use(createToolsRouter({ buildTools }));
 
   // Bridge for a rendered MCP App widget's own host<->iframe postMessage
   // protocol: fetching its `ui://` HTML resource and (after the frontend's

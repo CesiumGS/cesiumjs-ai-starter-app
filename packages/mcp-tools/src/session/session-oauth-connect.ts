@@ -6,7 +6,11 @@ import {
   type MCPClient,
   type OAuthClientProvider,
 } from "@ai-sdk/mcp";
-import { buildTransport, selectToolEntries, type SelectedMcpTool } from "../connect-mcp-server.js";
+import {
+  buildTransport,
+  selectToolEntries,
+  type SelectedMcpTool,
+} from "../connection/connect-mcp-server.js";
 import type { McpToolsLogger } from "../logger.js";
 import { discoverProtectedResourceScope } from "./oauth/discover-protected-resource-scope.js";
 import { createOAuthClientProvider } from "./oauth/oauth-client-provider.js";

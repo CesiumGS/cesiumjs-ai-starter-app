@@ -23,8 +23,8 @@ function isMcpOAuthResultMessage(data: unknown): data is McpOAuthResultMessage {
 
 /**
  * Subscribes to the session MCP OAuth outcome pushed via `window.postMessage`
- * by the OAuth popup itself (backend-rendered — see
- * `backend/src/routers/mcp-session-router.ts`'s `renderMcpCallbackHtml`) once
+ * by the OAuth popup itself (backend-rendered — see `@cesium-ai/server`'s
+ * `mcp-session-router.ts`'s `renderMcpCallbackHtml`) once
  * it resolves. Filters on `event.source === popup` — the specific `Window`
  * reference the caller opened (see `McpConnect.tsx`'s `handleConnect`) —
  * rather than `event.origin`, since this backend may be shared by more than

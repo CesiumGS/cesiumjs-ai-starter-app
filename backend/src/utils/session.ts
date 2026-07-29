@@ -41,7 +41,7 @@ export function createSessionMiddleware(options: CreateSessionMiddlewareOptions)
   }
   if (!store) {
     console.warn(
-      "[session] No session store configured \u2014 using express-session's in-memory MemoryStore. " +
+      "[session] No session store configured - using express-session's in-memory MemoryStore. " +
         "Sessions (and any MCP connections tied to them) are lost on restart and are not shared " +
         "across multiple backend instances. Pass a real store (e.g. connect-redis) in production.",
     );

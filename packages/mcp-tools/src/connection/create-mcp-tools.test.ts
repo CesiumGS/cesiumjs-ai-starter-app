@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Tool } from "ai";
-import type { McpServerConfig } from "./types.js";
+import type { McpServerConfig } from "../types.js";
 
 const { createMCPClientMock } = vi.hoisted(() => ({
   createMCPClientMock: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock("@ai-sdk/mcp", () => ({
 }));
 
 const { createMcpTools, DEFAULT_MCP_TOOL_TIMEOUT_MS } = await import("./create-mcp-tools.js");
-const { noopMcpToolsLogger } = await import("./logger.js");
+const { noopMcpToolsLogger } = await import("../logger.js");
 
 function fakeTool(overrides: Partial<Tool> = {}): Tool {
   return {

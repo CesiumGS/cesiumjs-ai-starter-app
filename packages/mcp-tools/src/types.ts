@@ -89,7 +89,7 @@ const serverFields = {
   allowedTools: z.array(z.string()).optional(),
 };
 
-export const McpServerConfigSchema = z
+const McpServerConfigSchema = z
   .object({ ...serverFields, transport: McpTransportConfigSchema })
   .strict();
 
@@ -108,13 +108,3 @@ function uniqueServerNames<T extends { name: string }>(servers: T[], ctx: z.Refi
 }
 
 export const McpServerConfigsSchema = z.array(McpServerConfigSchema).superRefine(uniqueServerNames);
-
-/**
- * Validates a list of MCP server configs (e.g. parsed from an
- * `mcp.config.json` file). Throws a descriptive error on invalid shape or
- * duplicate names. One flat list, no manual "does this need OAuth" flag —
- * see `createMcpTools`'s `authRequiredServers`.
- */
-export function parseMcpServerConfigs(value: unknown): McpServerConfig[] {
-  return McpServerConfigsSchema.parse(value) as McpServerConfig[];
-}

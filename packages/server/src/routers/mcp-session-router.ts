@@ -1,13 +1,18 @@
 import type { SessionMcpManager } from "@cesium-ai/mcp-tools";
 import { Router, type Request, type Response } from "express";
+// Type-only: pulls in express-session's ambient augmentation of Express's
+// `Request` (adds `sessionID`/`session`) without adding a runtime import —
+// every route below keys off `req.sessionID`, but the host app owns
+// actually mounting `express-session` middleware.
+import type {} from "express-session";
 
 /**
  * The shape pushed to the OAuth popup's opener via `window.postMessage` once
  * `/api/mcp/callback` resolves — mirrors `McpOAuthResultMessage` in
  * `@cesium-ai/chat-element`'s `mcp-oauth-channel.ts` (kept in sync manually;
- * this backend has no dependency on that frontend package). `source` lets a
+ * this package has no dependency on that frontend package). `source` lets a
  * listener ignore unrelated same-window `message` events without needing to
- * check `event.origin` (this backend doesn't know, or need to know, which
+ * check `event.origin` (a host app doesn't know, or need to know, which
  * origin(s) host a frontend for it — see below).
  */
 interface McpOAuthResultMessage {
@@ -31,12 +36,12 @@ function toInlineScriptJson(value: unknown): string {
 
 /**
  * Renders the plain HTML page shown inside the OAuth popup once this
- * backend's shared `/api/mcp/callback` route resolves. Deliberately
- * rendered by the backend itself rather than redirecting to "the" frontend:
- * this backend may serve more than one frontend origin (or none known to
- * it — e.g. an embeddable widget on arbitrary host pages), and there's no
- * single frontend URL that's always correct to bounce back to. Pushes the
- * resolved outcome to `window.opener` via `postMessage` — the frontend side
+ * router's shared `/api/mcp/callback` route resolves. Deliberately rendered
+ * by the backend itself rather than redirecting to "the" frontend: a host
+ * app may serve more than one frontend origin (or none known to it — e.g.
+ * an embeddable widget on arbitrary host pages), and there's no single
+ * frontend URL that's always correct to bounce back to. Pushes the resolved
+ * outcome to `window.opener` via `postMessage` — the frontend side
  * (`@cesium-ai/chat-element`'s `McpConnect.tsx`) validates it came from the
  * specific popup `Window` it opened, rather than by origin, since this page
  * doesn't know the opener's origin either. `title`/`body` are fixed strings
@@ -72,9 +77,9 @@ function renderMcpCallbackHtml(message: McpOAuthResultMessage): string {
 
 /**
  * Builds `/api/mcp/*` routes for user-initiated, per-browser-session MCP
- * OAuth connections (e.g. a "Connect to Cesium ion" UI button) the
+ * OAuth connections (e.g. a "Connect to Cesium ion" UI button) — the
  * dynamic counterpart to operator-configured, always-on servers. Requires
- * session middleware (see `../utils/session.js`) mounted
+ * the host app to mount `express-session` (or equivalent) middleware
  * earlier in the pipeline, since every route keys off `req.sessionID`.
  */
 export function createMcpSessionRouter(sessionMcp: SessionMcpManager): Router {

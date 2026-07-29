@@ -24,7 +24,7 @@ export interface McpAppToolMeta {
 
 /**
  * An AI SDK `Tool` discovered from an MCP server, carrying its MCP Apps
- * widget metadata (if any) directly on the tool object itself \u2014 rather than
+ * widget metadata (if any) directly on the tool object itself - rather than
  * in a separate map the caller has to look up by name alongside the tool
  * registry. Present wherever `@cesium-ai/mcp-tools` hands back tools
  * (`McpToolsHandle.tools`, `SessionMcpManager.getSessionTools`).

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Tool } from "ai";
-import type { McpToolsHandle } from "./create-mcp-tools.js";
+import type { McpToolsHandle } from "./connection/create-mcp-tools.js";
 import { isKnownMcpTool, resolveMcpClient, resolveMcpTools } from "./resolve-mcp-scope.js";
 import type { SessionMcpManager } from "./session/session-mcp-manager.js";
 

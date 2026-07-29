@@ -28,16 +28,16 @@ export interface AiChatPanelProps {
   toolsApiEndpoint?: string;
   /**
    * Base URL for session-scoped, user-initiated MCP OAuth connect routes
-   * (e.g. "Connect to Cesium ion"), shaped `${apiBase}/api/mcp` — see this
-   * repo's backend's `mcp-session-router.ts`. When omitted (or the host
+   * (e.g. "Connect to Cesium ion"), shaped `${apiBase}/api/mcp` — see
+   * `@cesium-ai/server`'s `mcp-session-router.ts`. When omitted (or the host
    * reports no session-connectable servers), no connect UI is rendered.
    */
   mcpConnectApiBase?: string;
   /**
    * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
    * resource, and calling tools back on its own server from inside the
-   * rendered widget), shaped `${apiBase}/api/mcp-app` — see this repo's
-   * backend's `mcp-app-router.ts`. When omitted, a tool result that declares
+   * rendered widget), shaped `${apiBase}/api/mcp-app` — see
+   * `@cesium-ai/server`'s `mcp-app-router.ts`. When omitted, a tool result that declares
    * an MCP Apps widget (via `toolsApiEndpoint`'s `mcpApp` field) renders only
    * its plain JSON result, same as any other tool.
    */
