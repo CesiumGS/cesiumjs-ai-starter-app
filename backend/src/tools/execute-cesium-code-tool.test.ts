@@ -91,6 +91,154 @@ describe("createExecuteCesiumCodeTool", () => {
     });
   });
 
+  it("threads maxLength, maxLines, and allowedSymbols through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({
+      model: fakeModel,
+      maxLength: 2000,
+      maxLines: 50,
+      allowedSymbols: ["viewer"],
+    });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1d",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      maxLength: 2000,
+      maxLines: 50,
+      allowedSymbols: ["viewer"],
+    });
+  });
+
+  it("threads extraInstructions through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({
+      model: fakeModel,
+      extraInstructions: "Prefer flat styling.",
+    });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1e",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      extraInstructions: "Prefer flat styling.",
+    });
+  });
+
+  it("threads the latest sandbox execution error and previous code into a retry generation", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "const tileset = await Cesium.createOsmBuildingsAsync();",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel });
+    await cesiumTool.execute!(
+      { intent: "show OSM buildings" },
+      {
+        toolCallId: "call-retry",
+        context: undefined,
+        messages: [
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: "call-original",
+                toolName: "executeCesiumCode",
+                output: {
+                  type: "json",
+                  value: {
+                    code: "viewer.scene.primitives.add(Cesium.createOsmBuildingsAsync());",
+                    executionError: "A Promise cannot be passed to a Cesium API.",
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "show OSM buildings",
+      model: fakeModel,
+      runtimeFeedback: {
+        previousCode: "viewer.scene.primitives.add(Cesium.createOsmBuildingsAsync());",
+        executionError: "A Promise cannot be passed to a Cesium API.",
+      },
+    });
+  });
+
+  it("does not reuse an older runtime error after a later execution succeeds", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.setView({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel });
+    await cesiumTool.execute!(
+      { intent: "change the camera" },
+      {
+        toolCallId: "call-after-success",
+        context: undefined,
+        messages: [
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: "call-failed",
+                toolName: "executeCesiumCode",
+                output: {
+                  type: "json",
+                  value: { code: "bad();", executionError: "not a function" },
+                },
+              },
+            ],
+          },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: "call-succeeded",
+                toolName: "executeCesiumCode",
+                output: { type: "json", value: { code: "viewer.camera.setView({});" } },
+              },
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenLastCalledWith({
+      intent: "change the camera",
+      model: fakeModel,
+    });
+  });
+
   it("returns { error } when generation fails verification", async () => {
     generateVerifiedCesiumCode.mockResolvedValueOnce({
       verified: false,

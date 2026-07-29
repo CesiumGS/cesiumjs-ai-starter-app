@@ -49,6 +49,9 @@ const BANNED_GLOBALS = new Set([
   "Worker",
   "SharedWorker",
   "postMessage",
+  "setTimeout",
+  "setInterval",
+  "requestAnimationFrame",
 ]);
 
 /**

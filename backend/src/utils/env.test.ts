@@ -5,7 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * each test resets the module registry and re-imports with a controlled
  * environment. `dotenv.config` is a no-op here since no `.env` file exists
  * relative to the test's `process.cwd()`.
+ *
+ * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP_SERVERS parsing),
+ * a heavier dependency chain than before. `vi.resetModules()` forces every
+ * `loadEnv()` call below to re-evaluate that whole chain from scratch, which
+ * can push the first couple of dynamic imports in this file past vitest's
+ * default 5000ms per-test timeout under full-workspace-suite parallel
+ * contention (each in isolation is fast — see repo memory on this file's
+ * pre-existing full-run timing flakiness). Bump this file's timeout rather
+ * than chase a "fix" for what's fundamentally cold-module-load variance.
  */
+vi.setConfig({ testTimeout: 15_000 });
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -32,6 +42,10 @@ describe("env parsing", () => {
       RATE_LIMIT_RPM: undefined,
       CODEGEN_MAX_SKILLS: undefined,
       CODEGEN_MAX_ATTEMPTS: undefined,
+      CODEGEN_MAX_CODE_LENGTH: undefined,
+      CODEGEN_MAX_CODE_LINES: undefined,
+      CODEGEN_ALLOWED_SYMBOLS: undefined,
+      CODEGEN_EXTRA_INSTRUCTIONS: undefined,
       TELEMETRY_ENABLED: undefined,
     });
 
@@ -41,6 +55,10 @@ describe("env parsing", () => {
     expect(env.RATE_LIMIT_RPM).toBe(20);
     expect(env.CODEGEN_MAX_SKILLS).toBe(1);
     expect(env.CODEGEN_MAX_ATTEMPTS).toBe(3);
+    expect(env.CODEGEN_MAX_CODE_LENGTH).toBe(4000);
+    expect(env.CODEGEN_MAX_CODE_LINES).toBe(100);
+    expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
+    expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
     expect(env.TELEMETRY_ENABLED).toBe(false);
   });
 
@@ -148,9 +166,96 @@ describe("env parsing", () => {
     );
   });
 
+  it("coerces CODEGEN_MAX_CODE_LENGTH to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_CODE_LENGTH: "8000" });
+    expect(env.CODEGEN_MAX_CODE_LENGTH).toBe(8000);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_CODE_LENGTH", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_CODE_LENGTH: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("coerces CODEGEN_MAX_CODE_LINES to a positive integer", async () => {
+    const { env } = await loadEnv({ CODEGEN_MAX_CODE_LINES: "200" });
+    expect(env.CODEGEN_MAX_CODE_LINES).toBe(200);
+  });
+
+  it("rejects a non-positive CODEGEN_MAX_CODE_LINES", async () => {
+    await expect(loadEnv({ CODEGEN_MAX_CODE_LINES: "0" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  describe("CODEGEN_ALLOWED_SYMBOLS comma-splitting", () => {
+    it("splits and trims a comma-separated list", async () => {
+      const { env } = await loadEnv({
+        CODEGEN_ALLOWED_SYMBOLS: "viewer, Cartesian3 ,Cartographic",
+      });
+      expect(env.CODEGEN_ALLOWED_SYMBOLS).toEqual(["viewer", "Cartesian3", "Cartographic"]);
+    });
+
+    it("is undefined (no allowlist restriction) when blank", async () => {
+      const { env } = await loadEnv({ CODEGEN_ALLOWED_SYMBOLS: "" });
+      expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
+    });
+  });
+
+  describe("CODEGEN_EXTRA_INSTRUCTIONS", () => {
+    it("keeps a non-blank CODEGEN_EXTRA_INSTRUCTIONS", async () => {
+      const { env } = await loadEnv({ CODEGEN_EXTRA_INSTRUCTIONS: "Prefer flat styling." });
+      expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBe("Prefer flat styling.");
+    });
+
+    it("treats a blank CODEGEN_EXTRA_INSTRUCTIONS as unset", async () => {
+      const { env } = await loadEnv({ CODEGEN_EXTRA_INSTRUCTIONS: "   " });
+      expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
+    });
+  });
+
   it("rejects a malformed OTEL_EXPORTER_OTLP_ENDPOINT", async () => {
     await expect(loadEnv({ OTEL_EXPORTER_OTLP_ENDPOINT: "not-a-url" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
+  });
+
+  it("defaults MCP_SERVERS to an empty array and MCP_TOOL_TIMEOUT_MS to 30000", async () => {
+    const { env } = await loadEnv({ MCP_SERVERS: undefined, MCP_TOOL_TIMEOUT_MS: undefined });
+    expect(env.MCP_SERVERS).toEqual([]);
+    expect(env.MCP_TOOL_TIMEOUT_MS).toBe(30_000);
+  });
+
+  it("parses a valid MCP_SERVERS JSON array", async () => {
+    const { env } = await loadEnv({
+      MCP_SERVERS: JSON.stringify([
+        { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+      ]),
+    });
+    expect(env.MCP_SERVERS).toEqual([
+      { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+    ]);
+  });
+
+  it("rejects malformed MCP_SERVERS JSON", async () => {
+    await expect(loadEnv({ MCP_SERVERS: "{not json" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects MCP_SERVERS with duplicate server names", async () => {
+    await expect(
+      loadEnv({
+        MCP_SERVERS: JSON.stringify([
+          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
+        ]),
+      }),
+    ).rejects.toThrow(/Invalid environment configuration/i);
+  });
+
+  it("coerces MCP_TOOL_TIMEOUT_MS to a positive integer", async () => {
+    const { env } = await loadEnv({ MCP_TOOL_TIMEOUT_MS: "5000" });
+    expect(env.MCP_TOOL_TIMEOUT_MS).toBe(5000);
   });
 });

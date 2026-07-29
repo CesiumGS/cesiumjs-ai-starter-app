@@ -98,6 +98,18 @@ describe("verifyCesiumCode — banned constructs", () => {
       expect(result.verified).toBe(false);
     }
   });
+
+  it("rejects timer and animation-frame callbacks that cannot outlive the guest VM", () => {
+    for (const code of [
+      `setTimeout(() => {}, 1000);`,
+      `setInterval(() => {}, 1000);`,
+      `requestAnimationFrame(() => {});`,
+    ]) {
+      const result = verifyCesiumCode(code);
+      expect(result.verified).toBe(false);
+      expect(result.violations?.some((violation) => /banned global/i.test(violation))).toBe(true);
+    }
+  });
 });
 
 describe("verifyCesiumCode — free identifier allowlist", () => {

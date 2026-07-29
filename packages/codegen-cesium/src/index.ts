@@ -25,6 +25,7 @@ export {
   generateVerifiedCesiumCode,
   type GenerateVerifiedCesiumCodeOptions,
   type GenerateVerifiedCesiumCodeResult,
+  type RuntimeCodegenFeedback,
 } from "./pipeline/generate-verified-cesium-code.js";
 
 export { CODEGEN_CESIUM_TOOL_NAMES, type CodegenCesiumToolName } from "./tool-names.js";

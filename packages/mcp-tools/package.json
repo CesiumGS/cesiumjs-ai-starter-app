@@ -1,0 +1,40 @@
+{
+  "name": "@cesium-ai/mcp-tools",
+  "version": "0.0.1",
+  "description": "Optional, server-only Model Context Protocol (MCP) client tool bridge for the AI SDK. Connects to one or more MCP servers (SSE/HTTP — stdio is deliberately unsupported), namespaces + allowlists their tools, and merges them into an AI SDK ToolSet a host app can spread alongside @cesium-ai/tools-schemas.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@ai-sdk/mcp": "^2.0.0",
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

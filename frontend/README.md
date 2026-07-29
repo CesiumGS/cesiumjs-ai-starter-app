@@ -4,16 +4,22 @@
 
 ## Structure
 
-| File                                                                                                                                          | Description                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [`src/App.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/App.tsx)                                           | Root: globe + chat panel                  |
-| [`src/components/CesiumGlobe.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/CesiumGlobe.tsx)     | CesiumJS Viewer lifecycle wrapper         |
-| [`src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)         | Tool-call listener — `TOOL_EXECUTORS` map |
-| [`src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts)                           | `flyTo` client-side executor              |
-| [`src/tools/execute-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/execute-cesium-code.ts) | `executeCesiumCode` result handler        |
-| [`src/utils/cesium-loader.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/utils/cesium-loader.ts)             | Viewer initialization                     |
-| [`src/utils/config.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/utils/config.ts)                           | `VITE_*` env vars                         |
-| [`src/main.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/main.tsx)                                         | React entry point                         |
+```
+src/
+├── App.tsx                     # Root component — mounts the globe + chat panel
+├── components/
+│   ├── CesiumGlobe.tsx          # CesiumJS Viewer lifecycle wrapper
+│   └── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
+├── tools/
+│   ├── camera.ts                       # flyToLocation — client-side flyTo executor
+│   ├── execute-cesium-code-result.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
+│   ├── render-error-watch.ts           # waitForRenderError — delayed render-loop crash detection
+│   └── execute-cesium-code.ts          # Sandbox execution (executeApprovedCesiumCode) + orchestration (handleExecuteCesiumCodeResult)
+├── utils/
+│   ├── cesium-loader.ts          # Viewer initialization (terrain, imagery, defaults)
+│   └── config.ts                 # Reads VITE_* env vars (Ion token, chat API base URL)
+└── main.tsx                     # React entry point
+```
 
 ## Tool execution
 
@@ -21,11 +27,13 @@
 
 The frontend imports only tool **names** (`/names`) and structural **shapes** (`/schemas`) from shared packages — never model-facing descriptions, which stay backend-only.
 
-`executeCesiumCode` is handled via `handleServerToolResult`: the backend streams AST-verified code, the user approves, and `executeApprovedCesiumCode` executes it via `new Function("viewer", "Cesium", code)`. See the [backend](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/backend/) for the verification pipeline.
+## `executeCesiumCode`: server-verified, client-executed
+
+`executeCesiumCode` is a "Code Mode" tool resolved server-side — `@cesium-ai/codegen-cesium` generates and verifies the snippet via AST inspection, then streams it to `ChatPanel.tsx`'s `handleServerToolResult` (see [`backend/README.md`](../backend/README.md)). After user approval, the frontend validates the result and executes it in a fresh QuickJS-WASM runtime from `@cesium-ai/codegen-sandbox`. The sandbox has a memory/deadline budget, an opaque-handle bridge to the live Viewer, host-side collection caps, a per-session execution rate limit, and blocks lifecycle, DOM, private, and bulk-removal properties. Static verification and runtime isolation are independent gates.
 
 ## Environment
 
-Copy `.env.example` to `.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` ([get one free](https://ion.cesium.com)). Optionally set `VITE_API_BASE_URL` to point at a non-default backend.
+Copy [`.env.example`](.env.example) to `.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` (get one free at [ion.cesium.com](https://ion.cesium.com)). It's baked into the client bundle at build time — intentionally client-visible, so scope it in the Ion console. Optionally set `VITE_API_BASE_URL` to point at a non-default backend, or `VITE_LOG_LEVEL` (`debug`/`info`/`warn`/`error`/`silent`) to control this app's console logging (currently just the codegen sandbox's logger) — defaults to `debug` in dev builds, `silent` in production (see `src/utils/config.ts`). Set `VITE_SANDBOX_ALLOWED_NETWORK_ORIGINS` to a comma-separated list of exact HTTP(S) origins when generated Cesium code must load external assets; leaving it empty denies guest-provided network URLs.
 
 ## Scripts
 

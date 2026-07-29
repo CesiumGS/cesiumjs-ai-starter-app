@@ -4,11 +4,12 @@
 # `docker build -f backend/Dockerfile .` — this is what compose.yaml uses.
 #
 # This app's workspace packages (@cesium-ai/server, @cesium-ai/tools-schemas,
-# @cesium-ai/codegen-cesium, @cesium-ai/sample-config) are resolved via npm
-# workspaces from the repo root, so the backend image can't be built from the
-# backend/ folder alone. Only manifests for workspaces the backend actually
-# depends on are copied — npm ci is fine with the rest of the `workspaces`
-# glob in the root package.json not resolving to anything on disk.
+# @cesium-ai/codegen-cesium, @cesium-ai/mcp-tools, @cesium-ai/sample-config)
+# are resolved via npm workspaces from the repo root, so the backend image
+# can't be built from the backend/ folder alone. Only manifests for
+# workspaces the backend actually depends on are copied — npm ci is fine with
+# the rest of the `workspaces` glob in the root package.json not resolving to
+# anything on disk.
 
 # ---- Stage 1: build --------------------------------------------------------
 FROM node:lts-alpine AS build
@@ -21,12 +22,14 @@ COPY shared/package.json shared/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY packages/codegen-cesium/package.json packages/codegen-cesium/package.json
+COPY packages/mcp-tools/package.json packages/mcp-tools/package.json
 RUN npm ci
 
 COPY shared shared
 COPY packages/server packages/server
 COPY packages/tools-schemas packages/tools-schemas
 COPY packages/codegen-cesium packages/codegen-cesium
+COPY packages/mcp-tools packages/mcp-tools
 COPY backend backend
 
 RUN npm run build:packages && npm run build -w backend
@@ -56,6 +59,8 @@ COPY --from=build /app/packages/tools-schemas/package.json packages/tools-schema
 COPY --from=build /app/packages/tools-schemas/dist packages/tools-schemas/dist
 COPY --from=build /app/packages/codegen-cesium/package.json packages/codegen-cesium/package.json
 COPY --from=build /app/packages/codegen-cesium/dist packages/codegen-cesium/dist
+COPY --from=build /app/packages/mcp-tools/package.json packages/mcp-tools/package.json
+COPY --from=build /app/packages/mcp-tools/dist packages/mcp-tools/dist
 
 USER node
 
