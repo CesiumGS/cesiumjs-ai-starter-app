@@ -17,12 +17,8 @@ function findMcpConfigFile(): string | undefined {
   return MCP_CONFIG_CANDIDATE_PATHS.find((path) => existsSync(path));
 }
 
-export type McpServersConfigSource = "file" | "default";
-
 export interface McpServersConfigResult {
-  servers: McpServerConfig[];
-  /** Where the (possibly empty) server list came from — useful for a startup log. */
-  source: McpServersConfigSource;
+  mcpServers: McpServerConfig[];
   /** Only set when `source === "file"`. */
   sourcePath?: string;
 }
@@ -59,7 +55,7 @@ export function resolveMcpServersConfig():
       };
     }
   } else {
-    return { result: { servers: [], source: "default" } };
+    return { result: { mcpServers: [] } };
   }
 
   const parsed = McpServerConfigsSchema.safeParse(raw);
@@ -69,8 +65,7 @@ export function resolveMcpServersConfig():
 
   return {
     result: {
-      servers: parsed.data as McpServerConfig[],
-      source: "file",
+      mcpServers: parsed.data as McpServerConfig[],
       sourcePath: configFile,
     },
   };

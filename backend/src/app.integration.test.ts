@@ -40,6 +40,7 @@ function fakeEnv(overrides: Partial<Env> = {}): Env {
   return {
     AI_PROVIDER: "anthropic",
     ALLOWED_ORIGIN: ["http://localhost:5173"],
+    PUBLIC_URL: "http://localhost:3001",
     RATE_LIMIT_RPM: 20,
     SESSION_SECRET: "integration-test-session-secret",
     ...overrides,
@@ -153,13 +154,11 @@ describe("backend app — /api/tools", () => {
 
   it("reports mcpApp widget metadata for a tool that declared one", async () => {
     const mcp = fakeMcpToolsHandle({
-      tools: { mcp__ion__launch_importer: { description: "Launches the importer" } as never },
-      appTools: {
+      tools: {
         mcp__ion__launch_importer: {
-          resourceUri: "ui://ion/importer",
-          serverName: "ion",
-          rawToolName: "launch_importer",
-        },
+          description: "Launches the importer",
+          mcpApp: { resourceUri: "ui://ion/importer" },
+        } as never,
       },
     });
     const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
@@ -240,8 +239,8 @@ function fakeSessionMcpManager(overrides: Partial<SessionMcpManager> = {}): Sess
     connect: async () => ({ authorizationUrl: "https://auth.example.com/authorize" }),
     completeCallback: async () => ({ connected: true, serverName: "ion" }),
     cancelPending: async () => undefined,
+    consumeLastError: async () => undefined,
     getSessionTools: async () => ({}),
-    getSessionAppTools: async () => ({}),
     getSessionClient: async () => undefined,
     isConnected: async () => false,
     serverNames: ["ion"],
@@ -258,7 +257,6 @@ function fakeMcpToolsHandle(overrides: Partial<McpToolsHandle> = {}): McpToolsHa
     tools: {},
     servers: [],
     authRequiredServers: [],
-    appTools: {},
     getClient: () => undefined,
     close: async () => {},
     ...overrides,
@@ -343,7 +341,26 @@ describe("backend app — /api/mcp session routes", () => {
     expect(await res.json()).toEqual({ connected: true });
   });
 
-  it("renders a callback result page and completes the flow via the shared, server-name-agnostic route", async () => {
+  it("reports the last recorded failure reason only while NOT connected", async () => {
+    const consumeLastError = vi.fn(async () => "Authorization was denied: access_denied");
+    const { url } = await start(
+      createBackendApp({
+        env: fakeEnv(),
+        model: flyToModel(),
+        sessionMcp: fakeSessionMcpManager({ isConnected: async () => false, consumeLastError }),
+      }),
+    );
+
+    const res = await fetch(`${url}/api/mcp/ion/status`);
+
+    expect(await res.json()).toEqual({
+      connected: false,
+      error: "Authorization was denied: access_denied",
+    });
+    expect(consumeLastError).toHaveBeenCalledWith(expect.any(String), "ion");
+  });
+
+  it("renders the result page directly (no redirect), completing the flow via the shared, server-name-agnostic route", async () => {
     const completeCallback = vi.fn(async () => ({ connected: true as const, serverName: "ion" }));
     const { url } = await start(
       createBackendApp({
@@ -353,34 +370,17 @@ describe("backend app — /api/mcp session routes", () => {
       }),
     );
 
-    const res = await fetch(`${url}/api/mcp/callback?code=abc&state=xyz`);
+    const res = await fetch(`${url}/api/mcp/callback?code=abc&state=xyz`, { redirect: "manual" });
 
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("cesium-ai-mcp-oauth");
+    expect(res.headers.get("content-type")).toContain("text/html");
+    const html = await res.text();
+    expect(html).toContain('"server":"ion"');
+    expect(html).toContain('"connected":true');
     expect(completeCallback).toHaveBeenCalledWith(expect.any(String), "abc", "xyz");
   });
 
-  it("escapes provider error text embedded in the callback page script", async () => {
-    const { url } = await start(
-      createBackendApp({
-        env: fakeEnv(),
-        model: flyToModel(),
-        sessionMcp: fakeSessionMcpManager(),
-      }),
-    );
-
-    const attack = `denied</script><script>globalThis.compromised=true</script>`;
-    const res = await fetch(
-      `${url}/api/mcp/callback?error=access_denied&error_description=${encodeURIComponent(attack)}`,
-    );
-    const body = await res.text();
-
-    expect(body).not.toContain(JSON.stringify(attack));
-    expect(body).toContain("\\u003c/script>");
-  });
-
-  it("cancels the pending flow (and reports its server name) when the provider denies consent", async () => {
+  it("escapes provider-controlled text embedded in the result page so it can't break out of the inline script", async () => {
     const cancelPending = vi.fn(async () => "ion");
     const { url } = await start(
       createBackendApp({
@@ -390,11 +390,50 @@ describe("backend app — /api/mcp session routes", () => {
       }),
     );
 
-    const res = await fetch(`${url}/api/mcp/callback?error=access_denied&state=xyz`);
-    const body = await res.text();
+    const attack = `denied</script><script>globalThis.compromised=true</script>`;
+    const res = await fetch(
+      `${url}/api/mcp/callback?error=access_denied&error_description=${encodeURIComponent(attack)}`,
+      { redirect: "manual" },
+    );
 
-    expect(cancelPending).toHaveBeenCalledWith(expect.any(String), "xyz");
-    expect(body).toContain('"server":"ion"');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // The raw, unescaped attack payload must never appear verbatim in the
+    // response — `</script>` (in any case a naive check might miss) is
+    // rewritten to `\u003c/script>` so it can't terminate the inline script
+    // block early and inject markup.
+    expect(html).not.toContain(attack);
+    expect(html.match(/<script>/gi)?.length).toBe(1);
+    expect(cancelPending).toHaveBeenCalledWith(
+      expect.any(String),
+      undefined,
+      `Authorization was denied: ${attack}`,
+    );
+  });
+
+  it("cancels the pending flow when the provider denies consent, recording the denial reason", async () => {
+    const cancelPending = vi.fn(async () => "ion");
+    const { url } = await start(
+      createBackendApp({
+        env: fakeEnv(),
+        model: flyToModel(),
+        sessionMcp: fakeSessionMcpManager({ cancelPending }),
+      }),
+    );
+
+    const res = await fetch(`${url}/api/mcp/callback?error=access_denied&state=xyz`, {
+      redirect: "manual",
+    });
+
+    expect(cancelPending).toHaveBeenCalledWith(
+      expect.any(String),
+      "xyz",
+      "Authorization was denied: access_denied",
+    );
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('"server":"ion"');
+    expect(html).toContain('"connected":false');
   });
 
   it("disconnects a server", async () => {

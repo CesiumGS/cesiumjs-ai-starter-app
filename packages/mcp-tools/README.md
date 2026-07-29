@@ -61,10 +61,9 @@ interface CreateMcpToolsOptions {
 }
 
 interface McpToolsHandle {
-  tools: ToolSet; // merged, namespaced — spread into your registry
+  tools: ToolSet; // merged, namespaced — spread into your registry. A tool with an MCP Apps widget carries it as its own `mcpApp` property (see "MCP Apps widgets" below)
   servers: readonly McpServerStatus[]; // per-server connect outcome
   authRequiredServers: readonly McpServerConfig[]; // auto-detected as needing per-user OAuth
-  appTools: Record<string, McpAppToolInfo>; // MCP Apps widget metadata, keyed by namespaced tool name — see "MCP Apps widgets" below
   getClient(serverName: string): MCPClient | undefined; // live client for one connected server — needed to serve widget bridge requests
   close(): Promise<void>; // closes every underlying MCP client
 }
@@ -128,7 +127,7 @@ const sessionMcp = createSessionMcpManager({
 });
 ```
 
-`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `backend/src/mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
+`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `backend/src/routers/mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
 
 `@ai-sdk/mcp` handles dynamic client registration, PKCE (S256), authorization-code exchange, and refresh. This package keeps provider state in memory only — the host must call `disconnect`, `disconnectSession`, and `closeAll` at the appropriate lifecycle boundaries.
 
@@ -142,9 +141,9 @@ Validates a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.co
 
 ## MCP Apps widgets
 
-Both `createMcpTools` and `createSessionMcpManager` always advertise `@ai-sdk/mcp`'s `mcpAppClientCapabilities` during connect — the ["MCP Apps"](https://modelcontextprotocol.io) extension that lets a tool declare an interactive `ui://` HTML widget resource (via `_meta.ui.resourceUri`) instead of/alongside a plain JSON result. This package only discovers and exposes that metadata (`getMcpAppToolMeta`, `McpToolsHandle.appTools` / `SessionMcpManager.getSessionAppTools`) plus a way to reach the underlying live `MCPClient` (`getClient` / `getSessionClient`) — it does **not** fetch resources or call tools on a widget's behalf. That's the host's job:
+Both `createMcpTools` and `createSessionMcpManager` always advertise `@ai-sdk/mcp`'s `mcpAppClientCapabilities` during connect — the ["MCP Apps"](https://modelcontextprotocol.io) extension that lets a tool declare an interactive `ui://` HTML widget resource (via `_meta.ui.resourceUri`) instead of/alongside a plain JSON result. This package only discovers that metadata (`getMcpAppToolMeta`) and attaches it directly onto the discovered tool as `tool.mcpApp` (see `McpTool`) — no separate map to look up alongside the tool registry — plus a way to reach the underlying live `MCPClient` (`getClient` / `getSessionClient`). It does **not** fetch resources or call tools on a widget's behalf. That's the host's job:
 
-- `backend/src/mcp-app-router.ts` exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
+- `backend/src/routers/mcp-app-router.ts` exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
 - `packages/chat-element/src/McpAppWidget.tsx` uses `@mcp-ui/client`'s `AppRenderer`, which implements the MCP Apps JSON-RPC/postMessage protocol and isolates widget HTML through a host-served double-iframe sandbox proxy. This repo serves that proxy from `frontend/public/sandbox_proxy.html`; another host can pass its URL through `AiChatPanel`'s `mcpAppSandboxUrl` prop. Widget-initiated tool calls remain approval-gated.
 
 ## Request flows
@@ -180,7 +179,7 @@ sequenceDiagram
 
 ### Session-scoped interactive OAuth connect
 
-Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are this repo's own `backend/src/mcp-session-router.ts`:
+Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are this repo's own `backend/src/routers/mcp-session-router.ts`:
 
 ```mermaid
 sequenceDiagram
@@ -214,8 +213,9 @@ sequenceDiagram
     Backend->>MCP: tools()
     MCP-->>Backend: tool list
     Note over Backend: namespaced (mcp__<server>__<tool>) + timeout-wrapped,<br/>stored keyed by this browser session's sessionId
-    Backend-->>Browser: self-closing HTML page → postMessage({ok:true}) → window.close()
-    Browser->>Browser: McpConnect.tsx receives the postMessage,<br/>refetches /api/tools to show the newly connected tools
+    Backend-->>Browser: 200 OK, plain HTML result page rendered directly<br/>by the backend (no redirect — this backend may be shared by more<br/>than one frontend origin, so there's no single one to bounce back to)
+    Browser->>Browser: that page pushes {server, connected, error?} to<br/>window.opener via postMessage, then window.close()
+    Browser->>Browser: McpConnect.tsx, listening since the popup opened,<br/>matches the message against the exact popup Window reference<br/>it opened, sees connected:true and refetches /api/tools
 ```
 
 ### Calling a connected MCP tool during chat

@@ -2,12 +2,11 @@ export {
   createMcpTools,
   DEFAULT_MCP_TOOL_TIMEOUT_MS,
   type CreateMcpToolsOptions,
-  type McpAppToolInfo,
   type McpServerStatus,
   type McpToolsHandle,
 } from "./create-mcp-tools.js";
 export { namespacedToolName, type SelectedMcpTool } from "./connect-mcp-server.js";
-export { getMcpAppToolMeta, type McpAppToolMeta } from "./mcp-app-meta.js";
+export { getMcpAppToolMeta, type McpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
 export {
   createConsoleMcpToolsLogger,
   noopMcpToolsLogger,
@@ -27,8 +26,19 @@ export {
   type SessionMcpManager,
   type SessionMcpManagerOptions,
 } from "./session/session-mcp-manager.js";
-export type { ConnectedMcpConnection, PendingMcpConnection } from "./storage/models.js";
+export {
+  resolveMcpClient,
+  resolveMcpTools,
+  isKnownMcpTool,
+  type McpScope,
+} from "./resolve-mcp-scope.js";
+export {
+  toConnectedMcpConnectionDescriptor,
+  toPendingMcpConnectionDescriptor,
+  type ConnectedMcpConnectionDescriptor,
+  type PendingMcpConnectionDescriptor,
+} from "./storage/models.js";
 export type {
-  McpConnectedConnectionRepository,
+  McpConnectionRepository,
   McpPendingConnectionRepository,
 } from "./storage/repositories.js";

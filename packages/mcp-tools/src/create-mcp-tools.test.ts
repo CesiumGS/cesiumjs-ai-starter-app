@@ -233,7 +233,7 @@ describe("createMcpTools", () => {
     expect(handle.getClient("unknown-server")).toBeUndefined();
   });
 
-  it("collects MCP Apps widget metadata into appTools, keyed by the namespaced tool name", async () => {
+  it("attaches MCP Apps widget metadata directly onto the discovered tool as `mcpApp`", async () => {
     createMCPClientMock.mockResolvedValueOnce({
       tools: vi.fn(async () => ({
         launch_importer: fakeTool({
@@ -249,14 +249,10 @@ describe("createMcpTools", () => {
       logger: noopMcpToolsLogger,
     });
 
-    expect(handle.appTools).toEqual({
-      mcp__ion__launch_importer: {
-        resourceUri: "ui://ion/importer",
-        visibility: ["model", "app"],
-        serverName: "ion",
-        rawToolName: "launch_importer",
-      },
+    expect(handle.tools["mcp__ion__launch_importer"]?.mcpApp).toEqual({
+      resourceUri: "ui://ion/importer",
+      visibility: ["model", "app"],
     });
-    expect(handle.appTools["mcp__ion__plain_tool"]).toBeUndefined();
+    expect(handle.tools["mcp__ion__plain_tool"]?.mcpApp).toBeUndefined();
   });
 });

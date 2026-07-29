@@ -118,7 +118,8 @@ if (issues.length > 0) {
 // `mcpConfig.result` are both guaranteed — narrow explicitly rather than an
 // unchecked `as` cast on the exported `env` object itself.
 const baseEnv = (parsed as Extract<typeof parsed, { success: true }>).data;
-const { servers: mcpServers } = (mcpConfig as Extract<typeof mcpConfig, { result: unknown }>)
-  .result as { servers: McpServerConfig[] };
+const { mcpServers } = (mcpConfig as Extract<typeof mcpConfig, { result: unknown }>).result as {
+  mcpServers: McpServerConfig[];
+};
 
 export const env: Env = { ...baseEnv, mcpServers };

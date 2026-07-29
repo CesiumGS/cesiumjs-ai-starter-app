@@ -40,7 +40,7 @@ if (mcp) {
 // startup connection attempt above, with no static credentials configured)
 // are NOT connected here — each is only ever connected on demand, per
 // browser session, once a user actually initiates it via the interactive
-// "Connect" UI (see `mcp-session-router.ts`). Skipped entirely (sessionMcp
+// "Connect" UI (see `routers/mcp-session-router.ts`). Skipped entirely (sessionMcp
 // stays undefined) when nothing needed auth, a zero-behavior-change default.
 //
 // No `pendingRepository`/`connectedRepository` is passed, so state stays in

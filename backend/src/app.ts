@@ -2,14 +2,21 @@ import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
 import { createChatRouter } from "@cesium-ai/server";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
-import type { McpToolsHandle, SessionMcpManager } from "@cesium-ai/mcp-tools";
+import {
+  resolveMcpTools,
+  type McpToolsHandle,
+  type McpTool,
+  type SessionMcpManager,
+} from "@cesium-ai/mcp-tools";
 import type { LanguageModel, ToolApprovalConfiguration, ToolSet } from "ai";
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
 import type { Env } from "./utils/env.js";
-import { createMcpAppRouter } from "./mcp-app-router.js";
-import { createMcpSessionRouter } from "./mcp-session-router.js";
+import { createHealthRouter } from "./routers/health-router.js";
+import { createMcpAppRouter } from "./routers/mcp-app-router.js";
+import { createMcpSessionRouter } from "./routers/mcp-session-router.js";
+import { createToolsRouter } from "./routers/tools-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
@@ -84,19 +91,22 @@ export function createBackendApp({
         "SESSION_SECRET must be set when session-scoped MCP connections are enabled.",
       );
     }
-    app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, store: sessionStore }));
+    // Marks the session cookie `Secure` (HTTPS-only) whenever `PUBLIC_URL` is
+    // itself HTTPS — avoids sending the session cookie in plaintext over the
+    // network in any deployment reachable at an https:// URL, with no extra
+    // env var needed. Stays `false` for local http://localhost dev.
+    const secure = env.PUBLIC_URL.startsWith("https://");
+    app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, secure, store: sessionStore }));
     app.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+    // No `frontendUrl` needed: `/api/mcp/callback` renders its own plain
+    // result page directly (see mcp-session-router.ts) rather than
+    // redirecting back to "the" frontend — this app may be shared by more
+    // than one frontend origin, and there's no single one always correct
+    // to bounce back to.
     app.use(createMcpSessionRouter(sessionMcp));
   }
 
-  app.get("/health", (_req, res) => {
-    res.json({
-      status: "ok",
-      provider: env.AI_PROVIDER,
-      providerConfigured: model !== undefined,
-      ...(mcp ? { mcpServers: mcp.servers } : {}),
-    });
-  });
+  app.use(createHealthRouter({ env, modelConfigured: model !== undefined, mcp }));
 
   app.use("/api/chat", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
   // Curate tools via ENABLED_CESIUM_TOOLS allowlist; add custom flyTo schema.
@@ -129,33 +139,12 @@ export function createBackendApp({
   // user-initiated MCP connections (see `sessionMcp`) not known statically
   // at server-construction time. `createChatRouter`'s `tools` option accepts
   // a `(req) => ToolSet | Promise<ToolSet>` for exactly this reason.
-  const buildTools = async (req: Request): Promise<ToolSet> => ({
+  const buildTools = async (req: Request): Promise<Record<string, McpTool>> => ({
     ...staticTools,
-    ...(sessionMcp ? await sessionMcp.getSessionTools(req.sessionID) : {}),
+    ...(await resolveMcpTools({ sessionMcp }, req.sessionID)),
   });
 
-  app.use("/api/tools", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
-  // Lets the client introspect the exact tool surface this request would run
-  // against, including MCP tools not known statically at build time.
-  // Read-only; rate-limited the same as /api/chat since a third-party MCP
-  // server's tool count/descriptions could otherwise be scraped freely.
-  app.get("/api/tools", async (req, res) => {
-    const tools = await buildTools(req);
-    const appTools = {
-      ...(mcp?.appTools ?? {}),
-      ...(sessionMcp ? await sessionMcp.getSessionAppTools(req.sessionID) : {}),
-    };
-    res.json({
-      tools: Object.entries(tools).map(([name, tool]) => ({
-        name,
-        description: tool.description,
-        // Present only for MCP tools that declared an MCP Apps `ui://` widget
-        // resource (see @cesium-ai/mcp-tools' `mcp-app-meta.ts`) — lets the
-        // frontend render that widget inline instead of the plain JSON result.
-        ...(appTools[name] ? { mcpApp: { resourceUri: appTools[name].resourceUri } } : {}),
-      })),
-    });
-  });
+  app.use(createToolsRouter({ env, buildTools }));
 
   // Bridge for a rendered MCP App widget's own host<->iframe postMessage
   // protocol: fetching its `ui://` HTML resource and (after the frontend's

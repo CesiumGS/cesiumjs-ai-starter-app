@@ -1,3 +1,5 @@
+import type { Tool } from "ai";
+
 /**
  * Minimal, local reader for the "MCP Apps" extension's tool metadata
  * (`_meta.ui`) — `@ai-sdk/mcp` implements the extension internally
@@ -19,6 +21,21 @@ export interface McpAppToolMeta {
   /** Which surfaces the server intended this tool for. Absent means "no restriction stated". */
   visibility?: readonly ("model" | "app")[];
 }
+
+/**
+ * An AI SDK `Tool` discovered from an MCP server, carrying its MCP Apps
+ * widget metadata (if any) directly on the tool object itself \u2014 rather than
+ * in a separate map the caller has to look up by name alongside the tool
+ * registry. Present wherever `@cesium-ai/mcp-tools` hands back tools
+ * (`McpToolsHandle.tools`, `SessionMcpManager.getSessionTools`).
+ *
+ * A type alias (intersection), not an `interface extends Tool` — `Tool`'s
+ * own definition is a generic union, which TS interfaces can't extend.
+ */
+export type McpTool = Tool & {
+  /** Present only if this tool declared a `ui://` MCP Apps widget resource (`_meta.ui`). */
+  mcpApp?: McpAppToolMeta;
+};
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

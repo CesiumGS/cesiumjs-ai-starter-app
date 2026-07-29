@@ -9,28 +9,22 @@ import {
   disconnectMcpServer,
   fetchMcpConnectionStatus,
   fetchSessionMcpServers,
-} from "./mcp-connect";
-import type { RegisteredTool } from "./registered-tools";
+} from "../mcp/mcp-connect";
+import { listenForMcpOAuthResult } from "../mcp/mcp-oauth-channel";
+import type { RegisteredTool } from "../mcp/registered-tools";
 import { ToolGroup, filterToolsForGroup } from "./ToolGroup";
-import { spanVariantMapping } from "./ui-constants";
+import { spanVariantMapping } from "../utils/ui-constants";
 import styles from "./AiChatPanel.module.css";
 
-/** Message shape the backend's shared `/api/mcp/callback` popup page posts back to `window.opener`. */
-interface McpOAuthMessage {
-  type: "cesium-ai-mcp-oauth";
-  server: string;
-  ok: boolean;
-  message?: string;
-}
-
-function isMcpOAuthMessage(data: unknown): data is McpOAuthMessage {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    (data as { type?: unknown }).type === "cesium-ai-mcp-oauth" &&
-    typeof (data as { server?: unknown }).server === "string"
-  );
-}
+/**
+ * How often to check whether the OAuth popup itself has been closed (a
+ * plain, local `Window.closed` property read — no network call at all), so
+ * an abandoned attempt (the user closes the popup without completing
+ * consent, or without this browser supporting `BroadcastChannel` at all —
+ * see `mcp-oauth-channel.ts`) still resolves to a final connected/failed
+ * state instead of leaving the row stuck on "Connecting…" forever.
+ */
+const CLOSED_CHECK_INTERVAL_MS = 500;
 
 interface ServerState {
   name: string;
@@ -99,10 +93,18 @@ export interface McpConnectProps {
  * "Disconnect" action.
  *
  * Connecting opens a separate browser popup to the returned authorization
- * URL; it navigates through the provider's consent screen and back to this
- * backend's callback route, which posts a `{type: "cesium-ai-mcp-oauth",
- * server, ok}` message to `window.opener` and closes itself — this
- * component listens for that message to learn the outcome without polling.
+ * URL; it navigates through the provider's consent screen, back to this
+ * backend's shared callback route, which renders a small, plain "Connected"/
+ * "Connection failed" page directly (rather than redirecting to a frontend —
+ * this backend may be shared by more than one frontend origin, so there's no
+ * single one always correct to bounce back to) and self-closes. This
+ * component learns the actual outcome PUSHED from that popup via
+ * `window.postMessage` (see `mcp-oauth-channel.ts`), matched against the
+ * exact popup `Window` reference this component opened rather than by
+ * origin — no network polling on this end at all. A lightweight, purely-
+ * local `Window.closed` check (see `CLOSED_CHECK_INTERVAL_MS`) is kept as a
+ * fallback so an abandoned attempt (popup closed without completing) still
+ * resolves to a final state instead of hanging on "Connecting…" forever.
  */
 export function McpConnect({
   apiBase,
@@ -115,6 +117,13 @@ export function McpConnect({
   /** Name of the server whose connect/disconnect popup is currently open, or `null` if none. */
   const [openServer, setOpenServer] = useState<string | null>(null);
   const anchorsRef = useRef(new Map<string, HTMLElement>());
+  /**
+   * Per-server cleanup for an in-flight connect attempt: unsubscribes the
+   * `BroadcastChannel` listener and stops the local popup-closed check.
+   * Keyed by server name so a new attempt for the same server cleanly
+   * replaces (rather than doubles up with) any still-pending previous one.
+   */
+  const watchersRef = useRef(new Map<string, () => void>());
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +138,7 @@ export function McpConnect({
         setServers(
           names.map((name, i) => ({
             name,
-            connected: statuses[i] ?? false,
+            connected: statuses[i]?.connected ?? false,
             connecting: false,
           })),
         );
@@ -140,45 +149,89 @@ export function McpConnect({
     };
   }, [apiBase, onServerNames]);
 
+  // Stop every in-flight watcher on unmount — nothing left to update.
   useEffect(() => {
-    let cancelled = false;
-    const callbackOrigin = new URL(apiBase, window.location.href).origin;
-
-    async function handleMessage(event: MessageEvent) {
-      if (event.origin !== callbackOrigin || !isMcpOAuthMessage(event.data)) return;
-      const { server, ok, message } = event.data;
-      const connected = ok ? await fetchMcpConnectionStatus(apiBase, server) : false;
-      if (cancelled) return;
-      setServers((prev) =>
-        prev.map((s) =>
-          s.name === server
-            ? {
-                ...s,
-                connecting: false,
-                connected,
-                error: connected
-                  ? undefined
-                  : (message ??
-                    (ok ? "The server did not confirm the connection." : "Connection failed.")),
-              }
-            : s,
-        ),
-      );
-      if (connected) {
-        setOpenServer((current) => (current === server ? null : current));
-        onConnectionChange?.();
-      } else {
-        // Surface the failure as an anchored popup next to the row, since
-        // there's no other Connect button left to show it near.
-        setOpenServer(server);
-      }
-    }
-    window.addEventListener("message", handleMessage);
+    const watchers = watchersRef.current;
     return () => {
-      cancelled = true;
-      window.removeEventListener("message", handleMessage);
+      for (const stop of watchers.values()) stop();
+      watchers.clear();
     };
-  }, [apiBase, onConnectionChange]);
+  }, []);
+
+  const stopWatching = useCallback((name: string) => {
+    const stop = watchersRef.current.get(name);
+    if (stop !== undefined) {
+      stop();
+      watchersRef.current.delete(name);
+    }
+  }, []);
+
+  /**
+   * Watches for `name`'s connect attempt to resolve: primarily via the
+   * `postMessage` push from the OAuth popup itself (backend-rendered — see
+   * `renderMcpCallbackHtml` in `backend/src/routers/mcp-session-router.ts`;
+   * near-instant, no network call on this end), with a local `Window.closed`
+   * check as a fallback — covers the user closing the popup without
+   * completing consent (in which case the popup's own ~1.5s auto-close is
+   * what eventually triggers the fallback's single status fetch below).
+   * Whichever settles first wins; the other is torn down immediately via
+   * `stopWatching`.
+   */
+  const watchForOutcome = useCallback(
+    (name: string, popup: Window) => {
+      stopWatching(name);
+
+      const applyOutcome = (connected: boolean, error: string | undefined) => {
+        stopWatching(name);
+        if (!popup.closed) popup.close();
+        setServers((prev) =>
+          prev.map((s) =>
+            s.name === name
+              ? connected
+                ? { ...s, connecting: false, connected: true, error: undefined }
+                : {
+                    ...s,
+                    connecting: false,
+                    connected: false,
+                    error: error ?? "Connection failed.",
+                  }
+              : s,
+          ),
+        );
+        if (connected) {
+          setOpenServer((current) => (current === name ? null : current));
+          onConnectionChange?.();
+        } else {
+          // Surface the failure as an anchored popup next to the row, since
+          // there's no other Connect button left to show it near.
+          setOpenServer(name);
+        }
+      };
+
+      const unsubscribe = listenForMcpOAuthResult(popup, (message) => {
+        if (message.server !== name) return;
+        applyOutcome(message.connected, message.error);
+      });
+
+      const closedTimer = setInterval(() => {
+        if (!popup.closed) return;
+        clearInterval(closedTimer);
+        // The popup is gone with no broadcast having arrived (e.g. the user
+        // closed it manually, or this browser lacks `BroadcastChannel`
+        // support) — do the one, final status check `McpCallbackPage` would
+        // otherwise have pushed, rather than continuously polling.
+        void fetchMcpConnectionStatus(apiBase, name).then((status) => {
+          applyOutcome(status.connected, status.error);
+        });
+      }, CLOSED_CHECK_INTERVAL_MS);
+
+      watchersRef.current.set(name, () => {
+        unsubscribe();
+        clearInterval(closedTimer);
+      });
+    },
+    [apiBase, onConnectionChange, stopWatching],
+  );
 
   const handleConnect = useCallback(
     async (name: string) => {
@@ -203,6 +256,13 @@ export function McpConnect({
         setOpenServer(name);
         return;
       }
+      // Clear any leftover pending attempt first — e.g. a previous popup the
+      // user closed (or that otherwise never reached the callback route)
+      // still counts as "pending" on the backend for `pendingTtlMs`, which
+      // would otherwise make THIS attempt fail immediately with "already
+      // pending" and leave the user stuck with no way to retry from the UI.
+      // A no-op if nothing was actually pending/connected.
+      await disconnectMcpServer(apiBase, name);
       const result = await beginMcpConnect(apiBase, name);
       if ("error" in result) {
         popup.close();
@@ -213,18 +273,20 @@ export function McpConnect({
         return;
       }
       popup.location.assign(result.authorizationUrl);
+      watchForOutcome(name, popup);
     },
-    [apiBase],
+    [apiBase, watchForOutcome],
   );
 
   const handleDisconnect = useCallback(
     async (name: string) => {
+      stopWatching(name);
       await disconnectMcpServer(apiBase, name);
       setServers((prev) => prev.map((s) => (s.name === name ? { ...s, connected: false } : s)));
       setOpenServer((current) => (current === name ? null : current));
       onConnectionChange?.();
     },
-    [apiBase, onConnectionChange],
+    [apiBase, onConnectionChange, stopWatching],
   );
 
   const toggleOpen = useCallback((name: string) => {

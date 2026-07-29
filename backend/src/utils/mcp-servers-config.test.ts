@@ -37,7 +37,7 @@ describe("resolveMcpServersConfig", () => {
     fsMocks.existsSync.mockReturnValue(false);
     const { resolveMcpServersConfig } = await loadModule();
 
-    expect(resolveMcpServersConfig()).toEqual({ result: { servers: [], source: "default" } });
+    expect(resolveMcpServersConfig()).toEqual({ result: { mcpServers: [] } });
   });
 
   it("parses an mcp.config.json file", async () => {
@@ -52,8 +52,7 @@ describe("resolveMcpServersConfig", () => {
     const { resolveMcpServersConfig } = await loadModule();
 
     const outcome = resolveMcpServersConfig();
-    expect("result" in outcome && outcome.result.source).toBe("file");
-    expect("result" in outcome && outcome.result.servers[0]?.name).toBe("from-file");
+    expect("result" in outcome && outcome.result.mcpServers[0]?.name).toBe("from-file");
     expect("result" in outcome && outcome.result.sourcePath).toBeDefined();
   });
 
@@ -95,7 +94,7 @@ describe("resolveMcpServersConfig", () => {
     const { resolveMcpServersConfig } = await loadModule();
 
     const outcome = resolveMcpServersConfig();
-    expect("result" in outcome && outcome.result.servers.map((server) => server.name)).toEqual([
+    expect("result" in outcome && outcome.result.mcpServers.map((server) => server.name)).toEqual([
       "docs",
       "ion",
     ]);

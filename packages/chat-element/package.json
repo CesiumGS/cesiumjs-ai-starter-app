@@ -7,7 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/chat-client/index.ts",
-    "./react": "./src/AiChatPanel.tsx"
+    "./react": "./src/components/AiChatPanel.tsx"
   },
   "files": [
     "src"

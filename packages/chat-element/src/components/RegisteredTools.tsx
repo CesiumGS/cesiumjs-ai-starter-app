@@ -4,11 +4,11 @@ import { Icon } from "@stratakit/mui";
 import svgCesium from "@stratakit/icons/cesium.svg";
 import svgConfiguration from "@stratakit/icons/configuration.svg";
 import svgMcpServer from "@stratakit/icons/mcp-server.svg";
-import { MCP_TOOL_PREFIX, parseMcpToolName } from "./mcp-tool-name";
-import type { RegisteredTool } from "./registered-tools";
+import { MCP_TOOL_PREFIX, parseMcpToolName } from "../mcp/mcp-tool-name";
+import type { RegisteredTool } from "../mcp/registered-tools";
 import { McpConnect } from "./McpConnect";
 import { ToolGroup, filterToolsForGroup } from "./ToolGroup";
-import { spanVariantMapping } from "./ui-constants";
+import { spanVariantMapping } from "../utils/ui-constants";
 import styles from "./AiChatPanel.module.css";
 
 /**

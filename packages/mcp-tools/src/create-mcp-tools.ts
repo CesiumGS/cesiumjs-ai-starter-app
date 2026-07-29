@@ -1,25 +1,12 @@
 import type { MCPClient } from "@ai-sdk/mcp";
-import type { ToolSet } from "ai";
 import { connectMcpServer } from "./connect-mcp-server.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "./logger.js";
-import type { McpAppToolMeta } from "./mcp-app-meta.js";
+import type { McpTool } from "./mcp-app-meta.js";
 import { withTimeout } from "./tool-timeout.js";
 import type { McpServerConfig } from "./types.js";
 
 /** Default per-tool-call timeout, applied to every MCP tool unless overridden. */
 export const DEFAULT_MCP_TOOL_TIMEOUT_MS = 30_000;
-
-/**
- * MCP Apps widget metadata for one discovered tool, keyed by its NAMESPACED
- * (`mcp__<server>__<tool>`) name in {@link McpToolsHandle.appTools} — carries
- * enough to route a browser-rendered widget's bridge requests (resource
- * reads, tool calls) back to the right underlying `MCPClient` and RAW tool
- * name.
- */
-export interface McpAppToolInfo extends McpAppToolMeta {
-  serverName: string;
-  rawToolName: string;
-}
 
 export interface CreateMcpToolsOptions {
   /** MCP servers to connect to. Server-only, trusted config — never derived from a chat request. */
@@ -50,8 +37,13 @@ export interface McpServerStatus {
 }
 
 export interface McpToolsHandle {
-  /** Merged, namespaced tool registry — spread this alongside `createCesiumTools()`. */
-  tools: ToolSet;
+  /**
+   * Merged, namespaced tool registry — spread this alongside
+   * `createCesiumTools()`. A tool that declared a `ui://` MCP Apps widget
+   * resource carries that metadata as its own `mcpApp` property (see
+   * `McpTool`) rather than in a separate map.
+   */
+  tools: Record<string, McpTool>;
   /** Connection outcome per configured server, for startup logs / `/health` reporting. */
   servers: readonly McpServerStatus[];
   /**
@@ -62,13 +54,6 @@ export interface McpToolsHandle {
    * "Connect" UI instead of just logged as a hard failure.
    */
   authRequiredServers: readonly McpServerConfig[];
-  /**
-   * MCP Apps widget metadata for every discovered tool that declared a
-   * `ui://` resource (see `mcp-app-meta.ts`), keyed by its NAMESPACED
-   * (`mcp__<server>__<tool>`) name — used to serve `/api/mcp-app/*` bridge
-   * requests for a rendered widget.
-   */
-  appTools: Record<string, McpAppToolInfo>;
   /**
    * The live `MCPClient` for one connected server, keyed by server name —
    * needed to serve MCP App resource-reads/tool-calls a rendered widget's
@@ -87,8 +72,7 @@ async function registerServer(
 ): Promise<{
   status: McpServerStatus;
   client?: MCPClient;
-  tools: ToolSet;
-  appTools: Record<string, McpAppToolInfo>;
+  tools: Record<string, McpTool>;
 }> {
   const result = await connectMcpServer(server, logger);
   if ("error" in result) {
@@ -101,21 +85,12 @@ async function registerServer(
         ...(result.authRequired ? { authRequired: true } : {}),
       },
       tools: {},
-      appTools: {},
     };
   }
 
-  const tools: ToolSet = {};
-  const appTools: Record<string, McpAppToolInfo> = {};
+  const tools: Record<string, McpTool> = {};
   for (const entry of result.toolEntries) {
     tools[entry.namespacedName] = withTimeout(entry.tool, timeoutMs, entry.namespacedName, logger);
-    if (entry.appMeta) {
-      appTools[entry.namespacedName] = {
-        ...entry.appMeta,
-        serverName: server.name,
-        rawToolName: entry.rawName,
-      };
-    }
   }
 
   return {
@@ -126,7 +101,6 @@ async function registerServer(
     },
     client: result.client,
     tools,
-    appTools,
   };
 }
 
@@ -155,8 +129,7 @@ export async function createMcpTools(options: CreateMcpToolsOptions): Promise<Mc
   const clientsByServer = new Map<string, MCPClient>();
   const statuses: McpServerStatus[] = [];
   const authRequiredServers: McpServerConfig[] = [];
-  const tools: ToolSet = {};
-  const appTools: Record<string, McpAppToolInfo> = {};
+  const tools: Record<string, McpTool> = {};
 
   for (const server of servers) {
     const registered = await registerServer(server, logger, timeoutMs);
@@ -164,14 +137,12 @@ export async function createMcpTools(options: CreateMcpToolsOptions): Promise<Mc
     if (registered.client) clientsByServer.set(server.name, registered.client);
     if (registered.status.authRequired) authRequiredServers.push(server);
     Object.assign(tools, registered.tools);
-    Object.assign(appTools, registered.appTools);
   }
 
   return {
     tools,
     servers: statuses,
     authRequiredServers,
-    appTools,
     getClient: (serverName) => clientsByServer.get(serverName),
     close: async () => {
       const results = await Promise.allSettled(

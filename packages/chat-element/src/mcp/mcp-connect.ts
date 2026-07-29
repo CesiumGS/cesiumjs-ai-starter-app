@@ -26,12 +26,18 @@ export async function fetchSessionMcpServers(apiBase: string): Promise<string[]>
     : [];
 }
 
-/** Whether the current browser session already has a live connection to `server`. */
-export async function fetchMcpConnectionStatus(apiBase: string, server: string): Promise<boolean> {
-  const data = await getJson<{ connected?: boolean }>(
+/** Whether the current browser session already has a live connection to `server`, and (if not) the last recorded failure reason, if any. */
+export async function fetchMcpConnectionStatus(
+  apiBase: string,
+  server: string,
+): Promise<{ connected: boolean; error?: string }> {
+  const data = await getJson<{ connected?: boolean; error?: string }>(
     `${apiBase}/${encodeURIComponent(server)}/status`,
   );
-  return data?.connected === true;
+  return {
+    connected: data?.connected === true,
+    error: typeof data?.error === "string" ? data.error : undefined,
+  };
 }
 
 /**

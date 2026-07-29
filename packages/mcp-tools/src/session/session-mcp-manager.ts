@@ -1,14 +1,20 @@
 import type { MCPClient } from "@ai-sdk/mcp";
-import type { ToolSet } from "ai";
-import type { McpAppToolInfo } from "../create-mcp-tools.js";
+import type { McpTool } from "../mcp-app-meta.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
-import type { ConnectedMcpConnection } from "../storage/models.js";
+import {
+  toConnectedMcpConnectionDescriptor,
+  toPendingMcpConnectionDescriptor,
+  type ConnectedMcpConnection,
+  type ConnectedMcpConnectionDescriptor,
+  type PendingMcpConnection,
+  type PendingMcpConnectionDescriptor,
+} from "../storage/models.js";
 import {
   createInMemoryConnectedRepository,
   createInMemoryPendingRepository,
 } from "../storage/in-memory-repositories.js";
 import type {
-  McpConnectedConnectionRepository,
+  McpConnectionRepository,
   McpPendingConnectionRepository,
 } from "../storage/repositories.js";
 import { beginSessionOAuthConnect, completeSessionOAuthConnect } from "./session-oauth-connect.js";
@@ -58,7 +64,27 @@ export interface SessionMcpManagerOptions {
    * backed by anything but process memory (holds live client connections) —
    * this option exists mainly so a host can observe connection lifecycle.
    */
-  connectedRepository?: McpConnectedConnectionRepository;
+  connectedRepository?: McpConnectionRepository<ConnectedMcpConnection>;
+  /**
+   * Optional cross-process status store for connected sessions, keyed the
+   * same way as `connectedRepository`. Unlike `connectedRepository`, this
+   * only ever receives/returns {@link ConnectedMcpConnectionDescriptor} —
+   * plain data with no live `client`/`tools` — so it's safe to back with
+   * Redis, Azure Table, or any other external store. This manager converts
+   * to/from the live `ConnectedMcpConnection` internally; callers plugging
+   * in a store never see or need the ai-sdk `MCPClient`/`ToolSet` types.
+   * Written alongside (never instead of) `connectedRepository`. Omit to skip
+   * cross-process status entirely.
+   */
+  connectedDescriptorRepository?: McpConnectionRepository<ConnectedMcpConnectionDescriptor>;
+  /**
+   * Optional cross-process status store for in-flight OAuth attempts,
+   * mirroring `connectedDescriptorRepository` but for `pendingRepository` —
+   * only ever sees {@link PendingMcpConnectionDescriptor} (no live OAuth
+   * provider). Written alongside (never instead of) `pendingRepository`.
+   * Omit to skip cross-process status entirely.
+   */
+  pendingDescriptorRepository?: McpConnectionRepository<PendingMcpConnectionDescriptor>;
   logger?: McpToolsLogger;
 }
 
@@ -83,12 +109,38 @@ export interface SessionMcpManager {
     code: string,
     state: string | undefined,
   ) => Promise<{ connected: true; serverName: string } | { error: string; serverName?: string }>;
-  /** Cancels a pending flow matching `state` for `sessionId` without exchanging a code (e.g. consent denied) — returns the server name it belonged to, if any. */
-  cancelPending: (sessionId: string, state: string | undefined) => Promise<string | undefined>;
-  /** Namespaced, timeout-wrapped tools from every server `sessionId` has connected, merged into one `ToolSet`. */
-  getSessionTools: (sessionId: string) => Promise<ToolSet>;
-  /** MCP Apps widget metadata (keyed by namespaced tool name) from every server `sessionId` has connected, merged — mirrors `McpToolsHandle.appTools`. */
-  getSessionAppTools: (sessionId: string) => Promise<Record<string, McpAppToolInfo>>;
+  /**
+   * Cancels a pending flow matching `state` for `sessionId` without
+   * exchanging a code (e.g. consent denied) — returns the server name it
+   * belonged to, if any. `message`, if given, is recorded as the reason a
+   * later `consumeLastError` call for that server will report.
+   */
+  cancelPending: (
+    sessionId: string,
+    state: string | undefined,
+    message?: string,
+  ) => Promise<string | undefined>;
+  /**
+   * Reads and clears the most recent failure reason recorded for
+   * `sessionId`'s connection attempt to `serverName` (set by a failed
+   * `completeCallback`/`cancelPending`), or `undefined` if none is
+   * recorded. Consuming (rather than just reading) it means a stale failure
+   * from a past attempt never lingers into a later status check once it's
+   * been surfaced once — a fresh `connect()` call also clears it
+   * unconditionally. This is how the frontend's `GET .../:server/status`
+   * endpoint (fetched by both the OAuth callback page and, as a fallback,
+   * the opener window — see `@cesium-ai/chat-element`'s `McpConnect.tsx`)
+   * learns *why* a connection attempt failed, without the callback page
+   * itself needing to carry that text back via `window.postMessage`.
+   */
+  consumeLastError: (sessionId: string, serverName: string) => Promise<string | undefined>;
+  /**
+   * Namespaced, timeout-wrapped tools from every server `sessionId` has
+   * connected, merged into one record. A tool that declared a `ui://` MCP
+   * Apps widget resource carries that metadata as its own `mcpApp` property
+   * (see `McpTool`) rather than in a separate map.
+   */
+  getSessionTools: (sessionId: string) => Promise<Record<string, McpTool>>;
   /** The live `MCPClient` for `sessionId`'s connection to `serverName`, or `undefined` if not connected — mirrors `McpToolsHandle.getClient`. */
   getSessionClient: (sessionId: string, serverName: string) => Promise<MCPClient | undefined>;
   /** Whether `sessionId` currently has a live connection to `serverName`. */
@@ -120,13 +172,51 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     pendingTtlMs = DEFAULT_PENDING_TTL_MS,
     pendingRepository = createInMemoryPendingRepository(),
     connectedRepository = createInMemoryConnectedRepository(),
+    connectedDescriptorRepository,
+    pendingDescriptorRepository,
     logger = noopMcpToolsLogger,
   } = options;
   const serverByName = new Map(servers.map((server) => [server.name, server]));
+  /**
+   * Best-effort, process-local record of the last failure reason per
+   * `(sessionId, serverName)` — read (and cleared) via `consumeLastError`.
+   * Deliberately NOT part of `pendingRepository`/`connectedRepository` (both
+   * pluggable for cross-process storage): this is purely a short-lived UI
+   * hint, not connection state, so a single-instance in-memory map is an
+   * acceptable simplification even for a multi-instance deployment (worst
+   * case, the "why did it fail" text just doesn't surface on a replica that
+   * didn't handle the callback — `connected`/`pending` state itself is
+   * unaffected).
+   */
+  const lastError = new Map<string, string>();
 
   /** Turns a `(sessionId, serverName)` pair into the opaque `id` string the repositories are keyed by — they don't need to know what it means. */
   function connectionId(sessionId: string, serverName: string): string {
     return `${sessionId}:${serverName}`;
+  }
+
+  /** Saves a pending entry to `pendingRepository` and, if configured, a derived descriptor to `pendingDescriptorRepository`. */
+  async function savePending(id: string, entry: PendingMcpConnection): Promise<void> {
+    await pendingRepository.save(id, entry);
+    await pendingDescriptorRepository?.save(id, toPendingMcpConnectionDescriptor(entry));
+  }
+
+  /** Deletes a pending entry from `pendingRepository` and, if configured, its descriptor from `pendingDescriptorRepository`. */
+  async function deletePending(id: string): Promise<void> {
+    await pendingRepository.delete(id);
+    await pendingDescriptorRepository?.delete(id);
+  }
+
+  /** Saves a connected entry to `connectedRepository` and, if configured, a derived descriptor to `connectedDescriptorRepository`. */
+  async function saveConnected(id: string, entry: ConnectedMcpConnection): Promise<void> {
+    await connectedRepository.save(id, entry);
+    await connectedDescriptorRepository?.save(id, toConnectedMcpConnectionDescriptor(entry));
+  }
+
+  /** Deletes a connected entry from `connectedRepository` and, if configured, its descriptor from `connectedDescriptorRepository`. */
+  async function deleteConnected(id: string): Promise<void> {
+    await connectedRepository.delete(id);
+    await connectedDescriptorRepository?.delete(id);
   }
 
   async function connect(sessionId: string, serverName: string) {
@@ -134,6 +224,10 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     if (!server) return { error: `Unknown session-connectable MCP server "${serverName}".` };
 
     const id = connectionId(sessionId, serverName);
+    // A fresh attempt should never surface a failure reason left over from a
+    // PREVIOUS attempt via `consumeLastError` — clear it unconditionally,
+    // whether or not this attempt itself succeeds.
+    lastError.delete(id);
     const existingPending = await pendingRepository.findById(id);
     if (existingPending) {
       const age = Date.now() - existingPending.startedAt;
@@ -149,7 +243,7 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
       logger.warn(`Superseding a stale pending OAuth connection for "${serverName}"`, {
         ageMs: age,
       });
-      await pendingRepository.delete(id);
+      await deletePending(id);
     }
 
     const result = await beginSessionOAuthConnect({
@@ -172,7 +266,7 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
       };
     }
 
-    await pendingRepository.save(id, {
+    await savePending(id, {
       sessionId,
       serverName,
       state,
@@ -188,13 +282,15 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     if (!entry || entry.sessionId !== sessionId) {
       return { error: "No pending OAuth connection matches the given state for this session." };
     }
-    await pendingRepository.delete(connectionId(entry.sessionId, entry.serverName));
+    await deletePending(connectionId(entry.sessionId, entry.serverName));
 
     const result = await completeSessionOAuthConnect(entry.oauth, code, state, logger);
-    if ("error" in result) return { error: result.error, serverName: entry.serverName };
+    if ("error" in result) {
+      lastError.set(connectionId(entry.sessionId, entry.serverName), result.error);
+      return { error: result.error, serverName: entry.serverName };
+    }
 
-    const tools: ToolSet = {};
-    const appTools: Record<string, McpAppToolInfo> = {};
+    const tools: Record<string, McpTool> = {};
     for (const toolEntry of result.toolEntries) {
       tools[toolEntry.namespacedName] = withTimeout(
         toolEntry.tool,
@@ -202,20 +298,12 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
         toolEntry.namespacedName,
         logger,
       );
-      if (toolEntry.appMeta) {
-        appTools[toolEntry.namespacedName] = {
-          ...toolEntry.appMeta,
-          serverName: entry.serverName,
-          rawToolName: toolEntry.rawName,
-        };
-      }
     }
     await replaceConnection({
       sessionId: entry.sessionId,
       serverName: entry.serverName,
       client: result.client,
       tools,
-      appTools,
     });
     return { connected: true as const, serverName: entry.serverName };
   }
@@ -223,30 +311,33 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
   async function cancelPending(
     sessionId: string,
     state: string | undefined,
+    message?: string,
   ): Promise<string | undefined> {
     const entry =
       typeof state === "string" ? await pendingRepository.findByState(state) : undefined;
     if (!entry || entry.sessionId !== sessionId) return undefined;
-    await pendingRepository.delete(connectionId(entry.sessionId, entry.serverName));
+    await deletePending(connectionId(entry.sessionId, entry.serverName));
+    if (message) lastError.set(connectionId(entry.sessionId, entry.serverName), message);
     return entry.serverName;
   }
 
-  async function getSessionTools(sessionId: string): Promise<ToolSet> {
-    const tools: ToolSet = {};
+  async function consumeLastError(
+    sessionId: string,
+    serverName: string,
+  ): Promise<string | undefined> {
+    const id = connectionId(sessionId, serverName);
+    const message = lastError.get(id);
+    lastError.delete(id);
+    return message;
+  }
+
+  async function getSessionTools(sessionId: string): Promise<Record<string, McpTool>> {
+    const tools: Record<string, McpTool> = {};
     for (const server of servers) {
       const entry = await connectedRepository.findById(connectionId(sessionId, server.name));
       if (entry) Object.assign(tools, entry.tools);
     }
     return tools;
-  }
-
-  async function getSessionAppTools(sessionId: string): Promise<Record<string, McpAppToolInfo>> {
-    const appTools: Record<string, McpAppToolInfo> = {};
-    for (const server of servers) {
-      const entry = await connectedRepository.findById(connectionId(sessionId, server.name));
-      if (entry) Object.assign(appTools, entry.appTools);
-    }
-    return appTools;
   }
 
   async function getSessionClient(sessionId: string, serverName: string) {
@@ -262,7 +353,7 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     const id = connectionId(sessionId, serverName);
     const entry = await connectedRepository.findById(id);
     if (!entry) return;
-    await connectedRepository.delete(id);
+    await deleteConnected(id);
     try {
       await entry.client.close();
     } catch (err) {
@@ -275,13 +366,14 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
 
   async function replaceConnection(entry: ConnectedMcpConnection): Promise<void> {
     await closeConnection(entry.sessionId, entry.serverName);
-    await connectedRepository.save(connectionId(entry.sessionId, entry.serverName), entry);
+    await saveConnected(connectionId(entry.sessionId, entry.serverName), entry);
   }
 
   async function closeEntry(sessionId: string, serverName: string): Promise<void> {
     const id = connectionId(sessionId, serverName);
     const pendingEntry = await pendingRepository.findById(id);
-    if (pendingEntry) await pendingRepository.delete(id);
+    if (pendingEntry) await deletePending(id);
+    lastError.delete(id);
     await closeConnection(sessionId, serverName);
   }
 
@@ -299,7 +391,7 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     const allConnected = await connectedRepository.listAll();
     const results = await Promise.allSettled(
       allConnected.map(async (entry) => {
-        await connectedRepository.delete(connectionId(entry.sessionId, entry.serverName));
+        await deleteConnected(connectionId(entry.sessionId, entry.serverName));
         return entry.client.close();
       }),
     );
@@ -316,8 +408,8 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     connect,
     completeCallback,
     cancelPending,
+    consumeLastError,
     getSessionTools,
-    getSessionAppTools,
     getSessionClient,
     isConnected,
     serverNames: servers.map((server) => server.name),

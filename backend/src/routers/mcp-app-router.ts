@@ -1,18 +1,13 @@
-import { type MCPClient } from "@ai-sdk/mcp";
 import {
   DEFAULT_MCP_TOOL_TIMEOUT_MS,
-  namespacedToolName,
-  type McpToolsHandle,
-  type SessionMcpManager,
+  isKnownMcpTool,
+  resolveMcpClient,
+  type McpScope,
 } from "@cesium-ai/mcp-tools";
 import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 
-export interface McpAppRouterOptions {
-  /** Operator-configured, always-on MCP servers — see `createMcpTools`. */
-  mcp?: McpToolsHandle;
-  /** Per-browser-session, user-initiated MCP OAuth connections — see `createSessionMcpManager`. */
-  sessionMcp?: SessionMcpManager;
+export interface McpAppRouterOptions extends McpScope {
   /** Maximum duration for each proxied MCP resource read or tool call. */
   timeoutMs?: number;
   /** Maximum resource fingerprints retained for drift detection. */
@@ -20,40 +15,6 @@ export interface McpAppRouterOptions {
 }
 
 const DEFAULT_MAX_TRACKED_RESOURCES = 256;
-
-/**
- * Resolves the live `MCPClient` for `server`, checking the operator-configured
- * (`mcp`) servers first, then this request's own session-connected
- * (`sessionMcp`) servers. A server name is only ever meaningfully connected
- * through ONE of these two at a time in this app's architecture (a server
- * `createMcpTools` fails to connect to at startup with a 401 is excluded
- * from `mcp.tools`/`mcp.getClient` entirely and only ever reachable via
- * `sessionMcp` once a user connects it) — so no `scope` parameter is needed
- * from the caller.
- */
-async function resolveClient(
-  server: string,
-  req: Request,
-  { mcp, sessionMcp }: McpAppRouterOptions,
-): Promise<MCPClient | undefined> {
-  const globalClient = mcp?.getClient(server);
-  if (globalClient) return globalClient;
-  return sessionMcp?.getSessionClient(req.sessionID, server);
-}
-
-/** Whether `(server, rawToolName)` is one of the tools this request's resolved tool registry actually knows about — prevents the widget bridge from calling an unlisted/cross-server tool name. */
-async function isKnownServerTool(
-  server: string,
-  rawToolName: string,
-  req: Request,
-  { mcp, sessionMcp }: McpAppRouterOptions,
-): Promise<boolean> {
-  const namespaced = namespacedToolName(server, rawToolName);
-  if (mcp && namespaced in mcp.tools) return true;
-  if (!sessionMcp) return false;
-  const sessionTools = await sessionMcp.getSessionTools(req.sessionID);
-  return namespaced in sessionTools;
-}
 
 /**
  * Best-effort, in-memory trust-on-first-use fingerprint cache for MCP App
@@ -108,7 +69,7 @@ async function handleResourceRequest(
     return;
   }
 
-  const client = await resolveClient(server, req, options);
+  const client = await resolveMcpClient(options, req.sessionID, server);
   if (!client) {
     res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
     return;
@@ -153,14 +114,14 @@ async function handleToolCallRequest(
     return;
   }
 
-  if (!(await isKnownServerTool(server, toolName, req, options))) {
+  if (!(await isKnownMcpTool(options, req.sessionID, server, toolName))) {
     res.status(404).json({
       error: `"${toolName}" is not a known tool on MCP server "${server}" for this request.`,
     });
     return;
   }
 
-  const client = await resolveClient(server, req, options);
+  const client = await resolveMcpClient(options, req.sessionID, server);
   if (!client) {
     res.status(404).json({ error: `Unknown or unconnected MCP server "${server}".` });
     return;

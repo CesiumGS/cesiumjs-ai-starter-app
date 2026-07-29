@@ -5,13 +5,18 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return typeof value === "object" && value !== null && Symbol.asyncIterator in value;
 }
 
-/** Wraps a tool's `execute` so a stalled MCP server can't hang the agent loop past `timeoutMs`. */
-export function withTimeout(
-  tool: Tool,
+/**
+ * Wraps a tool's `execute` so a stalled MCP server can't hang the agent loop
+ * past `timeoutMs`. Generic over `T` (rather than fixed to `Tool`) so any
+ * extra properties the caller attached to the tool object \u2014 e.g. `McpTool`'s
+ * `mcpApp` widget metadata \u2014 survive the wrap.
+ */
+export function withTimeout<T extends Tool>(
+  tool: T,
   timeoutMs: number,
   describe: string,
   logger: McpToolsLogger,
-): Tool {
+): T {
   const originalExecute = tool.execute;
   if (!originalExecute) return tool;
   return {
@@ -35,5 +40,5 @@ export function withTimeout(
         clearTimeout(timer);
       }
     },
-  };
+  } as T;
 }

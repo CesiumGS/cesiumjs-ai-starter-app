@@ -3,13 +3,13 @@ import { Button, Fab, IconButton, TextField, Tooltip, Typography } from "@mui/ma
 import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
-import { ChatClient } from "./chat-client";
-import type { ToolExecutionOutcome } from "./chat-client";
+import { ChatClient } from "../chat-client";
+import type { ToolExecutionOutcome } from "../chat-client";
 import { MessageItem } from "./MessageItem";
-import type { RegisteredToolMcpApp } from "./registered-tools";
+import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import { RegisteredTools } from "./RegisteredTools";
-import { useRegisteredTools } from "./use-registered-tools";
-import { spanVariantMapping } from "./ui-constants";
+import { useRegisteredTools } from "../mcp/use-registered-tools";
+import { spanVariantMapping } from "../utils/ui-constants";
 import styles from "./AiChatPanel.module.css";
 
 const MIN_WIDTH = 280;

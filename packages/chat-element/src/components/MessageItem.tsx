@@ -1,9 +1,9 @@
 import { Typography } from "@mui/material";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "./chat-client";
-import type { RegisteredToolMcpApp } from "./registered-tools";
-import { spanVariantMapping } from "./ui-constants";
+import type { Message } from "../chat-client";
+import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
+import { spanVariantMapping } from "../utils/ui-constants";
 import { ToolCard, type PendingApprovalHandlers } from "./ToolCard";
 import styles from "./AiChatPanel.module.css";
 

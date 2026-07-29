@@ -39,7 +39,7 @@ function mcpServer(name: string): McpServerConfig {
 
 /**
  * A fake `PendingSessionOAuth` whose `provider.storedState()` resolves a
- * fixed value \u2014 the shared/generic callback route routes purely on this
+ * fixed value — the shared/generic callback route routes purely on this
  * `state` value (see `session-mcp-manager.ts`'s `pendingByState`), so every
  * fake pending flow needs one, mirroring the real `createOAuthClientProvider`.
  */
@@ -246,7 +246,7 @@ describe("createSessionMcpManager", () => {
     expect(await manager.isConnected("session-2", "ion")).toBe(false);
   });
 
-  it("exposes a connected session's live client via getSessionClient, and its MCP Apps tool metadata via getSessionAppTools", async () => {
+  it("exposes a connected session's live client via getSessionClient, and its MCP Apps widget metadata as tool.mcpApp", async () => {
     beginSessionOAuthConnectMock.mockResolvedValueOnce({
       authorizationUrl: "https://auth.example.com/authorize",
       pending: FAKE_PENDING,
@@ -258,8 +258,7 @@ describe("createSessionMcpManager", () => {
         {
           rawName: "launch_importer",
           namespacedName: "mcp__ion__launch_importer",
-          tool: fakeTool(),
-          appMeta: { resourceUri: "ui://ion/importer" },
+          tool: { ...fakeTool(), mcpApp: { resourceUri: "ui://ion/importer" } },
         },
         { rawName: "list_assets", namespacedName: "mcp__ion__list_assets", tool: fakeTool() },
       ],
@@ -272,22 +271,18 @@ describe("createSessionMcpManager", () => {
     });
 
     expect(await manager.getSessionClient("session-1", "ion")).toBeUndefined();
-    expect(await manager.getSessionAppTools("session-1")).toEqual({});
+    expect(await manager.getSessionTools("session-1")).toEqual({});
 
     await manager.connect("session-1", "ion");
     await manager.completeCallback("session-1", "auth-code", "state-value");
 
     expect(await manager.getSessionClient("session-1", "ion")).toBe(client);
-    expect(await manager.getSessionAppTools("session-1")).toEqual({
-      mcp__ion__launch_importer: {
-        resourceUri: "ui://ion/importer",
-        serverName: "ion",
-        rawToolName: "launch_importer",
-      },
-    });
-    // A different session sees neither the client nor the app tools.
+    const tools = await manager.getSessionTools("session-1");
+    expect(tools.mcp__ion__launch_importer?.mcpApp).toEqual({ resourceUri: "ui://ion/importer" });
+    expect(tools.mcp__ion__list_assets?.mcpApp).toBeUndefined();
+    // A different session sees neither the client nor the tools.
     expect(await manager.getSessionClient("session-2", "ion")).toBeUndefined();
-    expect(await manager.getSessionAppTools("session-2")).toEqual({});
+    expect(await manager.getSessionTools("session-2")).toEqual({});
   });
 
   it("routes a shared callback to the right one of TWO concurrently pending servers via their distinct state values", async () => {
@@ -371,6 +366,64 @@ describe("createSessionMcpManager", () => {
 
     await manager.connect("session-1", "ion");
     expect(await manager.cancelPending("session-2", "state-value")).toBeUndefined();
+  });
+
+  it("consumeLastError reads and clears the reason recorded by a denied cancelPending", async () => {
+    beginSessionOAuthConnectMock.mockResolvedValueOnce({
+      authorizationUrl: "https://auth.example.com/authorize",
+      pending: FAKE_PENDING,
+    });
+    const manager = createSessionMcpManager({
+      servers: [mcpServer("ion")],
+      buildRedirectUrl: () => REDIRECT_URL,
+      logger: noopMcpToolsLogger,
+    });
+
+    await manager.connect("session-1", "ion");
+    await manager.cancelPending("session-1", "state-value", "Authorization was denied.");
+
+    expect(await manager.consumeLastError("session-1", "ion")).toBe("Authorization was denied.");
+    // Consumed — a second read finds nothing left.
+    expect(await manager.consumeLastError("session-1", "ion")).toBeUndefined();
+  });
+
+  it("consumeLastError reads and clears the reason recorded by a failed completeCallback", async () => {
+    beginSessionOAuthConnectMock.mockResolvedValueOnce({
+      authorizationUrl: "https://auth.example.com/authorize",
+      pending: FAKE_PENDING,
+    });
+    completeSessionOAuthConnectMock.mockResolvedValueOnce({ error: "Token exchange failed." });
+    const manager = createSessionMcpManager({
+      servers: [mcpServer("ion")],
+      buildRedirectUrl: () => REDIRECT_URL,
+      logger: noopMcpToolsLogger,
+    });
+
+    await manager.connect("session-1", "ion");
+    const result = await manager.completeCallback("session-1", "bad-code", "state-value");
+
+    expect(result).toEqual({ error: "Token exchange failed.", serverName: "ion" });
+    expect(await manager.isConnected("session-1", "ion")).toBe(false);
+    expect(await manager.consumeLastError("session-1", "ion")).toBe("Token exchange failed.");
+  });
+
+  it("connect clears any stale recorded error before starting a new attempt", async () => {
+    beginSessionOAuthConnectMock.mockResolvedValue({
+      authorizationUrl: "https://auth.example.com/authorize",
+      pending: FAKE_PENDING,
+    });
+    const manager = createSessionMcpManager({
+      servers: [mcpServer("ion")],
+      buildRedirectUrl: () => REDIRECT_URL,
+      logger: noopMcpToolsLogger,
+    });
+
+    await manager.connect("session-1", "ion");
+    await manager.cancelPending("session-1", "state-value", "Authorization was denied.");
+    expect(await manager.isConnected("session-1", "ion")).toBe(false);
+
+    await manager.connect("session-1", "ion");
+    expect(await manager.consumeLastError("session-1", "ion")).toBeUndefined();
   });
 
   it("disconnect closes the client and drops the session's tools", async () => {

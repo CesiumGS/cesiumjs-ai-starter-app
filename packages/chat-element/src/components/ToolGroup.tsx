@@ -5,8 +5,8 @@ import svgChevronDown from "@stratakit/icons/chevron-down.svg";
 import svgChevronRight from "@stratakit/icons/chevron-right.svg";
 import svgCheckmark from "@stratakit/icons/status-success.svg";
 import svgDisconnect from "@stratakit/icons/disconnect.svg";
-import type { RegisteredTool } from "./registered-tools";
-import { spanVariantMapping } from "./ui-constants";
+import type { RegisteredTool } from "../mcp/registered-tools";
+import { spanVariantMapping } from "../utils/ui-constants";
 import styles from "./AiChatPanel.module.css";
 
 /**

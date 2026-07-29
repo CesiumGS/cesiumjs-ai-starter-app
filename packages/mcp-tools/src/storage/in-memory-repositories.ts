@@ -1,8 +1,5 @@
 import type { ConnectedMcpConnection, PendingMcpConnection } from "./models.js";
-import type {
-  McpConnectedConnectionRepository,
-  McpPendingConnectionRepository,
-} from "./repositories.js";
+import type { McpConnectionRepository, McpPendingConnectionRepository } from "./repositories.js";
 
 export function createInMemoryPendingRepository(): McpPendingConnectionRepository {
   const byId = new Map<string, PendingMcpConnection>();
@@ -21,10 +18,11 @@ export function createInMemoryPendingRepository(): McpPendingConnectionRepositor
       byId.delete(id);
       byState.delete(entry.state);
     },
+    listAll: () => [...byId.values()],
   };
 }
 
-export function createInMemoryConnectedRepository(): McpConnectedConnectionRepository {
+export function createInMemoryConnectedRepository(): McpConnectionRepository<ConnectedMcpConnection> {
   const byId = new Map<string, ConnectedMcpConnection>();
 
   return {

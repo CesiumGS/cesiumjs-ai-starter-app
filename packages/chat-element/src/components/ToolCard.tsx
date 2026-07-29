@@ -2,12 +2,12 @@ import { Button, Typography } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgChevronRight from "@stratakit/icons/chevron-right.svg";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { ToolInvocation } from "./chat-client";
-import { formatToolPayload } from "./format-tool-payload";
+import type { ToolInvocation } from "../chat-client";
+import { formatToolPayload } from "../utils/format-tool-payload";
 import { ExecuteCesiumCodeResult } from "./ExecuteCesiumCodeResult";
 import { McpAppWidget } from "./McpAppWidget";
-import { parseMcpToolName } from "./mcp-tool-name";
-import type { RegisteredToolMcpApp } from "./registered-tools";
+import { parseMcpToolName } from "../mcp/mcp-tool-name";
+import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import styles from "./AiChatPanel.module.css";
 
 /**

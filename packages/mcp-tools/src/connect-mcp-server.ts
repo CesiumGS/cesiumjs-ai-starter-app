@@ -4,10 +4,9 @@ import {
   type MCPClient,
   type OAuthClientProvider,
 } from "@ai-sdk/mcp";
-import type { Tool } from "ai";
 import type { McpToolsLogger } from "./logger.js";
 import { isUnauthorizedMcpError } from "./mcp-error.js";
-import { getMcpAppToolMeta, type McpAppToolMeta } from "./mcp-app-meta.js";
+import { getMcpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
 import type { McpServerConfig, McpTransportConfig } from "./types.js";
 
 /** `mcp__<server>__<tool>` — the namespace every discovered tool is exposed under, everywhere in this app. */
@@ -24,9 +23,8 @@ export interface SelectedMcpTool {
   rawName: string;
   /** `mcp__<server>__<tool>` name this tool is registered under everywhere else in this app. */
   namespacedName: string;
-  tool: Tool;
-  /** Present only if this tool declared a `_meta.ui` MCP Apps widget resource. */
-  appMeta?: McpAppToolMeta;
+  /** Carries its MCP Apps widget metadata (if any) directly as `tool.mcpApp` — see `McpTool`. */
+  tool: McpTool;
 }
 
 /**
@@ -68,8 +66,7 @@ export function selectToolEntries(
     selected.push({
       rawName: toolName,
       namespacedName: namespacedToolName(server.name, toolName),
-      tool: toolDef as Tool,
-      ...(appMeta ? { appMeta } : {}),
+      tool: (appMeta ? { ...toolDef, mcpApp: appMeta } : toolDef) as McpTool,
     });
   }
   return selected;
