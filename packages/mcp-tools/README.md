@@ -1,6 +1,6 @@
 # @cesium-ai/mcp-tools
 
-Optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](../tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
+Optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
 
 ```ts
 import { createMcpTools } from "@cesium-ai/mcp-tools";
@@ -29,7 +29,7 @@ This package has **no dependency on `@cesium-ai/server` or `@cesium-ai/tools-sch
 
 MCP tools are architecturally different from this repo's other tool groups:
 
-- **They run entirely server-side.** Unlike `flyTo` (streamed to the browser, executed against the live `Viewer`), an MCP tool's `execute()` talks to the MCP server directly from Node and its result is the real, final outcome — never streamed as a client tool call. See the root [README's architecture section](../../README.md#architecture) and [`docs/architectures/architecture`](../../site/architectures/architecture/index.html) for the split-execution model this follows.
+- **They run entirely server-side.** Unlike `flyTo` (streamed to the browser, executed against the live `Viewer`), an MCP tool's `execute()` talks to the MCP server directly from Node and its result is the real, final outcome — never streamed as a client tool call. See the root [README's architecture section](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/README.md#architecture) and [`docs/architectures/architecture`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/architecture/) for the split-execution model this follows.
 - **The tool registry is third-party, dynamic content.** `flyTo`'s schema is hand-authored and reviewed; an MCP server can add, remove, or reword its tools at any time. That's a materially different trust boundary, so it gets its own package rather than living in `@cesium-ai/tools-schemas` (which is scoped to this repo's own hand-authored viewer tools) or `@cesium-ai/server` (model-/tool-agnostic, and shouldn't gain an MCP SDK dependency just to support an optional feature).
 
 ## Security model

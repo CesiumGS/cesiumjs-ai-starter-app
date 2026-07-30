@@ -188,10 +188,11 @@ The tool's `execute` handler in [`backend/src/tools/execute-cesium-code-tool.ts`
 ```
 
 The browser receives this as a tool result in the SSE stream. The starter app validates the
-result shape and then executes the verified `code` against the live `Viewer` after user
-approval. This execution currently has no dedicated sandbox isolation boundary (see the
-[Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) document for the
-recommended sandbox approach).
+result shape and then executes the verified `code` after user approval, isolated inside a
+fresh QuickJS-wasm interpreter provided by
+[`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)
+(see the [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) document for
+the full sandbox architecture).
 
 ---
 

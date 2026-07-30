@@ -63,6 +63,8 @@ nav:
   - Packages:
       - Overview: packages/index.md
       - cesium-ai/codegen-cesium: packages/codegen-cesium/index.md
+      - cesium-ai/codegen-sandbox: packages/codegen-sandbox/index.md
+      - cesium-ai/mcp-tools: packages/mcp-tools/index.md
       - cesium-ai/tools-schemas:
           - Overview: packages/tools-schemas/index.md
           - Tool Catalogue: packages/tools-schemas/tools.md

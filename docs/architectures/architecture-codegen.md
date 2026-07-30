@@ -140,8 +140,9 @@ descriptions into the browser — the package structure prevents this by design.
 
 ## 4. Security gates
 
-The codegen system is designed around two security gates. Only Gate 1 is currently
-implemented; Gate 2 is planned.
+The codegen system is designed around two security gates. Both are implemented: Gate 1 runs
+server-side in `@cesium-ai/codegen-cesium`; Gate 2 runs client-side in
+`@cesium-ai/codegen-sandbox`.
 
 ```mermaid
 flowchart TB
@@ -152,8 +153,8 @@ flowchart TB
     end
 
     subgraph Browser["Browser (untrusted execution surface)"]
-        subgraph GATE2["Gate 2 — Sandbox Isolation (planned)"]
-            SBX["Sandboxed execution<br/>timeout · memory limit · resource caps"]
+        subgraph GATE2["Gate 2 — Sandbox Isolation (implemented)"]
+            SBX["QuickJS-wasm sandboxed execution<br/>(@cesium-ai/codegen-sandbox)<br/>timeout · memory limit · resource caps"]
         end
         VIEWER["CesiumJS Viewer<br/>(proxied handles only)"]
     end
@@ -172,12 +173,14 @@ computed member access) or banned browser globals (`fetch`, `window`, `document`
 infinite loops. Unverified code is never returned as the verified result. The LLM API key
 and raw skill bodies never cross the Backend → Browser boundary — both stay server-side.
 
-**Gate 2 — Browser-side Sandbox Isolation** is not yet implemented. Currently, verified
-code is returned to the chat panel and executed directly against the `Viewer` after user
-approval, without a dedicated sandbox isolation boundary.
-The [Security Considerations](codegen-tool-security-attacks-vectors.md) document covers the
-recommended sandbox options (QuickJS WASM, iframe sandbox, and the recommended hybrid
-approach) before Gate 2 is added.
+**Gate 2 — Browser-side Sandbox Isolation** is implemented in
+[`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md).
+After user approval, verified code is executed inside a fresh QuickJS-wasm interpreter per
+run — isolated from the page's global scope, with no direct access to `window`/`document`/
+`fetch` — bound to the live `Viewer` only through a guarded, opaque-handle host bridge that
+enforces an execution timeout, a memory limit, and entity/primitive/data-source collection
+caps. The [Security Considerations](codegen-tool-security-attacks-vectors.md) document
+covers the sandbox options evaluated before choosing this QuickJS-wasm approach.
 
 ---
 

@@ -8,9 +8,11 @@ compliance checklist.
 For the component architecture and current implementation status of each gate, see the
 [Codegen Architecture](architecture-codegen.md) document.
 
-**Current status:** The pipeline implements Gate 1 (server-side static AST verification).
-Gate 2 (browser-side sandbox isolation) is not yet implemented — verified code is returned
-to the client and executed after user approval, without sandbox isolation.
+**Current status:** The pipeline implements both gates. Gate 1 (server-side static AST
+verification) runs in `@cesium-ai/codegen-cesium`; Gate 2 (browser-side sandbox isolation)
+runs in [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md) — verified code is executed inside a fresh
+QuickJS-wasm interpreter, bound to the live `Viewer` only through a guarded, opaque-handle
+bridge, after user approval.
 
 ---
 
@@ -23,8 +25,8 @@ show where each vector strikes and link to the detailed section below.
 flowchart TB
     subgraph CLIENT["Browser (untrusted execution surface)"]
         FE["ChatPanel / CesiumGlobe<br/>(frontend)"]
-        subgraph GATE2["GATE 2 — Sandbox Isolation"]
-            SBX["Sandboxed Execution<br/>timeout · memory limit · resource caps"]
+        subgraph GATE2["GATE 2 — Sandbox Isolation (implemented)"]
+            SBX["Sandboxed Execution (@cesium-ai/codegen-sandbox)<br/>timeout · memory limit · resource caps"]
         end
         VIEWER["CesiumJS Viewer<br/>(proxied handles only)"]
     end
@@ -187,9 +189,10 @@ the primary defence against whatever the LLM produces.
    const result = verifyCesiumCode(code, { allowedSymbols: myAllowedSymbolsList });
    ```
 
-3. **Sandbox execution (Gate 2)** — A runtime sandbox provides a second containment layer
-   for anything the static verifier misses. Code runs isolated from the page's global
-   scope and cannot reach browser APIs directly.
+3. **Sandbox execution (Gate 2)** — The QuickJS-wasm runtime sandbox in
+   `@cesium-ai/codegen-sandbox` provides a second containment layer for anything the static
+   verifier misses. Code runs isolated from the page's global scope and cannot reach browser
+   APIs directly.
 
 ---
 
@@ -225,7 +228,7 @@ The verifier already addresses the most common bypass routes: computed member ac
 
 ### 5. Resource Exhaustion / DoS
 
-**Where it occurs:** Browser-side code execution (Gate 2 sandbox).
+**Where it occurs:** Browser-side code execution (Gate 2 sandbox, `@cesium-ai/codegen-sandbox`).
 
 Generated code — accidentally or intentionally — could exhaust browser resources through
 infinite loops, deep recursion, memory allocation, or spamming Viewer entities. This only
@@ -265,14 +268,15 @@ The static verifier catches the simplest cases (`while (true)`, `for (;;)` witho
 
 Generated code running in the browser's global scope can, in principle, access browser
 APIs: cookies, `localStorage`, `sessionStorage`, geolocation, the clipboard, and same-
-origin `fetch` endpoints. This is primarily a concern for the planned Gate 2 sandbox, which
-removes direct access to these surfaces.
+origin `fetch` endpoints. Gate 2 (`@cesium-ai/codegen-sandbox`) removes direct access to
+these surfaces.
 
 **Mitigations:**
 
-1. **Sandbox isolation (Gate 2)** — The primary control. Generated code runs in an isolated
-   environment without access to the page's global scope, `window`, `document`, or storage
-   APIs. It interacts with the viewer only through a controlled bridge with opaque handles.
+1. **Sandbox isolation (Gate 2)** — The primary control. Generated code runs in the
+   `@cesium-ai/codegen-sandbox` QuickJS-wasm interpreter, isolated from the page's global
+   scope, `window`, `document`, and storage APIs. It interacts with the viewer only through a
+   controlled bridge with opaque handles.
 
 2. **Content Security Policy (deployment)** — A CSP header limits where the browser can
    connect, so even if sandbox isolation is bypassed, `fetch()` to attacker-controlled
@@ -320,7 +324,10 @@ a compromised LLM API returning adversarial output.
 ## Execution model trade-offs
 
 The choice of how to execute generated code in the browser has significant security
-implications. Three broad approaches exist; the fourth combines them in layers.
+implications. Three broad approaches exist; the fourth combines them in layers. This repo
+implements Option B as its Gate 2 (see the "Current status" note above and
+[Codegen Execution Sandbox Options](../Codegen-execution-sandbox-options.md) for the full
+comparison, including two additional iframe-based approaches evaluated afterward).
 
 ### Option A: Direct execution (no sandbox)
 
@@ -328,18 +335,20 @@ Generated code runs directly in the browser's global scope — no isolation laye
 access to `window`, `document`, `localStorage`, and so on. Security relies entirely on
 Gate 1 (static AST verification).
 
-This is the simplest approach and the current state of the repository. It is appropriate
-for personal or demo apps where the threat model is low and the user understands the
-trade-off. The static verifier materially reduces risk, but it cannot provide runtime
-containment.
+This is the simplest approach, appropriate for personal or demo apps where the threat
+model is low and the user understands the trade-off. The static verifier materially
+reduces risk, but it cannot provide runtime containment. **This repo does not use this
+option** — Gate 2 (below) is implemented.
 
 ---
 
-### Option B: QuickJS WASM sandbox
+### Option B: QuickJS WASM sandbox (implemented — this repo's Gate 2)
 
 Generated code runs inside [QuickJS-emscripten](https://github.com/justjake/quickjs-emscripten) — a JavaScript interpreter compiled to
 [WebAssembly](https://webassembly.org) — with an explicit timeout and heap cap. The viewer is exposed through an
-opaque handle bridge, so the sandbox cannot reach page globals.
+opaque handle bridge, so the sandbox cannot reach page globals. This is what
+[`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)
+implements.
 
 This provides strong process-level isolation, handles infinite loops gracefully (via
 timeout interrupt), and prevents memory exhaustion. The trade-offs are additional bundle
