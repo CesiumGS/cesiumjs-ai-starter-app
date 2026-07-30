@@ -5,6 +5,8 @@ This guide covers how to enable, wire up, and disable tools from the
 a catalogue of ready-made CesiumJS tools; you pick which ones your app exposes
 by editing **three app-layer files** — the library itself is never touched.
 
+![flyTo tool result — Palm Jumeirah](../assets/fly-to-palm-jumeirah.png)
+
 ---
 
 ## 1. How **flyTo** tool works
@@ -33,6 +35,7 @@ Here is what happens step by step:
    can confirm the flight finished.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
 flowchart LR
     subgraph Browser
         User

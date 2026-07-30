@@ -7,6 +7,7 @@ Intent-to-verified-CesiumJS-code generation pipeline, plus the `executeCesiumCod
 Steps 1–5 live in this package; steps 6–8 are in the consuming app:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 65, "padding": 12}}}%%
 graph TD
     A["🧑 User Intent"] -->|input| B["Domain Matching<br/>matchBestSkill"]
     B -->|SKILL.md| C["Prompt Building<br/>buildCodegenPrompt"]
@@ -43,7 +44,7 @@ Never import the root from client code — it pulls in `acorn`, `ai`, the `@cesi
 ## Security
 
 - **GATE 1 — Static analysis (this package):** `verifyCesiumCode` parses generated code with [`acorn`](https://github.com/acornjs/acorn)/[`acorn-walk`](https://github.com/acornjs/acorn/tree/master/acorn-walk) and rejects banned constructs (`eval`, `Function`, dynamic `import()`, banned browser globals, computed member access), free identifiers outside the allowlist, oversized snippets, and unbounded loops — without ever running the code.
-- **GATE 2 — Runtime isolation (frontend):** A sandboxed execution context with memory/deadline limits and a proxied Viewer surface runs the verified code. This repo's sample app does not yet have a frontend sandbox wired up; a browser-side execution boundary is planned.
+- **GATE 2 — Runtime isolation (frontend):** A sandboxed execution context with memory/deadline limits and a proxied Viewer surface runs the verified code. This repo's sample app wires this up via [`@cesium-ai/codegen-sandbox`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/codegen-sandbox/) — a fresh QuickJS-WASM interpreter per run, bound to the live `Viewer` only through a guarded, opaque-handle host bridge.
 - **Neither gate substitutes for the other.** Verified output is still attacker-influenceable model output until the frontend validates and executes it safely.
 
 See [Codegen Security](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/codegen-tool-security-attacks-vectors/) for a full threat model.
@@ -70,6 +71,7 @@ The library copy is **schema-only** — no `execute` method. Host apps wire thei
 ## File layout
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "16px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 55, "padding": 10}}}%%
 graph TD
     A["Input: Code String"] --> B["Check 1: Size Limits"]
     B -->|exceeds maxLength<br/>or maxLines?| B_fail["❌ Size Violation"]

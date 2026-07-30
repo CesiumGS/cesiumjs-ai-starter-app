@@ -32,6 +32,7 @@ untrusted/model-generated code with real crash/hang isolation, at the cost of th
 ## How It Works
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "16px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 55, "padding": 10}}}%%
 flowchart TD
     A["Verified CesiumJS snippet\n(from @cesium-ai/codegen-cesium)"] --> C["runCesiumCodeInSandbox"]
 

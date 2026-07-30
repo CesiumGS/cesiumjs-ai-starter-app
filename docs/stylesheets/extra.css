@@ -34,14 +34,491 @@
   }
 }
 
+/* ── Header tabs (Getting Started / Architecture / Tutorials / Packages) ──── */
+
+/* Material already lays these out as a non-wrapping flex row that scrolls
+   horizontally if it ever gets too narrow for its content (rather than
+   wrapping to a second line) — this just makes that explicit/guaranteed so
+   it can't regress if a future tab label or theme change nudges it. Note
+   Material hides this whole tab bar below ~76.25em viewport width and falls
+   back to the hamburger drawer nav instead, by design. */
+.md-tabs__list {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+/* Inline tabs (see overrides/partials/header.html): render the nav tabs on
+   the SAME row as the logo/title/search instead of Material's default
+   separate row below the header. Hidden below the same breakpoint Material
+   itself uses to hide the standalone tabs bar, so mobile still falls back
+   to the hamburger drawer nav exactly as it would by default. */
+.md-tabs__list--inline {
+  flex: 0 1 auto;
+  margin-left: 1rem;
+  min-width: 0;
+}
+
+@media screen and (max-width: 76.234375em) {
+  .md-tabs__list--inline {
+    display: none;
+  }
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────────── */
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 3rem;
+  max-width: 68rem;
+  margin: 1rem auto 2.5rem;
+}
+
+.hero-copy {
+  flex: 1 1 28rem;
+  min-width: 0;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--md-primary-fg-color);
+}
+
+.hero-title {
+  margin: 0 0 1rem;
+  font-size: 2.75rem;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--md-default-fg-color);
+}
+
+.hero-title-accent {
+  color: var(--md-primary-fg-color);
+}
+
+.hero-subtitle {
+  margin: 0 auto 1.5rem;
+  max-width: 40rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--md-default-fg-color--light);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.hero-btn {
+  display: inline-block;
+  padding: 0.65rem 1.4rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.hero-btn.hero-btn--primary {
+  background: var(--md-primary-fg-color);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(46, 134, 193, 0.35);
+}
+
+.hero-btn.hero-btn--primary:hover,
+.hero-btn.hero-btn--primary:focus-visible {
+  background: var(--md-primary-fg-color--dark);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.hero-btn.hero-btn--secondary {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color);
+}
+
+.hero-btn.hero-btn--secondary:hover,
+.hero-btn.hero-btn--secondary:focus-visible {
+  background: var(--md-default-fg-color--lighter);
+  color: var(--md-default-fg-color);
+  transform: translateY(-2px);
+}
+
+.hero-graphic {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-orb {
+  width: 14rem;
+  height: 14rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(72, 201, 240, 0.35),
+    rgba(46, 134, 193, 0.12) 60%,
+    rgba(46, 134, 193, 0) 75%
+  );
+}
+
+.hero-orb img {
+  width: 65%;
+  height: auto;
+}
+
+@media (max-width: 700px) {
+  .hero {
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .hero-subtitle {
+    max-width: none;
+  }
+
+  .hero-title {
+    font-size: 2.1rem;
+  }
+}
+
+/* ── Feature grid ─────────────────────────────────────────────────────────── */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin: 0 0 2rem;
+}
+
+.feature-card {
+  display: block;
+  padding: 1.4rem 1.5rem;
+  border-radius: 12px;
+  background: var(--md-code-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.feature-card:hover,
+.feature-card:focus-visible {
+  transform: translateY(-4px);
+  border-color: var(--md-primary-fg-color);
+  box-shadow: 0 10px 24px rgba(46, 134, 193, 0.2);
+  color: inherit;
+}
+
+.feature-icon {
+  display: inline-block;
+  font-size: 1.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.feature-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+.feature-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--md-default-fg-color--light);
+}
+
+.feature-cta {
+  display: inline-block;
+  margin-top: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--md-primary-fg-color);
+}
+
+@media (max-width: 900px) {
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .feature-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Quick section nav (index.md) ────────────────────────────────────────── */
+
+html {
+  scroll-behavior: smooth;
+}
+
+#showcase,
+#docs,
+#tutorials,
+#packages,
+#source {
+  scroll-margin-top: 4.5rem;
+}
+
+.quick-nav {
+  position: sticky;
+  top: 3rem;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.5rem 0 1rem;
+  padding: 0.5rem;
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 999px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.quick-nav__link {
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.quick-nav__link:hover,
+.quick-nav__link:focus-visible {
+  background: var(--md-primary-fg-color);
+  color: #fff;
+}
+
+/* ── Carousels (image showcase + text-card nav) ─────────────────────────── */
+
+/* Widen the whole content column (nav + content + toc row) on any page that
+   contains a carousel, so the carousels get much closer to full-width/
+   full-screen real estate instead of being squeezed into the ~61rem prose
+   column. Scoped via :has() so no other page's layout is affected. */
+@supports selector(:has(a)) {
+  .md-grid:has(.carousel-panel) {
+    max-width: min(100rem, calc(100vw - 2rem));
+  }
+
+  /* The grid widening above only affects the outer nav+content+toc row —
+     without this, the article itself would stretch edge-to-edge inside that
+     wider row, leaving headings/cards flush left with a big empty gap on
+     the right. Cap and center the article so everything reads as one
+     balanced, centered column instead. */
+  article.md-content__inner:has(.carousel-panel) {
+    max-width: 78rem;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+.carousel-panel {
+  margin: 1.5rem 0 2.5rem;
+  padding: 0.25rem 0;
+}
+
+.carousel-header {
+  margin-bottom: 1.1rem;
+}
+
+.carousel-eyebrow {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--md-primary-fg-color);
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+}
+
+.carousel-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--md-default-fg-color--light);
+  text-align: center;
+}
+
+.carousel-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.carousel-track {
+  flex: 1;
+  display: flex;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0.35rem 0.35rem 1rem;
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-primary-fg-color) transparent;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 24px,
+    black calc(100% - 24px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 24px,
+    black calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+.carousel-track::-webkit-scrollbar {
+  height: 8px;
+}
+
+.carousel-track::-webkit-scrollbar-thumb {
+  background: var(--md-primary-fg-color);
+  border-radius: 4px;
+}
+
+.carousel-arrow {
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  border: none;
+  background: var(--md-primary-fg-color);
+  color: #fff;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease;
+  z-index: 1;
+}
+
+.carousel-arrow:hover,
+.carousel-arrow:focus-visible {
+  background: var(--md-primary-fg-color--dark);
+  transform: scale(1.08);
+}
+
+.carousel-slide {
+  flex: 0 0 min(760px, 90%);
+  scroll-snap-align: start;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 14px;
+  background: var(--md-default-bg-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  overflow: hidden;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.carousel-slide:hover,
+.carousel-slide:focus-visible {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 30px rgba(46, 134, 193, 0.4);
+  color: inherit;
+}
+
+.carousel-slide figure {
+  margin: 0;
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: 440px;
+  object-fit: cover;
+  display: block;
+}
+
+.carousel-slide figcaption {
+  padding: 1rem 1.25rem 1.35rem;
+  font-size: 0.9rem;
+  font-style: normal;
+  line-height: 1.5;
+  color: var(--md-default-fg-color--light);
+  text-align: left;
+}
+
+.carousel-slide-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--md-default-fg-color);
+}
+
+.carousel-slide figcaption p {
+  margin: 0;
+}
+
+.carousel-cta {
+  display: block;
+  margin-top: 0.6rem;
+  font-weight: 700;
+  color: var(--md-primary-fg-color);
+}
+
+@media (max-width: 700px) {
+  .carousel-arrow {
+    display: none;
+  }
+
+  .carousel-slide {
+    flex-basis: 92%;
+  }
+
+  .carousel-slide img {
+    height: 240px;
+  }
+}
+
 /* ── Mermaid diagrams ────────────────────────────────────────────────────── */
 .mermaid {
   max-width: 100%;
   width: 100%;
+  margin: 2rem 0;
 }
 
 .mermaid svg {
   width: 100%;
   height: auto;
-  min-height: 200px;
+  min-height: 460px;
 }

@@ -85,6 +85,7 @@ Without `stopAfterTools`, the same-turn loop replies immediately after the tool 
 the real outcome is known:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "sequence": {"actorFontSize": 17, "messageFontSize": 16, "noteFontSize": 15, "actorMargin": 70, "boxMargin": 12, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     participant U as User
     participant M as Model
@@ -100,6 +101,7 @@ With `stopAfterTools: ["executeCesiumCode"]`, `stopWhen` ends the loop right aft
 result, so the model waits for a follow-up request carrying the real outcome before commenting:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "sequence": {"actorFontSize": 17, "messageFontSize": 16, "noteFontSize": 15, "actorMargin": 70, "boxMargin": 12, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     participant U as User
     participant M as Model

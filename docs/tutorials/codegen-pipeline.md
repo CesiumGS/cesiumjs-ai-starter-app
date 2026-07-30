@@ -10,6 +10,7 @@ day-to-day use.
 ## Pipeline overview
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
 flowchart TD
     A([Intent string]) --> B["Domain matching<br/>matchBestSkill — BM25"]
     B --> C["Prompt building<br/>buildCodegenPrompt"]
@@ -120,7 +121,7 @@ The code is never executed during verification. All violations are collected bef
 result is returned.
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '17px'}}}%%
+%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '20px'}}}%%
 flowchart LR
     subgraph Verifier["verifyCesiumCode"]
         SZ["Size check<br/>maxLength · maxLines"]
@@ -177,7 +178,7 @@ is ever returned as verified.
 ## Data flow summary
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '17px'}}}%%
+%%{init: {'flowchart': {'nodeSpacing': 60, 'rankSpacing': 100}, 'themeVariables': {'fontSize': '20px'}}}%%
 flowchart LR
     subgraph Input
         I([intent: string])

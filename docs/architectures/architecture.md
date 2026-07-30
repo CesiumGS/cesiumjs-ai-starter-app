@@ -7,6 +7,7 @@ how it's deployed (Docker Compose topology).
 ## 1. Component overview
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
 flowchart LR
     subgraph BrowserSide["Browser"]
         Viewer["CesiumJS Viewer"]
@@ -72,6 +73,7 @@ MCP-backed tools would run entirely server-side and never stream as client tool 
 The following shows what happens end to end when a user types **"fly to Paris"**.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "16px"}, "sequence": {"actorFontSize": 16, "messageFontSize": 15, "noteFontSize": 14, "actorMargin": 60, "boxMargin": 10, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     actor User
     participant UI as Chat Panel (React)
@@ -118,3 +120,4 @@ Key points this diagram makes explicit:
 - [Getting Started](../getting-started.md) — install and run the app.
 - [Packages](../packages/index.md) — what each workspace package is responsible for.
 - [Cesium Viewer Tools Tutorial](../tutorials/cesium-viewer-tools-tutorial.md) — how the viewer tool system works, and how to add/remove a tool.
+- [MCP Support Architecture](architecture-mcp.md) — how optional MCP (Model Context Protocol) tool servers are wired in.

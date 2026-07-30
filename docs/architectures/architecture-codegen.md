@@ -14,6 +14,7 @@ The codegen system is an additional path through the existing backend. A normal 
 path adds a server-side generation sub-system that runs before any code reaches the browser.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
 flowchart LR
     subgraph Browser
         UI["Chat Panel"]
@@ -56,6 +57,7 @@ bundled into the client.
 ### Request lifecycle
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "16px"}, "sequence": {"actorFontSize": 16, "messageFontSize": 15, "noteFontSize": 14, "actorMargin": 60, "boxMargin": 10, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     actor User
     participant UI as Chat Panel (React)
@@ -145,6 +147,7 @@ server-side in `@cesium-ai/codegen-cesium`; Gate 2 runs client-side in
 `@cesium-ai/codegen-sandbox`.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
 flowchart TB
     subgraph Server["Backend (trusted)"]
         subgraph GATE1["Gate 1 — Static AST Verification (implemented)"]

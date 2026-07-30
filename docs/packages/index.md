@@ -25,6 +25,7 @@ packages into a working product.
 ## Dependency graph
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "28px"}, "flowchart": {"nodeSpacing": 80, "rankSpacing": 110, "padding": 28}}}%%
 flowchart TD
     tools["@cesium-ai/tools-schemas"]
     codegen["@cesium-ai/codegen-cesium"]
@@ -60,13 +61,13 @@ nothing depends on them.
 
 Because of the graph above, packages must be built before the apps that depend on them:
 
-| Command                  | What it does                                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Command                  | What it does                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | `npm run build:packages` | Builds `tools-schemas` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `sample-config` → `server` in dependency order |
-| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                        |
-| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                   |
-| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                              |
-| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                |
+| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                       |
+| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                  |
+| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                             |
+| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                               |
 
 ## Packages
 

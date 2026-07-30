@@ -22,6 +22,7 @@ Every attack vector (**#1–#7**) is placed on the component architecture. Attac
 show where each vector strikes and link to the detailed section below.
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 65, "padding": 12}}}%%
 flowchart TB
     subgraph CLIENT["Browser (untrusted execution surface)"]
         FE["ChatPanel / CesiumGlobe<br/>(frontend)"]
@@ -326,7 +327,7 @@ a compromised LLM API returning adversarial output.
 The choice of how to execute generated code in the browser has significant security
 implications. Three broad approaches exist; the fourth combines them in layers. This repo
 implements Option B as its Gate 2 (see the "Current status" note above and
-[Codegen Execution Sandbox Options](../Codegen-execution-sandbox-options.md) for the full
+[Codegen Execution Sandbox Options](codegen-execution-sandbox-options.md) for the full
 comparison, including two additional iframe-based approaches evaluated afterward).
 
 ### Option A: Direct execution (no sandbox)

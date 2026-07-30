@@ -20,6 +20,8 @@ _"draw a red point at the Eiffel Tower"_. Here is what happens:
 4. On approval, the backend runs the full generation pipeline (domain matching → prompt building → LLM generation → AST verification → optional retry).
 5. Verified code is streamed back to the browser, which executes it against the live `Viewer`.
 
+![Codegen tool adding 3D buildings over New York](../assets/codegen-new-york.gif)
+
 For the full request lifecycle sequence diagram, see [Codegen Architecture — Request lifecycle](../architectures/architecture-codegen.md#request-lifecycle).
 
 ---
