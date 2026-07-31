@@ -210,6 +210,8 @@ if you configured a `docs` server with a `search` tool: _"search the docs for ca
 3. On approval, the backend forwards the call to the MCP server and returns the result; the model
    uses it to compose its final reply.
 
+![MCP tool call being approved and executed in the chat panel](../assets/fire_mcp.gif)
+
 If the model never calls the tool, double-check `allowedTools` doesn't exclude it and that the
 server actually advertises a tool relevant to your prompt (see `toolNames` in `/health`).
 

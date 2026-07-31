@@ -48,7 +48,7 @@ hide:
       </a>
       <a class="carousel-slide" href="tutorials/mcp-server-tutorial">
         <figure>
-          <img src="assets/fly-to-tool.gif" alt="Chat panel flying the CesiumJS camera to Palm Jumeirah in Dubai" loading="lazy" />
+          <img src="assets/fire_mcp.gif" alt="Chat panel flying the CesiumJS camera to Palm Jumeirah in Dubai" loading="lazy" />
           <figcaption>
             <h3 class="carousel-slide-title">Adding an MCP Server</h3>
             <p>Connect any Model Context Protocol server via <code>MCP_SERVERS</code> — its tools plug straight into the same agent loop, gated by the same approval flow.</p>
@@ -71,7 +71,7 @@ hide:
         left: atEnd ? 0 : track.scrollLeft + track.clientWidth * 0.9,
         behavior: "smooth",
       });
-    }, 5000);
+    }, 15000);
     ["pointerdown", "wheel", "touchstart"].forEach(function (eventName) {
       track.addEventListener(
         eventName,
