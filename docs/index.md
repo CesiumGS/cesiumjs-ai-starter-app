@@ -8,11 +8,9 @@ hide:
   <div class="hero-copy">
     <h1 class="hero-title">CesiumJS <span class="hero-title-accent">AI Starter App</span></h1>
     <p class="hero-subtitle">
-      A ready-to-run starter that pairs a
-      <a href="https://cesium.com/platform/cesiumjs/">CesiumJS</a> 3D globe viewer with an
-      LLM-powered chat interface. The LLM drives the globe through structured tool calls
-      (e.g. <em>"fly to Paris"</em>) while the <strong>LLM API key never reaches the
-      browser</strong> — all inference runs behind a Node.js API server.
+      A ready-to-run starter pairing a <a href="https://cesium.com/platform/cesiumjs/">CesiumJS</a>
+      3D globe with an LLM chat interface that drives it via tool calls (e.g.
+      <em>"fly to Paris"</em>) — with the <strong>API key kept server-side</strong>.
     </p>
     <div class="hero-actions">
       <a class="hero-btn hero-btn--primary" href="getting-started">Get Started</a>

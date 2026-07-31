@@ -25,17 +25,23 @@ Started / Architecture / Tutorials / Packages) as a SEPARATE `
           ".svg" %}
         </label>
         <div class="md-header__title" data-md-component="header-title">
-          <div class="md-header__ellipsis">
-            <div class="md-header__topic">
-              <span class="md-ellipsis"> {{ config.site_name }} </span>
+          <a
+            href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}"
+            title="{{ config.site_name | e }}"
+            class="md-header__title-link"
+          >
+            <div class="md-header__ellipsis">
+              <div class="md-header__topic">
+                <span class="md-ellipsis"> {{ config.site_name }} </span>
+              </div>
+              <div class="md-header__topic" data-md-component="header-topic">
+                <span class="md-ellipsis">
+                  {% if page.meta and page.meta.title %} {{ page.meta.title }} {% else %} {{
+                  page.title }} {% endif %}
+                </span>
+              </div>
             </div>
-            <div class="md-header__topic" data-md-component="header-topic">
-              <span class="md-ellipsis">
-                {% if page.meta and page.meta.title %} {{ page.meta.title }} {% else %} {{
-                page.title }} {% endif %}
-              </span>
-            </div>
-          </div>
+          </a>
         </div>
         {% if "navigation.tabs" in features %} {% import "partials/tabs-item.html" as item with
         context %}

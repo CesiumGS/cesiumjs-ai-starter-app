@@ -40,9 +40,15 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/panzoom-buttons.js
+
 plugins:
   - search
   - include-markdown
+  - panzoom:
+      full_screen: true
+      always_show_hint: true
 
 markdown_extensions:
   - pymdownx.superfences:
