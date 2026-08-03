@@ -4,6 +4,7 @@ import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
+import { createCesiumToolExecutors } from "@cesium-ai/tools";
 import { flyToLocation } from "../tools/camera";
 import {
   handleExecuteCesiumCodeResult,
@@ -20,9 +21,23 @@ interface ChatPanelProps {
 /** A client-side executor: runs one tool call against the live Viewer. */
 type ToolExecutor = (viewer: Viewer, args: unknown) => Promise<unknown>;
 
+/**
+ * `@cesium-ai/tools`'s default executor for every `@cesium-ai/tools-schemas`
+ * tool, with `flyTo` overridden by this app's own `flyToLocation` (`../tools/camera.ts`) —
+ * built on the package's `createFlyToExecutor` factory rather than a from-scratch
+ * executor, so it reuses the base validation/promise/error-handling plumbing and only
+ * extends the accepted shape (`flyToShape`, adding `duration`/`easingFunction`) and the
+ * extra `Camera.flyTo` options those fields translate to. See `@cesium-ai/tools`'s
+ * README ("Extending flyTo") for the general pattern: every other tool here keeps its
+ * default implementation with no changes needed.
+ */
+const CESIUM_TOOL_EXECUTORS = createCesiumToolExecutors({
+  flyTo: flyToLocation,
+});
+
 /** Client-side executors for enabled tools, keyed by type for compile-time safety. */
 const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
-  [CESIUM_TOOL_NAMES.flyTo]: (viewer, args) => flyToLocation(viewer, args),
+  [CESIUM_TOOL_NAMES.flyTo]: CESIUM_TOOL_EXECUTORS.flyTo,
   // executeCesiumCode is server-resolved; stub serves as defense-in-depth.
   [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: () =>
     Promise.resolve({

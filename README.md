@@ -105,6 +105,7 @@ Browser                          Server
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
 - **`@cesium-ai/tools-schemas`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute`, and scoped strictly to tools that run directly against a live `Viewer`.
+- **`@cesium-ai/tools`** — default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s catalogue (`flyTo`, camera, entity, animation, and imagery tools) — the browser-side "other half" of that schema-only package, so a host app doesn't have to hand-write an executor for every tool before it can turn one on. `createCesiumToolExecutors({ ... })` lets a host override or extend any individual tool (e.g. this app's own `flyTo`, which validates against an extended shape — see below) without forking the rest. See [`packages/tools/README.md`](packages/tools/README.md).
 - **`@cesium-ai/codegen-cesium`** — backend-only pipeline that turns `executeCesiumCode`'s natural-language `intent` into statically-verified CesiumJS code (skills-grounded generation + an AST verifier), and also owns `executeCesiumCode`'s tool definition itself (schema-only, no `execute`) — that tool can't run directly against a `Viewer` like `flyTo` does, so it lives here rather than in `tools-schemas`. Parse-only — it never executes generated code itself.
 
 This app builds its own executable `executeCesiumCode` tool on top of the library's schema (`backend/src/tools/execute-cesium-code-tool.ts`, wrapping `@cesium-ai/codegen-cesium`), the same "app extends the shared schema" pattern `flyTo` uses via `backend/src/tools/flyto-tool.ts`. Because `executeCesiumCode` is a "Code Mode" tool — the model's output is arbitrary generated code, not bounded typed args like `flyTo`'s lat/lon/altitude — it needs a materially different security posture than `flyTo`. The backend's AST verification (see [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md)) is defense-in-depth only, not a substitute for runtime isolation; the frontend independently executes verified snippets through `@cesium-ai/codegen-sandbox`, a fresh QuickJS-WASM interpreter with memory/deadline limits and a guarded host bridge. See [`packages/tools-schemas/README.md`](packages/tools-schemas/README.md) and [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md) for the full generation/verification pipeline.
@@ -144,7 +145,7 @@ After editing, rebuild the shared package so both tiers pick up the change: `npm
 npm test -- enabled-tools
 ```
 
-> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts)) if it runs directly against the live `Viewer`, or add it to `@cesium-ai/codegen-cesium` instead if — like `executeCesiumCode` — it needs the codegen/verification pipeline first; (2) add its schema/definition module under that package's `src/` and wire it into `createCesiumTools` ([`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts)) if it's a viewer tool; (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts)) if it runs directly against the live `Viewer`, or add it to `@cesium-ai/codegen-cesium` instead if — like `executeCesiumCode` — it needs the codegen/verification pipeline first; (2) add its schema/definition module under that package's `src/` and wire it into `createCesiumTools` ([`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts)) if it's a viewer tool; (3) add its default executor to `@cesium-ai/tools` ([`packages/tools/src/index.ts`](packages/tools/src/index.ts)) — or, for an app-specific tool that shouldn't ship as a package default, write it directly under `frontend/src/tools/` and pass it as an override to `createCesiumToolExecutors`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
 
 ### Update a tool's schema
 
@@ -246,6 +247,10 @@ cesiumjs-ai-tools-sample/
 │   │       ├── schemas.ts      # flyToInputShape — shared args contract (structural)
 │   │       ├── tools/flyTo/flyTo.ts # flyTo tool (model-facing schema + hints, no execute)
 │   │       └── index.ts        # createCesiumTools registry (enabled allowlist)
+│   ├── tools/                  # @cesium-ai/tools — default client-side tool executors
+│   │   └── src/
+│   │       ├── tools/          # One default executor per tool, grouped by domain
+│   │       └── index.ts        # DEFAULT_CESIUM_TOOL_EXECUTORS, createCesiumToolExecutors
 │   └── codegen-cesium/         # @cesium-ai/codegen-cesium — intent -> verified CesiumJS code pipeline + the executeCesiumCode tool
 │       └── src/
 │           ├── tool-names.ts   # CODEGEN_CESIUM_TOOL_NAMES — canonical codegen tool identifiers
