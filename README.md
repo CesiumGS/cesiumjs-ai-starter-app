@@ -107,6 +107,7 @@ Browser                          Server
 - **`@cesium-ai/tools-schemas`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute`, and scoped strictly to tools that run directly against a live `Viewer`.
 - **`@cesium-ai/tools`** — default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s catalogue (`flyTo`, camera, entity, animation, and imagery tools) — the browser-side "other half" of that schema-only package, so a host app doesn't have to hand-write an executor for every tool before it can turn one on. `createCesiumToolExecutors({ ... })` lets a host override or extend any individual tool (e.g. this app's own `flyTo`, which validates against an extended shape — see below) without forking the rest. See [`packages/tools/README.md`](packages/tools/README.md).
 - **`@cesium-ai/codegen-cesium`** — backend-only pipeline that turns `executeCesiumCode`'s natural-language `intent` into statically-verified CesiumJS code (skills-grounded generation + an AST verifier), and also owns `executeCesiumCode`'s tool definition itself (schema-only, no `execute`) — that tool can't run directly against a `Viewer` like `flyTo` does, so it lives here rather than in `tools-schemas`. Parse-only — it never executes generated code itself.
+- **`@cesium-ai/mcp-tools`** — optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) client bridge. Connects to MCP servers (SSE/HTTP — stdio is deliberately unsupported), namespaces + allowlist-filters their tools, and merges them into an AI SDK `ToolSet` a host app spreads alongside `createCesiumTools()` — this is the "MCP-backed tool group" the split-execution diagram above refers to. Entirely opt-in via the backend's `MCP_SERVERS` env var (unset by default). See [`packages/mcp-tools/README.md`](packages/mcp-tools/README.md) for the full security model and API.
 
 This app builds its own executable `executeCesiumCode` tool on top of the library's schema (`backend/src/tools/execute-cesium-code-tool.ts`, wrapping `@cesium-ai/codegen-cesium`), the same "app extends the shared schema" pattern `flyTo` uses via `backend/src/tools/flyto-tool.ts`. Because `executeCesiumCode` is a "Code Mode" tool — the model's output is arbitrary generated code, not bounded typed args like `flyTo`'s lat/lon/altitude — it needs a materially different security posture than `flyTo`. The backend's AST verification (see [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md)) is defense-in-depth only, not a substitute for runtime isolation; the frontend independently executes verified snippets through `@cesium-ai/codegen-sandbox`, a fresh QuickJS-WASM interpreter with memory/deadline limits and a guarded host bridge. See [`packages/tools-schemas/README.md`](packages/tools-schemas/README.md) and [`packages/codegen-cesium/README.md`](packages/codegen-cesium/README.md) for the full generation/verification pipeline.
 
@@ -166,6 +167,18 @@ npm test -- flyTo.schema-sync
 
 > Per-host tweaks without forking the tool: `createFlyTo` accepts a `FlyToConfig` (`description`, `fieldDescriptions`, or a full `inputSchema`). Note the `inputSchema` override replaces only the **model-facing** schema — use it for model-facing tweaks, not to change the validated contract. To change the contract, edit `flyToInputShape`.
 
+### Enabling MCP tools
+
+MCP tools are a separate, opt-in tool group — see [`@cesium-ai/mcp-tools`](packages/mcp-tools/README.md) for the full API and security model. Nothing below is required for the app to run; `MCP_SERVERS` is unset by default and no MCP client is ever created.
+
+Set `MCP_SERVERS` in `.env` to a JSON array of servers to connect to at backend startup ([`backend/src/index.ts`](backend/src/index.ts)):
+
+```bash
+MCP_SERVERS=[{"name":"docs","transport":{"type":"http","url":"https://example.com/mcp"},"allowedTools":["search"]}]
+```
+
+Each configured server's tools are namespaced `mcp__<name>__<toolName>` and merged into the same registry `flyTo`/`executeCesiumCode` live in ([`backend/src/app.ts`](backend/src/app.ts)) — **every MCP tool is approval-gated by default** (`toolApproval: "user-approval"`), the same human-in-the-loop checkpoint `executeCesiumCode` uses, since MCP tools run arbitrary third-party server code this app doesn't control. Connection failures are isolated per server (surfaced on `GET /health` as `mcpServers`) and never prevent the rest of the app from starting.
+
 ---
 
 ## Environment Variables
@@ -181,6 +194,8 @@ npm test -- flyTo.schema-sync
 | `RATE_LIMIT_RPM`               | No                | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                                                  |
 | `CODEGEN_MAX_SKILLS`           | No                | Max BM25-matched `cesiumjs-skills` domains inlined as grounding context in the `executeCesiumCode` tool's generation prompt (default `1`).                              |
 | `CODEGEN_MAX_ATTEMPTS`         | No                | Max regeneration attempts if a generated `executeCesiumCode` snippet fails static AST verification (default `3`).                                                       |
+| `MCP_SERVERS`                  | No                | JSON array of MCP servers to connect to (default: none — MCP support stays off). See [`packages/mcp-tools/README.md`](packages/mcp-tools/README.md).                    |
+| `MCP_TOOL_TIMEOUT_MS`          | No                | Per-tool-call timeout for MCP tools, in ms (default `30000`).                                                                                                           |
 | `VITE_API_BASE_URL`            | No                | Dev default `http://localhost:3001`. In `compose.yaml` this is built as `""` so the frontend calls relative `/api/chat`, which nginx proxies to the backend.            |
 
 See [`.env.example`](.env.example) for the complete list, including `AI_BASE_URL` and telemetry settings.
