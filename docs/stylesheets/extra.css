@@ -526,19 +526,32 @@ html {
   margin: 2rem 0;
 }
 
+/* `!important` here is required: mermaid renders each SVG with its own
+   inline `style="max-width: NNpx"` (its natural, un-scaled render width).
+   An inline style always wins over an external stylesheet rule regardless
+   of selector specificity, so without `!important` a wide/complex diagram
+   (e.g. one with several subgraphs side by side) can render wider than its
+   container and overflow instead of scaling down to fit. */
 .mermaid svg {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   height: auto;
   min-height: 460px;
 }
 
 /* ── mkdocs-panzoom-plugin overrides ─────────────────────────────────────
-   Give the "maximize" button a real modal/popup feel (dimmed backdrop,
+   Give the "maximize" button a real modal/popup feel (opaque backdrop,
    centered + padded content) instead of a jarring edge-to-edge takeover.
    Selector needs 2 classes to reliably beat the plugin's own same-order
-   `.panzoom-fullscreen` rule (loaded after this file). */
+   `.panzoom-fullscreen` rule (loaded after this file). `!important` on the
+   background is deliberate/required too: the plugin's own `.panzoom-box`
+   rule sets `background-color: var(--md-code-bg-color)` (not just
+   `background`), and `background-color` alone can still win the cascade for
+   the color channel specifically depending on load order in some browsers
+   even though this selector's specificity already beats the plugin's — pin
+   it down explicitly so the backdrop can never end up see-through. */
 .panzoom-box.panzoom-fullscreen {
-  background: rgba(0, 0, 0, 0.85);
+  background: #fff !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -548,9 +561,10 @@ html {
 
 .panzoom-fullscreen .mermaid svg {
   min-height: 0;
-  max-height: 100%;
-  max-width: 100%;
-  width: auto;
+  max-height: 100% !important;
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto;
 }
 
 /* Explicit zoom in/out buttons injected by javascripts/panzoom-buttons.js
