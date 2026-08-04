@@ -1,6 +1,6 @@
 # MCP Apps Architecture
 
-This document describes how [MCP Apps](https://spec.modelcontextprotocol.io/specification/2025-06-18/client/mcp-apps/)
+This document describes how [MCP Apps](https://modelcontextprotocol.io/extensions/apps/overview)
 widget rendering is wired into the starter app: where the components live, how a widget fetches
 its HTML and calls tools back, and what security gates apply. MCP Apps support is an extension of
 standard MCP — a tool can optionally declare an interactive `ui://` HTML widget resource via
@@ -46,34 +46,60 @@ backend, which validates every request against the session's own resolved tool r
 
 ---
 
-## 2. Sequence — widget render and a widget-initiated tool call
+## 2. Sequence — chat turn, widget render, and a widget-initiated tool call
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "16px"}, "sequence": {"actorFontSize": 16, "messageFontSize": 15, "noteFontSize": 14, "actorMargin": 60, "boxMargin": 10, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     actor User
     participant ChatPanel as Chat Panel (React)
-    participant Widget as McpAppWidget (AppRenderer)
-    participant Backend as Backend (/api/mcp-app/*)
+    participant API as Backend (/api/chat)
+    participant Agent as Agent loop<br/>(streamText)
+    participant LLM as LLM Provider
+    participant McpTools as @cesium-ai/mcp-tools
     participant MCP as MCP Server
+    participant AppRouter as Backend (/api/mcp-app/*)
+    participant Widget as McpAppWidget (AppRenderer)
 
-    Note over ChatPanel,MCP: After a tool call is approved and the result rendered
+    Note over ChatPanel,MCP: Chat turn — tool selection and approval
+    User->>ChatPanel: sends a message
+    ChatPanel->>API: POST /api/chat
+    API->>Agent: runAgent({ tools: {...viewerTools, ...mcp.tools} })
+    Agent->>LLM: streamText(tools=[..., mcp__[server]__[tool]])
+    LLM-->>Agent: tool call: mcp__[server]__[tool]({ args })
+    Agent-->>API: tool-approval-request
+    API-->>ChatPanel: SSE: approval request
+    ChatPanel->>User: show approval prompt
+    User->>ChatPanel: approves
+    ChatPanel-->>API: approval-responded
+    API->>Agent: resume — execute the tool
+    Agent->>McpTools: tools[mcp__[server]__[tool]].execute(args)
+    McpTools->>MCP: forward tool call (timeout-wrapped)
+    MCP-->>McpTools: tool result (includes _meta.ui.resourceUri)
+    McpTools-->>Agent: result { ..., mcpApp: { resourceUri: "ui://..." } }
+    Agent->>LLM: streamText(... + tool result)
+    LLM-->>Agent: final assistant message
+    Agent-->>API: stream text tokens + tool result with mcpApp
+    API-->>ChatPanel: SSE: text tokens + tool result
+    ChatPanel->>User: renders assistant reply + McpAppWidget
+
+    Note over ChatPanel,MCP: Widget render
     ChatPanel->>Widget: renders McpAppWidget(resourceUri, mcpAppApiBase)
-    Widget->>Backend: GET /api/mcp-app/resource?uri=ui://...
-    Backend->>MCP: client.readResource({ uri })
-    MCP-->>Backend: ReadResourceResult { contents: [{uri, mimeType, text}] }
-    Backend-->>Widget: 200 OK, raw ReadResourceResult JSON
+    Widget->>AppRouter: GET /api/mcp-app/resource?uri=ui://...
+    AppRouter->>MCP: client.readResource({ uri })
+    MCP-->>AppRouter: ReadResourceResult { contents: [{uri, mimeType, text}] }
+    AppRouter-->>Widget: 200 OK, raw ReadResourceResult JSON
     Widget->>User: renders widget HTML inside sandbox iframe
 
     Note over User,MCP: User interacts with the widget
     User->>Widget: triggers a tool call
     Widget->>User: inline Approve / Reject prompt (McpAppWidget)
     User->>Widget: approves
-    Widget->>Backend: POST /api/mcp-app/tool-call { server, toolName, args }
-    Note over Backend: validates (server, toolName) against<br/>request's resolved tool registry
-    Backend->>MCP: client.callTool(...)
-    MCP-->>Backend: tool result
-    Backend-->>Widget: 200 OK, tool result JSON
+    Widget->>AppRouter: POST /api/mcp-app/tool-call { server, toolName, args }
+    Note over AppRouter: validates (server, toolName) against<br/>request's resolved tool registry
+    AppRouter->>MCP: client.callTool(...)
+    MCP-->>AppRouter: tool result
+    AppRouter-->>Widget: 200 OK, tool result JSON
     Widget->>User: updates widget UI
 ```
 
@@ -81,25 +107,25 @@ sequenceDiagram
 
 ## 3. Component responsibilities
 
-| Component                     | File                                                                                                                                                                           | Responsibility                                                                                                                                                                                                                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Widget metadata discovery** | [`packages/mcp-tools/src/mcp-app-meta.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/mcp-app-meta.ts)                               | `getMcpAppToolMeta()` — reads `_meta.ui` from a discovered tool and attaches it as `tool.mcpApp`. `mcpAppClientCapabilities` is advertised during every `createMCPClient` call.                                                                                                      |
-| **Backend bridge**            | `@cesium-ai/server/mcp`'s `mcp-app-router.ts`                                                                                                                                  | `GET /api/mcp-app/resource` (fetches raw `ReadResourceResult` for `ui://` URIs only) and `POST /api/mcp-app/tool-call` (validates `(server, toolName)` against the request's tool registry, then calls the MCP tool). Both operations are timeout-wrapped via `MCP_TOOL_TIMEOUT_MS`. |
-| **Widget renderer**           | [`packages/chat-element/src/components/McpAppWidget.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/chat-element/src/components/McpAppWidget.tsx) | Uses `@mcp-ui/client`'s `AppRenderer` — implements the MCP Apps JSON-RPC/postMessage protocol; proxies `onReadResource`/`onCallTool` to the backend's `/api/mcp-app/*` routes. Shows inline Approve/Reject before any widget-initiated `tools/call` is forwarded.                    |
-| **Sandbox proxy**             | [`frontend/public/sandbox_proxy.html`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/public/sandbox_proxy.html)                                       | Static HTML file served at `/sandbox_proxy.html`. Required by `AppRenderer` as the inner iframe that isolates widget HTML from the host app's DOM. Served by Vite in dev and nginx in production.                                                                                    |
-| **Tool introspection**        | `GET /api/tools`                                                                                                                                                               | Reports `mcpApp: { resourceUri }` alongside `name`/`description` for every tool that declared a widget — the chat panel uses this to decide whether to render `McpAppWidget` for a given tool result.                                                                                |
+| Component                     | File                                                                                                                                                                           | Responsibility                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Widget metadata discovery** | [`packages/mcp-tools/src/mcp-app-meta.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/mcp-app-meta.ts)                               | `getMcpAppToolMeta()` — reads `_meta.ui` from a discovered tool and attaches it as `tool.mcpApp`. `mcpAppClientCapabilities` is advertised during every `createMCPClient` call.                                                                                                                                   |
+| **Backend bridge**            | `@cesium-ai/server/mcp`'s `mcp-app-router.ts`                                                                                                                                  | `GET /api/mcp-app/resource` (fetches raw `ReadResourceResult` for `ui://` URIs only) and `POST /api/mcp-app/tool-call` (validates `(server, toolName)` against the request's tool registry, then calls the MCP tool). Both operations are timeout-wrapped via `MCP_TOOL_TIMEOUT_MS`.                              |
+| **Widget renderer**           | [`packages/chat-element/src/components/McpAppWidget.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/chat-element/src/components/McpAppWidget.tsx) | Uses [`@mcp-ui/client`'s `AppRenderer`](https://www.npmjs.com/package/@mcp-ui/client) — implements the MCP Apps JSON-RPC/postMessage protocol; proxies `onReadResource`/`onCallTool` to the backend's `/api/mcp-app/*` routes. Shows inline Approve/Reject before any widget-initiated `tools/call` is forwarded. |
+| **Sandbox proxy**             | [`frontend/public/sandbox_proxy.html`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/public/sandbox_proxy.html)                                       | Static HTML file served at `/sandbox_proxy.html`. Required by [`AppRenderer`](https://www.npmjs.com/package/@mcp-ui/client) as the inner iframe that isolates widget HTML from the host app's DOM. Served by Vite in dev and nginx in production.                                                                 |
+| **Tool introspection**        | `GET /api/tools`                                                                                                                                                               | Reports `mcpApp: { resourceUri }` alongside `name`/`description` for every tool that declared a widget — the chat panel uses this to decide whether to render `McpAppWidget` for a given tool result.                                                                                                             |
 
 ---
 
 ## 4. Security model
 
-| Risk                                                                     | Mitigation                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Widget HTML executing arbitrary JS in the host page.                     | `AppRenderer` isolates widget HTML through a double-iframe boundary (`sandbox_proxy.html`). The widget runs in a sandboxed inner iframe with no direct access to the host app's DOM or `window`.                                |
-| A widget calling arbitrary MCP tools without user knowledge.             | Every widget-initiated `tools/call` requires an explicit inline Approve/Reject prompt in `McpAppWidget` before the backend is ever contacted.                                                                                   |
-| A widget calling tools on a server the current session hasn't connected. | `POST /api/mcp-app/tool-call` independently validates `(server, toolName)` against the request's own resolved tool registry (static + session tools) — a widget cannot call a tool the session doesn't already have registered. |
-| A widget fetching arbitrary network resources via the backend proxy.     | `GET /api/mcp-app/resource` is restricted to `ui://` URIs only — any other scheme returns 400 before the MCP client is ever called.                                                                                             |
-| Credentials/session tokens leaking to the widget.                        | The widget communicates only through the `AppRenderer` JSON-RPC bridge — it never sees the bearer token, session cookie, or any other auth credential the backend uses.                                                         |
+| Risk                                                                     | Mitigation                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Widget HTML executing arbitrary JS in the host page.                     | [`AppRenderer`](https://www.npmjs.com/package/@mcp-ui/client) isolates widget HTML through a double-iframe boundary ([`sandbox_proxy.html`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/public/sandbox_proxy.html)). The widget runs in a sandboxed inner iframe with no direct access to the host app's DOM or `window`. |
+| A widget calling arbitrary MCP tools without user knowledge.             | Every widget-initiated `tools/call` requires an explicit inline Approve/Reject prompt in `McpAppWidget` before the backend is ever contacted.                                                                                                                                                                                                        |
+| A widget calling tools on a server the current session hasn't connected. | `POST /api/mcp-app/tool-call` independently validates `(server, toolName)` against the request's own resolved tool registry (static + session tools) — a widget cannot call a tool the session doesn't already have registered.                                                                                                                      |
+| A widget fetching arbitrary network resources via the backend proxy.     | `GET /api/mcp-app/resource` is restricted to `ui://` URIs only — any other scheme returns 400 before the MCP client is ever called.                                                                                                                                                                                                                  |
+| Credentials/session tokens leaking to the widget.                        | The widget communicates only through the [`AppRenderer`](https://www.npmjs.com/package/@mcp-ui/client) JSON-RPC bridge — it never sees the bearer token, session cookie, or any other auth credential the backend uses.                                                                                                                              |
 
 ---
 

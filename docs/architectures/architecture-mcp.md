@@ -18,7 +18,7 @@ result **is** the real, final outcome, and it is never streamed to the browser a
 call.
 
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
+%%{init: {"themeVariables": {"fontSize": "16px"}, "flowchart": {"nodeSpacing": 65, "rankSpacing": 90, "padding": 18}}}%%
 flowchart LR
     subgraph Browser
         UI["Chat Panel"]
@@ -28,11 +28,11 @@ flowchart LR
     subgraph Backend["Backend Server"]
         API["/api/chat<br/>(rate limiter)"]
         Agent["Agent loop<br/>(streamText)"]
-        Registry["Tool registry<br/>(viewer tools + executeCesiumCode + mcp.tools)"]
+        Registry["Tool registry<br/>(viewer tools +<br/>executeCesiumCode +<br/>mcp.tools)"]
 
         subgraph McpTools["@cesium-ai/mcp-tools"]
             Connect["createMcpTools()<br/>(startup, once)"]
-            Namespace["Namespacing + allowlist<br/>mcp__&lt;server&gt;__&lt;tool&gt;"]
+            Namespace["Namespacing + allowlist<br/>mcp__&lt;server&gt;__<br/>&lt;tool&gt;"]
             Timeout["Per-call timeout wrapper"]
         end
     end
@@ -148,9 +148,20 @@ sequenceDiagram
     participant Backend as Backend (/api/mcp/*)
     participant AuthServer as Authorization Server
 
-    User->>Browser: clicks "Connect" in Tools popover
+    Note over User,Backend: Tools popover opens
+    User->>Browser: opens Tools popover
+    Browser->>Backend: GET /api/tools
+    Backend-->>Browser: { tools: [{name, description, mcpApp?}] }
+    Browser->>Backend: GET /api/mcp/session/servers
+    Backend-->>Browser: { servers: ["server-a", ...] }
+    Browser->>Backend: GET /api/mcp/:server/status
+    Backend-->>Browser: { connected: false, error? }
+    Browser->>User: shows server list with connection status
+
+    Note over User,AuthServer: OAuth connect flow
+    User->>Browser: clicks "Connect" on a disconnected server
     Browser->>Backend: POST /api/mcp/:server/connect
-    Note over Backend: discovers scope via [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) PRM,<br/>discovers AS via [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414)/OIDC,<br/>optional: dynamic client registration ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591))
+    Note over Backend: discovers scope via RFC 9728 Protected Resource Metadata,<br/>discovers AS via RFC 8414/OIDC,<br/>optional: dynamic client registration (RFC 7591)
     Note over Backend: builds PKCE verifier+challenge,<br/>stores PendingEntry keyed by OAuth state
     Backend-->>Browser: { authorizationUrl }
     Browser->>User: opens a popup at authorizationUrl
@@ -163,14 +174,59 @@ sequenceDiagram
     Backend->>Backend: connect to MCP server with Bearer token, discover tools
     Note over Backend: tools stored in session memory,<br/>available for this browser session only
     Backend-->>Browser: 200 OK, plain HTML page (postMessage → window.close)
-    Browser->>Browser: McpConnect.tsx receives postMessage from popup window,<br/>refetches /api/tools, updates UI
+    Browser->>Backend: GET /api/mcp/:server/status
+    Backend-->>Browser: { connected: true }
+    Browser->>Backend: GET /api/tools
+    Backend-->>Browser: { tools: [..., newly connected server tools] }
+    Browser->>User: updates Tools popover — server now connected
+
+    Note over User,Backend: Disconnect
+    User->>Browser: clicks "Disconnect"
+    Browser->>Backend: POST /api/mcp/:server/disconnect
+    Backend-->>Browser: { connected: false }
+    Browser->>Backend: GET /api/tools
+    Backend-->>Browser: { tools: [..., session tools removed] }
+    Browser->>User: updates Tools popover — server disconnected
 ```
 
 Key points:
 
 - A **single shared callback URL** (`<PUBLIC_URL>/api/mcp/callback`) handles all servers — the OAuth
   `state` parameter routes each callback to the right in-flight flow.
-- OAuth tokens are kept **in process memory only** — not written to disk or sent to the browser.
+- **Token storage.** Tokens are held in a plain closure-local `OAuthState` object inside the
+  [`OAuthClientProvider`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/oauth/oauth-client-provider.ts)
+  created for each connection — one provider per `(sessionId, serverName)` pair. They are never
+  written to disk, a database, or any external store, and never sent to the browser. The entire
+  provider is garbage-collected when the connection is closed.
+- **On connect.** A [`ConnectedMcpConnection`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/storage/models.ts)
+  — holding the live MCP client, its namespaced tool set, and the `OAuthClientProvider` (and thus
+  the tokens) — is saved to [`connectedRepository`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts) keyed by `${sessionId}:${serverName}`. From
+  that point the session's tools are available via
+  [`getSessionTools(sessionId)`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts)
+  and merged into every `/api/chat` request for that session.
+- **On disconnect.**
+  [`disconnect(sessionId, serverName)`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts)
+  closes the live MCP client, removes the entry from [`connectedRepository`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts), and releases the
+  `OAuthClientProvider`. The tokens and PKCE state are discarded with it — no explicit token
+  revocation call is made.
+- **User/browser isolation.** Every route in
+  [`mcp-session-router.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/routers/mcp-session-router.ts)
+  keys off `req.sessionID` from [`express-session`](https://expressjs.com/en/resources/middleware/session/)'s signed, `httpOnly` session cookie. Two
+  different browser tabs or users always get different `sessionID` values, so one session can
+  never see or use another session's connections or tokens. The composite key
+  `${sessionId}:${serverName}` (see
+  [`session-mcp-manager.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts))
+  means the same server can be connected independently (with different credentials) by different
+  sessions simultaneously.
+- **Production persistence.** By default
+  [`createSessionMiddleware`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/session.ts)
+  uses [`express-session`](https://expressjs.com/en/resources/middleware/session/)'s built-in in-memory `MemoryStore`. All session data — and therefore
+  every active MCP connection keyed to a session — is lost if the process restarts or crashes. For
+  production, pass a durable store (e.g. `connect-redis`) via the `store` option. Note that
+  swapping the session store alone is not enough for multi-instance deployments: `SessionMcpManager`
+  holds its own in-memory state (live MCP clients, in-flight OAuth attempts), so requests for a
+  given session must consistently reach the same backend instance (sticky sessions), or each
+  instance must independently re-authenticate when it receives a session it hasn't seen.
 - The callback page is rendered directly by the backend (no redirect to "the" frontend) because this
   backend may be shared by more than one frontend origin.
 
@@ -223,15 +279,15 @@ is entirely optional.
 | **401 detection**          | [`connection/mcp-error.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/connection/mcp-error.ts)                                                       | `isUnauthorizedMcpError(error)` — detects a 401 from both `http` (`.statusCode`) and `sse` (`/\(HTTP 401\)/` message) transports, since `MCPClientError` is not exported from `@ai-sdk/mcp`.                                                                             |
 | **Session OAuth manager**  | [`session/session-mcp-manager.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-mcp-manager.ts)                                         | `createSessionMcpManager({ servers, buildRedirectUrl, ... })` — manages per-browser-session connect/disconnect/callback flows; keyed by `sessionId`. In-memory by default; `connectedDescriptorRepository`/`pendingDescriptorRepository` are pluggable extension points. |
 | **OAuth connect steps**    | [`session/session-oauth-connect.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/session-oauth-connect.ts)                                     | `beginSessionOAuthConnect` / `completeSessionOAuthConnect` — the two-phase split (start + callback) needed because the browser popup is a separate HTTP navigation from the initial POST.                                                                                |
-| **OAuth client provider**  | [`session/oauth/oauth-client-provider.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/oauth/oauth-client-provider.ts)                         | `createOAuthClientProvider()` — implements `@ai-sdk/mcp`'s `OAuthClientProvider` interface; handles dynamic registration ([RFC 7591](https://www.rfc-editor.org/rfc/rfc7591)), PKCE, and token storage via an in-memory `MemoryOAuthTokenStore`.                         |
-| **Scope discovery**        | [`session/oauth/discover-protected-resource-scope.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/oauth/discover-protected-resource-scope.ts) | `discoverProtectedResourceScope()` — fetches [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) Protected Resource Metadata and joins `scopes_supported` into a space-separated scope string. Returns `undefined` when the field is absent (never throws).               |
+| **OAuth client provider**  | [`session/oauth/oauth-client-provider.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/oauth/oauth-client-provider.ts)                         | `createOAuthClientProvider()` — implements `@ai-sdk/mcp`'s `OAuthClientProvider` interface; handles dynamic registration ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591)), PKCE, and token storage via an in-memory `MemoryOAuthTokenStore`.                  |
+| **Scope discovery**        | [`session/oauth/discover-protected-resource-scope.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/session/oauth/discover-protected-resource-scope.ts) | `discoverProtectedResourceScope()` — fetches [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) Protected Resource Metadata and joins `scopes_supported` into a space-separated scope string. Returns `undefined` when the field is absent (never throws).        |
 | **Scope resolution**       | [`resolve-mcp-scope.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/resolve-mcp-scope.ts)                                                             | `resolveMcpTools`/`resolveMcpAppTools`/`resolveMcpClient`/`isKnownMcpTool` — helpers that merge operator `mcp` tools with a request's session tools, avoiding duplicated logic in the host app.                                                                          |
 | **MCP Apps metadata**      | [`mcp-app-meta.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/mcp-app-meta.ts)                                                                       | `getMcpAppToolMeta()` — reads `_meta.ui` from a discovered tool and attaches it directly onto the `McpTool` object; `mcpAppClientCapabilities` is advertised during connect.                                                                                             |
 | **Timeout wrapper**        | [`tool-timeout.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/tool-timeout.ts)                                                                       | `withTimeout(tool, timeoutMs, name, logger)` — wraps a tool's `execute()` in a `Promise.race` against a deadline so a stalled server can't hang the agent loop indefinitely.                                                                                             |
 | **Logging**                | [`logger.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/logger.ts)                                                                                   | `McpToolsLogger` interface; `noopMcpToolsLogger` (default) and `createConsoleMcpToolsLogger(level)`. Logs every discovered tool's name + description at connect time.                                                                                                    |
 | **Backend wiring**         | [`backend/src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/index.ts)                                                                                    | Resolves `createMcpTools` once at startup, builds `createSessionMcpManager` from `authRequiredServers` when non-empty, logs per-server outcomes (connected / auth-required / error), closes all clients on `SIGTERM`/`SIGINT`.                                           |
 | **App composition**        | [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)                                                                                        | Spreads `mcp?.tools` into static tools, resolves session tools per-request via `resolveMcpTools`, approval-gates every `mcp__*` tool, mounts session + MCP-App routers, surfaces `mcp.servers` in `/health`.                                                             |
-| **Session routes**         | `@cesium-ai/server/mcp`'s `mcp-session-router.ts`                                                                                                                                               | `POST /api/mcp/:server/connect`, `GET /api/mcp/callback`, `GET /api/mcp/:server/status`, `POST /api/mcp/:server/disconnect` — the HTTP surface for the browser-side "Connect" UI flow.                                                                                   |
+| **Session routes**         | `@cesium-ai/server/mcp`'s `mcp-session-router.ts`                                                                                                                                               | `GET /api/mcp/session/servers`, `POST /api/mcp/:server/connect`, `GET /api/mcp/callback`, `GET /api/mcp/:server/status`, `POST /api/mcp/:server/disconnect` — the HTTP surface for the browser-side "Connect" UI flow.                                                   |
 | **MCP Apps bridge routes** | `@cesium-ai/server/mcp`'s `mcp-app-router.ts`                                                                                                                                                   | `GET /api/mcp-app/resource` (returns raw `ReadResourceResult` for `ui://` URIs) and `POST /api/mcp-app/tool-call` (validates against the request's tool registry before calling the MCP tool). Timeout-wrapped; `ui://` URI-gated.                                       |
 | **Tools introspection**    | `@cesium-ai/server`'s `createToolsRouter`                                                                                                                                                       | `GET /api/tools` — returns `{ tools: [{name, description, mcpApp?}] }` for the request's resolved tool set (session-cookie-aware); used by the chat panel's Tools popover.                                                                                               |
 
@@ -263,10 +319,8 @@ resources/prompts are not wired up).
 
 ## 6. Configuration
 
-| Env var               | Default | Purpose                                                                                                                                                                                                                                          |
-| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Env var / config file | Default | Purpose                                                                                                                                                                                                                                          |
-| --------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------                                                                  |
+| --------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `mcp.config.json`     | —       | Preferred config location (gitignored). JSON array of `McpServerConfig`; takes priority over `MCP_SERVERS` when present. See [`mcp.config.json.example`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/mcp.config.json.example). |
 | `MCP_SERVERS`         | `[]`    | Fallback JSON array of `McpServerConfig` set via `.env`. Ignored when `mcp.config.json` exists.                                                                                                                                                  |
 | `MCP_TOOL_TIMEOUT_MS` | `30000` | Per-tool-call timeout in milliseconds, applied to every MCP tool.                                                                                                                                                                                |
