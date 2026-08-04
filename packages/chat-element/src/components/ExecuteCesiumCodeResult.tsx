@@ -3,7 +3,7 @@ import { IconButton, Tooltip } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgCopy from "@stratakit/icons/copy.svg";
 import svgCheckmark from "@stratakit/icons/checkmark.svg";
-import { formatToolPayload } from "./format-tool-payload";
+import { formatToolPayload } from "../utils/format-tool-payload";
 import styles from "./AiChatPanel.module.css";
 
 /**

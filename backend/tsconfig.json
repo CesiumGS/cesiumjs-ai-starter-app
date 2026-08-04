@@ -20,6 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "../packages/server/routers/tools-router.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

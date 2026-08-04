@@ -888,7 +888,7 @@ function fakeViewer() {
   const entitiesById = new Map<string, unknown>();
   let nextId = 0;
   // Created once per `fakeViewer()` call (not inside `get`'s callback) so every call to
-  // `imageryLayers.get(0)` \u2014 both from generated code and from a test's later assertion \u2014
+  // `imageryLayers.get(0)` — both from generated code and from a test's later assertion —
   // resolves to the SAME fake layer/provider instance, matching the existing `terrainProvider`
   // pattern above.
   const arcGisImageryLayer = {
@@ -953,13 +953,13 @@ function fakeViewer() {
     },
     // The real, *private* `Viewer._cesiumWidget` (distinct from the public `cesiumWidget` above)
     // that `Viewer.prototype.trackedEntity`'s real setter delegates to
-    // (`this._cesiumWidget.trackedEntity = value`) \u2014 needed so the `trackedEntity` accessor
+    // (`this._cesiumWidget.trackedEntity = value`) — needed so the `trackedEntity` accessor
     // below reproduces the exact real-Cesium shape that trips the "no `set` trap" bug.
     _cesiumWidget: {
       trackedEntity: undefined as unknown,
     },
     // Mirrors real Cesium's `Viewer.prototype.trackedEntity` accessor, which internally reads/
-    // writes `this._cesiumWidget.trackedEntity` \u2014 see `createGuardedProxy`'s `set` trap doc
+    // writes `this._cesiumWidget.trackedEntity` — see `createGuardedProxy`'s `set` trap doc
     // comment in `guarded-viewer-proxy.ts` for why this specific shape used to throw "Cesium
     // sandbox access to \"_cesiumWidget\" is not allowed."
     get trackedEntity(): unknown {
@@ -2784,7 +2784,7 @@ viewer.scene.camera.flyAround(target, 0.8);`,
   // `this._cesiumWidget.trackedEntity = value`. Without an explicit `set` trap forwarding
   // `receiver = t` (the real target), the Proxy's default set semantics invoke that setter with
   // `this` = the guarded Proxy itself, so its own internal `this._cesiumWidget` read re-enters
-  // the same Proxy's `get` trap and trips `assertSandboxPropertyAllowed("_cesiumWidget")` \u2014
+  // the same Proxy's `get` trap and trips `assertSandboxPropertyAllowed("_cesiumWidget")` —
   // exactly the reported "Cesium sandbox access to \"_cesiumWidget\" is not allowed." error.
   test("assigning viewer.trackedEntity does not trip the sandbox's own underscore-property guard", async () => {
     const viewer = fakeViewer();

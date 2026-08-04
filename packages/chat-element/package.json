@@ -7,7 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/chat-client/index.ts",
-    "./react": "./src/AiChatPanel.tsx"
+    "./react": "./src/components/AiChatPanel.tsx"
   },
   "files": [
     "src"
@@ -18,9 +18,13 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@mcp-ui/client": "^7.1.1",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@mui/material": "^9.0.0",
     "@stratakit/icons": "^0.4.0",
-    "@stratakit/mui": "^0.5.0"
+    "@stratakit/mui": "^0.5.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "peerDependencies": {
     "react": ">=18.0.0",

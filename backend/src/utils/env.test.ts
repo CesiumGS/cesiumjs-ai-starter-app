@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * environment. `dotenv.config` is a no-op here since no `.env` file exists
  * relative to the test's `process.cwd()`.
  *
- * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP_SERVERS parsing),
+ * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP config typing),
  * a heavier dependency chain than before. `vi.resetModules()` forces every
  * `loadEnv()` call below to re-evaluate that whole chain from scratch, which
  * can push the first couple of dynamic imports in this file past vitest's
@@ -14,7 +14,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * contention (each in isolation is fast — see repo memory on this file's
  * pre-existing full-run timing flakiness). Bump this file's timeout rather
  * than chase a "fix" for what's fundamentally cold-module-load variance.
+ *
+ * `existsSync` is mocked to always report "not found": this repo's own
+ * repo-root `mcp.config.json` is a REAL file that otherwise gets picked up
+ * by `mcp-servers-config.ts`. Forcing `existsSync` to `false` isolates these
+ * environment tests from that file and also reinforces the pre-existing
+ * "no .env file" assumption above, since `dotenv.config` calls the same
+ * `existsSync` before its own `readFileSync`. `readFileSync` itself is left
+ * real/unmocked — nothing in this file's tests should ever reach it once
+ * `existsSync` always says "no file here".
  */
+vi.mock("node:fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs")>();
+  return { ...actual, existsSync: () => false };
+});
+
 vi.setConfig({ testTimeout: 15_000 });
 
 const ORIGINAL_ENV = { ...process.env };
@@ -220,38 +234,10 @@ describe("env parsing", () => {
     );
   });
 
-  it("defaults MCP_SERVERS to an empty array and MCP_TOOL_TIMEOUT_MS to 30000", async () => {
-    const { env } = await loadEnv({ MCP_SERVERS: undefined, MCP_TOOL_TIMEOUT_MS: undefined });
-    expect(env.MCP_SERVERS).toEqual([]);
+  it("defaults mcpServers to an empty array and MCP_TOOL_TIMEOUT_MS to 30000", async () => {
+    const { env } = await loadEnv({ MCP_TOOL_TIMEOUT_MS: undefined });
+    expect(env.mcpServers).toEqual([]);
     expect(env.MCP_TOOL_TIMEOUT_MS).toBe(30_000);
-  });
-
-  it("parses a valid MCP_SERVERS JSON array", async () => {
-    const { env } = await loadEnv({
-      MCP_SERVERS: JSON.stringify([
-        { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
-      ]),
-    });
-    expect(env.MCP_SERVERS).toEqual([
-      { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
-    ]);
-  });
-
-  it("rejects malformed MCP_SERVERS JSON", async () => {
-    await expect(loadEnv({ MCP_SERVERS: "{not json" })).rejects.toThrow(
-      /Invalid environment configuration/i,
-    );
-  });
-
-  it("rejects MCP_SERVERS with duplicate server names", async () => {
-    await expect(
-      loadEnv({
-        MCP_SERVERS: JSON.stringify([
-          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
-          { name: "docs", transport: { type: "http", url: "https://example.com/mcp" } },
-        ]),
-      }),
-    ).rejects.toThrow(/Invalid environment configuration/i);
   });
 
   it("coerces MCP_TOOL_TIMEOUT_MS to a positive integer", async () => {

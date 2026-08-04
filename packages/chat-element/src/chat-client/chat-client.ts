@@ -110,6 +110,7 @@ export class ChatClient {
       response = await fetch(this.api, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ messages: payload }),
         signal: this.abortController.signal,
       });
