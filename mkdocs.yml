@@ -65,7 +65,9 @@ nav:
           - Overview: architectures/architecture-codegen.md
           - Codegen Security: architectures/codegen-tool-security-attacks-vectors.md
           - Codegen Execution Sandbox Options: architectures/codegen-execution-sandbox-options.md
-      - MCP Support Architecture: architectures/architecture-mcp.md
+      - MCP Support:
+          - MCP Architecture: architectures/architecture-mcp.md
+          - MCP Apps Architecture: architectures/architecture-mcp-apps.md
   - Tutorials:
       - Overview: tutorials/index.md
       - Cesium Viewer Tools Tutorial: tutorials/cesium-viewer-tools-tutorial.md

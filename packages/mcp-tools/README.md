@@ -1,6 +1,6 @@
 # @cesium-ai/mcp-tools
 
-Server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](../tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
+Server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/)'s `createCesiumTools()` returns, so a host app composes them the same way:
 
 ```ts
 import { createMcpTools } from "@cesium-ai/mcp-tools";
