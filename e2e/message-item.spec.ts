@@ -132,3 +132,74 @@ test.describe("MessageItem — message-item wrapper", () => {
     expect(gap).toBeGreaterThanOrEqual(4);
   });
 });
+
+/**
+ * Mocks `/api/chat` with a canned AI SDK UI message stream (SSE `data:` lines carrying
+ * `text-delta` chunks) so the assistant bubble renders fixed markdown content without a real
+ * backend/model — see `ChatClient.parseStream`/`handleStreamLine` (`packages/chat-element/src/
+ * chat-client/chat-client.ts`) for the chunk shapes this mimics.
+ */
+async function mockAssistantMarkdownReply(page: import("@playwright/test").Page, markdown: string) {
+  await page.route("**/api/chat", (route) => {
+    const chunks: Array<Record<string, unknown>> = [
+      { type: "text-start", id: "0" },
+      { type: "text-delta", id: "0", delta: markdown },
+      { type: "text-end", id: "0" },
+      { type: "finish" },
+    ];
+    const body =
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n`).join("") + "data: [DONE]\n";
+    route.fulfill({ status: 200, contentType: "text/event-stream", body });
+  });
+}
+
+test.describe("MessageItem — assistant markdown rendering", () => {
+  test("common markdown syntax renders as real HTML elements, not literal syntax", async ({
+    page,
+  }) => {
+    await mockAssistantMarkdownReply(
+      page,
+      "**bold** and *italic* and `inline code` and [a link](https://example.com/)\n\n" +
+        "- first item\n- second item",
+    );
+
+    await page.goto("/");
+    await page.waitForSelector(INPUT_SELECTOR, { timeout: 30000 });
+    await page.locator(INPUT_SELECTOR).fill("say hi with formatting");
+    await page.locator(INPUT_SELECTOR).press("Enter");
+
+    const assistantText = page.locator('[data-testid="assistant-text"]').first();
+    await expect(assistantText).toBeVisible({ timeout: 5000 });
+
+    await expect(assistantText.locator("strong")).toHaveText("bold");
+    await expect(assistantText.locator("em")).toHaveText("italic");
+    await expect(assistantText.locator("code")).toHaveText("inline code");
+
+    const link = assistantText.locator("a", { hasText: "a link" });
+    await expect(link).toHaveAttribute("href", "https://example.com/");
+
+    await expect(assistantText.locator("li")).toHaveCount(2);
+    await expect(assistantText.locator("li").first()).toHaveText("first item");
+    await expect(assistantText.locator("li").nth(1)).toHaveText("second item");
+
+    // The raw markdown syntax characters must not leak through un-rendered.
+    await expect(assistantText).not.toContainText("**bold**");
+    await expect(assistantText).not.toContainText("[a link]");
+  });
+
+  test("GFM table syntax renders as a real <table> (proves remarkGfm is wired up)", async ({
+    page,
+  }) => {
+    await mockAssistantMarkdownReply(page, "| A | B |\n| --- | --- |\n| 1 | 2 |");
+
+    await page.goto("/");
+    await page.waitForSelector(INPUT_SELECTOR, { timeout: 30000 });
+    await page.locator(INPUT_SELECTOR).fill("show a table");
+    await page.locator(INPUT_SELECTOR).press("Enter");
+
+    const assistantText = page.locator('[data-testid="assistant-text"]').first();
+    await expect(assistantText.locator("table")).toBeVisible({ timeout: 5000 });
+    await expect(assistantText.locator("th")).toHaveCount(2);
+    await expect(assistantText.locator("td")).toHaveCount(2);
+  });
+});

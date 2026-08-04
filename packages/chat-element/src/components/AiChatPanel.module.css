@@ -45,6 +45,16 @@
   gap: 0.4rem;
 }
 
+/* Right-hand side of the header — the registered-tools toggle (when present)
+   plus the close button, grouped together instead of the tools toggle
+   living in its own row right under the chat input, where its tooltip/popup
+   could otherwise overlap the text field. */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .titleIcon {
   width: 16px;
   height: 16px;
@@ -134,6 +144,83 @@
   color: var(--stratakit-color-text-neutral-primary);
 }
 
+/* Rendered markdown for assistant/error text — overrides the plain
+   `pre-wrap` text handling above since markdown elements (paragraphs,
+   lists, etc.) already carry their own spacing. */
+.markdown {
+  white-space: normal;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre {
+  margin: 0 0 0.6em;
+}
+
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+
+.markdown li {
+  margin: 0.15em 0;
+}
+
+.markdown li > p {
+  margin: 0;
+}
+
+.markdown a {
+  color: var(--stratakit-color-text-info-base);
+}
+
+.markdown code {
+  font-family: var(--stratakit-font-family-mono);
+  font-size: 12px;
+  background: var(--stratakit-color-bg-elevation-overlay);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+}
+
+.markdown pre {
+  background: var(--stratakit-color-bg-elevation-overlay);
+  border-radius: 4px;
+  padding: 0.5em 0.65em;
+  overflow: auto;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--stratakit-color-border-neutral-muted);
+  padding-left: 0.7em;
+  color: var(--stratakit-color-text-neutral-tertiary);
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 0 0 0.6em;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--stratakit-color-border-neutral-muted);
+  padding: 0.25em 0.5em;
+}
+
 .toolCard {
   background: var(--stratakit-color-bg-info-muted);
   border: 1px solid var(--stratakit-color-border-info-muted);
@@ -189,6 +276,21 @@
   margin-top: 0.5rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--stratakit-color-border-positive-muted);
+}
+
+/*
+ * MCP Apps widget container (see McpAppWidget.tsx). `margin-top` adds
+ * deliberate breathing room below the tool's args `<pre>` beyond the
+ * `.toolCard`'s own small flex `gap` — the widget's iframe content has its
+ * own padding/chrome, so it reads as visually cramped against the args block
+ * without this extra space. `height` is set inline per-instance (tracks the
+ * widget's real reported content size instead of a fixed placeholder).
+ */
+.mcpAppWidget {
+  width: 100%;
+  margin-top: 0.75rem;
+  transition: height 0.15s ease-out;
+  overflow: hidden;
 }
 
 .codeBlock {
@@ -299,11 +401,22 @@
 
 .inputForm {
   display: flex;
+  flex-direction: column;
+}
+
+.chatInputBox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chatInputRow {
+  display: flex;
   gap: 8px;
   align-items: center;
 }
 
-.chatInput {
+.chatInputRow > :global(.MuiFormControl-root) {
   flex: 1;
   min-width: 0;
 }
@@ -341,7 +454,7 @@
   caret-color: var(--stratakit-color-text-neutral-primary);
 }
 
-.chatInput input {
+.chatInputRow input {
   padding: 8px 12px !important;
 }
 
@@ -355,6 +468,229 @@
 
 .sendButton:hover {
   box-shadow: none;
+}
+
+/* Registered-tools toggle — toolbar row below the writing area, inside the input box */
+.toolsPanel {
+  display: flex;
+  align-items: center;
+}
+
+.toolsToggle {
+  margin: 0 !important;
+  padding: 4px !important;
+}
+
+.toolsToggleIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--stratakit-color-icon-neutral-primary);
+}
+
+/* Popup surface — anchored to the toggle button in the panel header, opening
+   downward/right-aligned below it (plenty of room, unlike the old low
+   toolbar-row placement this button used to have). */
+.toolsPopover {
+  background: var(--stratakit-color-bg-elevation-overlay) !important;
+  border: 1px solid var(--stratakit-color-border-neutral-muted) !important;
+  border-radius: 6px !important;
+  margin-top: 4px;
+}
+
+/* Fixed (non-scrolling) header above .toolsList — description + search box */
+.toolsPopoverHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--stratakit-color-border-neutral-muted);
+}
+
+.toolsPopoverDescription {
+  color: var(--stratakit-color-text-neutral-tertiary);
+}
+
+/* A little breathing room around the search box's own text, on top of
+   .toolsPopoverHeader's outer padding — the default standard-variant input
+   has no horizontal padding at all, so its text otherwise sits flush against
+   the underline's edges. */
+.toolsSearchField {
+  margin-top: 2px;
+}
+
+.toolsSearchField :global(.MuiInputBase-input) {
+  padding: 6px 4px;
+}
+
+.toolsList {
+  padding: 0.6rem 0.75rem;
+  min-width: 260px;
+  max-width: 360px;
+  max-height: min(420px, calc(100vh - 160px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--stratakit-color-bg-control-scrollbar-surface) transparent;
+}
+
+.toolGroup + .toolGroup {
+  margin-top: 0.4rem;
+}
+
+.toolGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.toolGroupIcon {
+  width: 12px;
+  height: 12px;
+  color: var(--stratakit-color-icon-neutral-primary);
+  flex-shrink: 0;
+}
+
+/* MCP-server icon shown inline inside a .toolGroupTitle (e.g. "🔌 ion") —
+   sized down and colored to match the title text itself, rather than the
+   larger/brighter neutral-primary icon color used for the standalone toggle
+   button icon (.toolsToggleIcon), so it reads as part of the label instead
+   of competing with it. */
+.toolGroupTitleIcon {
+  width: 12px;
+  height: 12px;
+  color: currentcolor;
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+
+.toolGroupTitle {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stratakit-color-text-neutral-tertiary);
+  /* Shrink (with an ellipsis) instead of forcing the row to overflow —
+     otherwise a long server name/tool count can push a sibling action (e.g.
+     McpConnect's "Disconnect" button) past the popover's edge, effectively
+     hiding it behind horizontal scroll. Flex items default to a content-based
+     min-width, so `min-width: 0` is required for the ellipsis to actually
+     take effect here. */
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolGroupList {
+  list-style: none;
+  margin: 0.1rem 0 0;
+  padding: 0 0 0 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.toolGroupItem {
+  font-size: 12px;
+}
+
+.toolGroupItemName {
+  font-family: var(--stratakit-font-family-mono);
+  color: var(--stratakit-color-text-neutral-primary);
+  display: inline-block;
+  cursor: default;
+}
+
+/* Wraps a `ToolGroup`'s header alongside an inline "Disconnect" action (see
+   `McpConnect.tsx`'s `onDisconnect` prop) — the header button keeps its own
+   layout/spacing, it just no longer stretches to the full row width so the
+   button fits next to it. */
+.toolGroupHeaderRow {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.toolGroupHeaderRow > .toolGroupHeader {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.toolGroupDisconnectButton {
+  flex-shrink: 0;
+  padding: 4px !important;
+}
+
+.toolGroupDisconnectIcon {
+  /* Same height as the "Connected" status icon (.mcpConnectStatusIconOk)
+     that sits in the same header row, so the two don't look mismatched. */
+  width: 12px;
+  height: 12px;
+  color: var(--stratakit-color-icon-neutral-primary);
+}
+
+/* Tooltip showing a tool's full description — constrained so a long
+   description wraps into a readable block instead of stretching edge to
+   edge with no padding/line spacing. */
+.toolDescriptionTooltip {
+  max-width: 260px;
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+/* Per-session MCP connect entries — each rendered as its own top-level
+   `.toolGroup`/`.toolGroupHeader` row (matching RegisteredTools' `MCP: <server>`
+   groups) inside its shared popover/list, so only the status icon itself
+   needs its own styling here. */
+.mcpConnectStatusIcon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.mcpConnectStatusIconOk {
+  width: 12px;
+  height: 12px;
+  color: var(--stratakit-color-text-positive-base);
+}
+
+.mcpConnectStatusIconWarn {
+  width: 12px;
+  height: 12px;
+  color: var(--stratakit-color-text-attention-base);
+}
+
+/* Popup surface anchored to a single server's toolGroupHeader button — see McpConnect.tsx */
+.mcpConnectPopover {
+  background: var(--stratakit-color-bg-elevation-overlay) !important;
+  border: 1px solid var(--stratakit-color-border-neutral-muted) !important;
+  border-radius: 6px !important;
+  margin-bottom: 8px;
+}
+
+.mcpConnectPopoverContent {
+  padding: 0.6rem 0.75rem;
+  min-width: 220px;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.mcpConnectPopoverTitle {
+  font-weight: 600;
+  color: var(--stratakit-color-text-neutral-primary);
 }
 
 /* Collapsed toggle button — size scales with viewport width */

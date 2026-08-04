@@ -11,6 +11,9 @@
 .env.local
 .env.*.local
 
+# MCP server config (may contain server-only auth headers/OAuth client secrets)
+mcp.config.json
+
 # Dependencies
 node_modules/
 

@@ -1,9 +1,13 @@
 import { Button, Typography } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgChevronRight from "@stratakit/icons/chevron-right.svg";
-import type { ToolInvocation } from "./chat-client";
-import { formatToolPayload } from "./format-tool-payload";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { ToolInvocation } from "../chat-client";
+import { formatToolPayload } from "../utils/format-tool-payload";
 import { ExecuteCesiumCodeResult } from "./ExecuteCesiumCodeResult";
+import { McpAppWidget } from "./McpAppWidget";
+import { parseMcpToolName } from "../mcp/mcp-tool-name";
+import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import styles from "./AiChatPanel.module.css";
 
 /**
@@ -31,6 +35,9 @@ export function ToolCard({
   onApprove,
   onReject,
   codeResultToolName,
+  mcpApp,
+  mcpAppApiBase,
+  mcpAppSandboxUrl,
 }: {
   invocation: ToolInvocation;
   isPendingApproval: boolean;
@@ -43,6 +50,17 @@ export function ToolCard({
    * Omitted means no tool call gets this special-cased treatment.
    */
   codeResultToolName?: string;
+  /**
+   * MCP Apps widget metadata for THIS invocation's tool, if it declared one
+   * (see `RegisteredTool.mcpApp` / `AiChatPanel`'s tools lookup). When set
+   * (and `mcpAppApiBase` is also provided), renders the widget inline via
+   * {@link McpAppWidget} instead of/alongside the plain JSON result.
+   */
+  mcpApp?: RegisteredToolMcpApp;
+  /** Base URL for the MCP Apps widget bridge routes — see `McpAppWidget`'s `appApiBase` prop. */
+  mcpAppApiBase?: string;
+  /** Host-served sandbox proxy URL forwarded to {@link McpAppWidget}. */
+  mcpAppSandboxUrl?: URL;
 }) {
   const argsText = JSON.stringify(invocation.args, null, 2);
   const hasResult = invocation.state === "result" && invocation.result !== undefined;
@@ -68,6 +86,7 @@ export function ToolCard({
       : 0;
   const combinedLength = argsText.length + resultText.length + codeLength;
   const defaultOpen = isPendingApproval || combinedLength <= AUTO_EXPAND_THRESHOLD;
+  const parsedMcpName = parseMcpToolName(invocation.toolName);
 
   return (
     <>
@@ -77,6 +96,17 @@ export function ToolCard({
           [tool] {invocation.toolName}
         </summary>
         <pre className={styles.toolArgs}>{argsText}</pre>
+        {mcpApp && mcpAppApiBase && parsedMcpName && (
+          <McpAppWidget
+            appApiBase={mcpAppApiBase}
+            server={parsedMcpName.server}
+            toolName={parsedMcpName.displayName}
+            resourceUri={mcpApp.resourceUri}
+            toolInput={invocation.args as Record<string, unknown> | undefined}
+            toolResult={hasResult ? (invocation.result as unknown as CallToolResult) : undefined}
+            sandboxUrl={mcpAppSandboxUrl}
+          />
+        )}
         {hasResult &&
           (isCodeResult ? (
             <ExecuteCesiumCodeResult result={invocation.result} />

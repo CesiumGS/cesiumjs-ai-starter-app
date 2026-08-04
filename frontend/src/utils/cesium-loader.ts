@@ -5,6 +5,14 @@ if (config.cesiumIonToken) {
   Ion.defaultAccessToken = config.cesiumIonToken;
 }
 
+// Only needed when the token above was issued by a non-production ion server (e.g. an internal or
+// staging ion environment) — otherwise every asset request 401s against the default
+// production api.cesium.com server, since Cesium has no way to infer the issuing server from the
+// token itself.
+if (config.cesiumIonServerUrl) {
+  Ion.defaultServer = config.cesiumIonServerUrl;
+}
+
 export function initViewer(container: HTMLElement): Viewer {
   return new Viewer(container, {
     terrain: Terrain.fromWorldTerrain(),

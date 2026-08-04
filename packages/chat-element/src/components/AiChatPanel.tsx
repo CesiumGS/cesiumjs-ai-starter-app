@@ -1,12 +1,15 @@
-import { useReducer, useState, useRef, useEffect, useCallback } from "react";
+import { useReducer, useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button, Fab, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
-import { ChatClient } from "./chat-client";
-import type { ToolExecutionOutcome } from "./chat-client";
+import { ChatClient } from "../chat-client";
+import type { ToolExecutionOutcome } from "../chat-client";
 import { MessageItem } from "./MessageItem";
-import { spanVariantMapping } from "./ui-constants";
+import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
+import { RegisteredTools } from "./RegisteredTools";
+import { useRegisteredTools } from "../mcp/use-registered-tools";
+import { spanVariantMapping } from "../utils/ui-constants";
 import styles from "./AiChatPanel.module.css";
 
 const MIN_WIDTH = 280;
@@ -14,7 +17,51 @@ const MAX_WIDTH = 800;
 const DEFAULT_WIDTH = 380;
 
 export interface AiChatPanelProps {
+  /**
+   * Base URL this app's backend is reachable at, e.g. `http://localhost:3001`
+   * (or a relative path). When set, it's joined with each route group's own
+   * REST path to default `apiEndpoint` (`${apiBase}/api/chat`),
+   * `toolsApiEndpoint` (`${apiBase}/api/tools`), `mcpConnectApiBase`
+   * (`${apiBase}/api/mcp`), and `mcpAppApiBase` (`${apiBase}/api/mcp-app`) —
+   * the convention this repo's own `@cesium-ai/server` follows. Pass any of
+   * those four props individually to override just that one endpoint (e.g. a
+   * separate service for MCP connect), or omit `apiBase` and set each one by
+   * hand for a host with no single shared base.
+   */
+  apiBase?: string;
+  /** Defaults to `${apiBase}/api/chat`, or `/api/chat` if neither is set. */
   apiEndpoint?: string;
+  /**
+   * Endpoint reporting the host's full registered tool set (built-in tools
+   * plus any dynamically-connected MCP tools), shaped `{ tools:
+   * RegisteredTool[] }` — see `fetchRegisteredTools`/`backend/src/app.ts`'s
+   * `GET /api/tools` for this repo's own implementation. Defaults to
+   * `${apiBase}/api/tools`. When neither is set, the tools disclosure in the
+   * panel header isn't rendered at all.
+   */
+  toolsApiEndpoint?: string;
+  /**
+   * Base URL for session-scoped, user-initiated MCP OAuth connect routes
+   * (e.g. "Connect to Cesium ion") — see `@cesium-ai/server`'s
+   * `mcp-session-router.ts`. Defaults to `${apiBase}/api/mcp`. When neither is
+   * set (or the host reports no session-connectable servers), no connect UI
+   * is rendered.
+   */
+  mcpConnectApiBase?: string;
+  /**
+   * Base URL for MCP Apps widget bridge routes (fetching a tool's `ui://`
+   * resource, and calling tools back on its own server from inside the
+   * rendered widget) — see `@cesium-ai/server`'s `mcp-app-router.ts`.
+   * Defaults to `${apiBase}/api/mcp-app`. When neither is set, a tool result
+   * that declares an MCP Apps widget (via `toolsApiEndpoint`'s `mcpApp`
+   * field) renders only its plain JSON result, same as any other tool.
+   */
+  mcpAppApiBase?: string;
+  /**
+   * URL of the host-served MCP Apps sandbox proxy. Defaults to
+   * `/sandbox_proxy.html` on the current origin.
+   */
+  mcpAppSandboxUrl?: URL;
   onToolCall?: (toolName: string, args: unknown) => Promise<unknown>;
   /**
    * Fired whenever a server-resolved tool result (`tool-output-available`)
@@ -132,7 +179,12 @@ function useChatClient(
 }
 
 export function AiChatPanel({
-  apiEndpoint = "/api/chat",
+  apiBase,
+  apiEndpoint,
+  toolsApiEndpoint,
+  mcpConnectApiBase,
+  mcpAppApiBase,
+  mcpAppSandboxUrl,
   onToolCall,
   onServerToolResult,
   onApprovalRequired,
@@ -143,8 +195,22 @@ export function AiChatPanel({
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const resolvedApiEndpoint = apiEndpoint ?? (apiBase ? `${apiBase}/api/chat` : "/api/chat");
+  const resolvedToolsApiEndpoint =
+    toolsApiEndpoint ?? (apiBase ? `${apiBase}/api/tools` : undefined);
+  const resolvedMcpConnectApiBase =
+    mcpConnectApiBase ?? (apiBase ? `${apiBase}/api/mcp` : undefined);
+  const resolvedMcpAppApiBase = mcpAppApiBase ?? (apiBase ? `${apiBase}/api/mcp-app` : undefined);
+  const { tools: registeredTools, refetchTools } = useRegisteredTools(resolvedToolsApiEndpoint);
+  const mcpAppByToolName = useMemo(() => {
+    const map = new Map<string, RegisteredToolMcpApp>();
+    for (const tool of registeredTools) {
+      if (tool.mcpApp) map.set(tool.name, tool.mcpApp);
+    }
+    return map;
+  }, [registeredTools]);
   const { client, forceUpdate } = useChatClient(
-    apiEndpoint,
+    resolvedApiEndpoint,
     onToolCall,
     onServerToolResult,
     onApprovalRequired,
@@ -242,11 +308,20 @@ export function AiChatPanel({
             AI Assistant
           </Typography>
         </div>
-        <Tooltip title="Close chat panel">
-          <IconButton aria-label="Close chat panel" size="small" onClick={() => setIsOpen(false)}>
-            <Icon href={svgDismiss} />
-          </IconButton>
-        </Tooltip>
+        <div className={styles.headerActions}>
+          {(resolvedToolsApiEndpoint || resolvedMcpConnectApiBase) && (
+            <RegisteredTools
+              tools={registeredTools}
+              refetchTools={refetchTools}
+              mcpConnectApiBase={resolvedMcpConnectApiBase}
+            />
+          )}
+          <Tooltip title="Close chat panel">
+            <IconButton aria-label="Close chat panel" size="small" onClick={() => setIsOpen(false)}>
+              <Icon href={svgDismiss} />
+            </IconButton>
+          </Tooltip>
+        </div>
       </div>
 
       <div className={styles.messages} ref={messagesRef}>
@@ -265,6 +340,9 @@ export function AiChatPanel({
                 onReject: handleReject,
               }}
               codeResultToolName={codeResultToolName}
+              mcpAppByToolName={mcpAppByToolName}
+              mcpAppApiBase={resolvedMcpAppApiBase}
+              mcpAppSandboxUrl={mcpAppSandboxUrl}
             />
           ))
         )}
@@ -272,29 +350,31 @@ export function AiChatPanel({
 
       <div className={styles.inputArea}>
         <form className={styles.inputForm} onSubmit={handleSubmit}>
-          <div className={styles.chatInput} data-testid="chat-input-wrapper">
-            <TextField
-              value={client.input}
-              onChange={(e) => {
-                client.input = e.target.value;
-                forceUpdate();
-              }}
-              placeholder="Ask about the map…"
-              disabled={client.isLoading}
-              aria-label="Chat message"
-              size="small"
-              fullWidth
-              className={styles.textField}
-            />
+          <div className={styles.chatInputBox} data-testid="chat-input-wrapper">
+            <div className={styles.chatInputRow}>
+              <TextField
+                value={client.input}
+                onChange={(e) => {
+                  client.input = e.target.value;
+                  forceUpdate();
+                }}
+                placeholder="Ask about the map…"
+                disabled={client.isLoading}
+                aria-label="Chat message"
+                size="small"
+                fullWidth
+                className={styles.textField}
+              />
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={client.isLoading || !client.input.trim()}
+                className={styles.sendButton}
+              >
+                {client.isLoading ? "…" : "Send"}
+              </Button>
+            </div>
           </div>
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={client.isLoading || !client.input.trim()}
-            className={styles.sendButton}
-          >
-            {client.isLoading ? "…" : "Send"}
-          </Button>
         </form>
       </div>
     </div>

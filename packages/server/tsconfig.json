@@ -20,6 +20,12 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "routers/chat-router.test.ts",
+    "routers/chat-router.ts",
+    "routers/mcp-session-router.ts",
+    "routers/mcp-app-router.ts"
+  ],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
 }

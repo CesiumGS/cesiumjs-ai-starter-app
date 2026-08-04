@@ -92,16 +92,34 @@ export interface ChatRouterOptions {
    * `/api/chat` then returns a structured `NOT_CONFIGURED` payload.
    */
   model?: LanguageModel;
-  /** Tool registry exposed to the agent loop (e.g. `createCesiumTools()`). */
-  tools: ToolSet;
+  /**
+   * Tool registry exposed to the agent loop (e.g. `createCesiumTools()`).
+   * Pass a function instead of a plain object to resolve the tool set fresh
+   * per request — e.g. to merge in per-session tools (like a user-initiated
+   * MCP connection) that aren't known at server-construction time. Called
+   * once per `/api/chat` request, after request validation.
+   */
+  tools: ToolSet | ((req: Request) => ToolSet | Promise<ToolSet>);
   /** System prompt override. Defaults to the package's CesiumJS preamble. */
   system?: string;
   /** Max agent steps per request. */
   maxSteps?: number;
   /** Max messages accepted per request. Defaults to 100. */
   maxMessages?: number;
-  /** Per-tool human-in-the-loop approval gating — see {@link RunAgentOptions.toolApproval}. */
+  /**
+   * Per-tool human-in-the-loop approval gating — see
+   * {@link RunAgentOptions.toolApproval}. Ignored when `resolveToolApproval`
+   * is also provided.
+   */
   toolApproval?: ToolApprovalConfiguration<ToolSet, never>;
+  /**
+   * Derives approval config from the request's resolved `tools` instead of a
+   * fixed `toolApproval` — needed when `tools` is dynamic (e.g. gating any
+   * tool name matching a naming convention, since per-session tool names
+   * aren't known at server-construction time). Takes precedence over
+   * `toolApproval` when both are set.
+   */
+  resolveToolApproval?: (tools: ToolSet) => ToolApprovalConfiguration<ToolSet, never>;
   /** Tool names to stop the loop after — see {@link RunAgentOptions.stopAfterTools}. */
   stopAfterTools?: readonly string[];
 }
@@ -124,6 +142,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     maxSteps,
     maxMessages = DEFAULT_MAX_MESSAGES,
     toolApproval,
+    resolveToolApproval,
     stopAfterTools,
   } = options;
 
@@ -158,13 +177,18 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     }
 
     try {
+      const resolvedTools = typeof tools === "function" ? await tools(req) : tools;
+      const resolvedToolApproval = resolveToolApproval
+        ? resolveToolApproval(resolvedTools)
+        : toolApproval;
+
       const result = await runAgent({
         messages: parsed.data.messages as unknown as UIMessage[],
         model,
-        tools,
+        tools: resolvedTools,
         system,
         maxSteps,
-        toolApproval,
+        toolApproval: resolvedToolApproval,
         stopAfterTools,
       });
 
