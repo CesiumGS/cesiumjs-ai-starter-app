@@ -10,7 +10,11 @@ export const MINIMAL_VALID_ENTITY_ADD_DATA: Record<(typeof entityAddTypeValues)[
       image: "https://example.com/icon.png",
     },
     label: { id: "l1", position: { longitude: 0, latitude: 0 }, text: "Label" },
-    model: { id: "m1", position: { longitude: 0, latitude: 0 }, uri: "https://example.com/model.glb" },
+    model: {
+      id: "m1",
+      position: { longitude: 0, latitude: 0 },
+      uri: "https://example.com/model.glb",
+    },
     polygon: {
       id: "poly1",
       positions: [
