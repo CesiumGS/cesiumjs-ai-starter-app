@@ -4,6 +4,25 @@ import {
   DEFAULT_ENTITY_ADD_FIELD_DESCRIPTIONS,
   defaultEntityAddInputSchema,
 } from "./entityAdd.js";
+import { entityAddTypeValues } from "./entityAdd.schema.js";
+import { MINIMAL_VALID_ENTITY_ADD_DATA } from "./entityAdd.fixtures.js";
+
+describe("entityAdd covers every supported entity type", () => {
+  for (const type of entityAddTypeValues) {
+    test(`"${type}" has a schema option and accepts its minimal valid payload`, () => {
+      const option = defaultEntityAddInputSchema.options.find(
+        (candidate) => candidate.shape.type.value === type,
+      );
+      expect(option, `no schema option found for type "${type}"`).toBeDefined();
+
+      const result = defaultEntityAddInputSchema.safeParse({
+        type,
+        data: MINIMAL_VALID_ENTITY_ADD_DATA[type],
+      });
+      expect(result.success, `expected minimal "${type}" payload to be valid`).toBe(true);
+    });
+  }
+});
 
 describe("buildEntityAddInputSchema", () => {
   test("with no overrides, top-level fields carry default hints", () => {

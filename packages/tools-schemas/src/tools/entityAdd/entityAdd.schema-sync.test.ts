@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { defaultEntityAddInputSchema } from "./entityAdd.js";
-import { entityAddInputShape } from "./entityAdd.schema.js";
+import { entityAddInputShape, entityAddTypeValues } from "./entityAdd.schema.js";
+import { MINIMAL_VALID_ENTITY_ADD_DATA } from "./entityAdd.fixtures.js";
 
 const CASES: ReadonlyArray<{ name: string; input: unknown; valid: boolean }> = [
   {
@@ -55,6 +56,12 @@ const CASES: ReadonlyArray<{ name: string; input: unknown; valid: boolean }> = [
     input: {},
     valid: false,
   },
+  // Every entity type's minimal valid payload, so frontend/backend sync is checked for all variants.
+  ...entityAddTypeValues.map((type) => ({
+    name: `${type} variant valid (minimal payload)`,
+    input: { type, data: MINIMAL_VALID_ENTITY_ADD_DATA[type] },
+    valid: true,
+  })),
 ];
 
 describe("entityAdd schema sync (frontend <-> backend)", () => {
