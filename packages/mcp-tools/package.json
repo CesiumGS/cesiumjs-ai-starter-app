@@ -16,7 +16,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "rimraf dist && tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "typecheck:test": "tsc -p tsconfig.typecheck.json",
     "clean": "rimraf dist"

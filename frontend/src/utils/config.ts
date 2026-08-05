@@ -45,7 +45,22 @@ function resolveSandboxAllowedNetworkOrigins(): string[] {
 
 export const config = {
   cesiumIonToken: import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN as string | undefined,
-  chatApiEndpoint: `${apiBaseUrl}/api/chat`,
+  /**
+   * Cesium ion API server the token above is validated against. Cesium defaults this to the
+   * production `https://api.cesium.com/` server — a token issued by a different ion server (e.g.
+   * an internal or staging ion environment) will 401 on every asset request unless this
+   * is overridden to match that token's actual issuer. Leave unset for a normal ion.cesium.com
+   * token.
+   */
+  cesiumIonServerUrl: import.meta.env.VITE_CESIUM_ION_SERVER_URL as string | undefined,
+  /**
+   * Base URL this app's single backend (`@cesium-ai/server`) is reachable at.
+   * Passed straight through as `AiChatPanel`'s `apiBase` prop, which derives
+   * the chat, tools, MCP connect, and MCP Apps endpoints from it by
+   * convention (`/api/chat`, `/api/tools`, `/api/mcp`, `/api/mcp-app`) — see
+   * `@cesium-ai/chat-element`'s `AiChatPanelProps.apiBase`.
+   */
+  apiBase: apiBaseUrl,
   logLevel: resolveLogLevel(),
   sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
 };

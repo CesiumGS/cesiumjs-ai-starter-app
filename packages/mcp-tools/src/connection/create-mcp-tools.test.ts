@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { Tool } from "ai";
-import type { McpServerConfig } from "./types.js";
+import type { McpServerConfig } from "../types.js";
 
 const { createMCPClientMock } = vi.hoisted(() => ({
   createMCPClientMock: vi.fn(),
@@ -8,10 +8,13 @@ const { createMCPClientMock } = vi.hoisted(() => ({
 
 vi.mock("@ai-sdk/mcp", () => ({
   createMCPClient: createMCPClientMock,
+  auth: vi.fn(),
+  UnauthorizedError: class UnauthorizedError extends Error {},
+  mcpAppClientCapabilities: { extensions: { "io.modelcontextprotocol/ui": { mimeTypes: [] } } },
 }));
 
 const { createMcpTools, DEFAULT_MCP_TOOL_TIMEOUT_MS } = await import("./create-mcp-tools.js");
-const { noopMcpToolsLogger } = await import("./logger.js");
+const { noopMcpToolsLogger } = await import("../logger.js");
 
 function fakeTool(overrides: Partial<Tool> = {}): Tool {
   return {
@@ -83,6 +86,34 @@ describe("createMcpTools", () => {
       { name: "healthy", connected: true, toolNames: ["mcp__healthy__ping"] },
     ]);
     expect(Object.keys(handle.tools)).toEqual(["mcp__healthy__ping"]);
+    expect(handle.authRequiredServers).toEqual([]);
+  });
+
+  it("routes a server whose connection fails with a 401 into authRequiredServers instead of a hard failure", async () => {
+    class FakeMcpClientError extends Error {
+      statusCode: number;
+      constructor(message: string, statusCode: number) {
+        super(message);
+        this.name = "MCPClientError";
+        this.statusCode = statusCode;
+      }
+    }
+    const ionServer = mcpServer("ion");
+    createMCPClientMock
+      .mockRejectedValueOnce(new FakeMcpClientError("(HTTP 401): unauthorized", 401))
+      .mockResolvedValueOnce({
+        tools: vi.fn(async () => ({ search: fakeTool() })),
+        close: vi.fn(async () => {}),
+      });
+
+    const handle = await createMcpTools({
+      servers: [ionServer, mcpServer("docs")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.servers[0]).toMatchObject({ name: "ion", connected: false, authRequired: true });
+    expect(handle.authRequiredServers).toEqual([ionServer]);
+    expect(Object.keys(handle.tools)).toEqual(["mcp__docs__search"]);
   });
 
   it("prefixes tool names so identical tool names from two servers never collide", async () => {
@@ -182,6 +213,46 @@ describe("createMcpTools", () => {
         headers: { Authorization: "Bearer secret" },
       },
       clientName: "cesium-ai-mcp-tools",
+      capabilities: expect.any(Object),
     });
+  });
+
+  it("exposes a connected server's live client via getClient, and undefined for one that never connected", async () => {
+    const close = vi.fn(async () => {});
+    const client = { tools: vi.fn(async () => ({ search: fakeTool() })), close };
+    createMCPClientMock.mockResolvedValueOnce(client);
+    createMCPClientMock.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+
+    const handle = await createMcpTools({
+      servers: [mcpServer("docs"), mcpServer("broken")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.getClient("docs")).toBe(client);
+    expect(handle.getClient("broken")).toBeUndefined();
+    expect(handle.getClient("unknown-server")).toBeUndefined();
+  });
+
+  it("attaches MCP Apps widget metadata directly onto the discovered tool as `mcpApp`", async () => {
+    createMCPClientMock.mockResolvedValueOnce({
+      tools: vi.fn(async () => ({
+        launch_importer: fakeTool({
+          _meta: { ui: { resourceUri: "ui://ion/importer", visibility: ["model", "app"] } },
+        } as Partial<Tool>),
+        plain_tool: fakeTool(),
+      })),
+      close: vi.fn(async () => {}),
+    });
+
+    const handle = await createMcpTools({
+      servers: [mcpServer("ion")],
+      logger: noopMcpToolsLogger,
+    });
+
+    expect(handle.tools["mcp__ion__launch_importer"]?.mcpApp).toEqual({
+      resourceUri: "ui://ion/importer",
+      visibility: ["model", "app"],
+    });
+    expect(handle.tools["mcp__ion__plain_tool"]?.mcpApp).toBeUndefined();
   });
 });

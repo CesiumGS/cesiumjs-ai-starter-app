@@ -1,15 +1,24 @@
 import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
-import { createChatRouter } from "@cesium-ai/server";
+import { createChatRouter, createToolsRouter } from "@cesium-ai/server";
+import { createMcpAppRouter, createMcpSessionRouter } from "@cesium-ai/server/mcp";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
-import type { McpToolsHandle } from "@cesium-ai/mcp-tools";
-import type { LanguageModel, ToolSet } from "ai";
+import {
+  resolveMcpTools,
+  type McpToolsHandle,
+  type McpTool,
+  type SessionMcpManager,
+} from "@cesium-ai/mcp-tools";
+import type { LanguageModel, ToolApprovalConfiguration, ToolSet } from "ai";
 import cors from "cors";
-import express, { type Express } from "express";
+import express, { type Express, type Request } from "express";
+import type { SessionOptions } from "express-session";
 import type { Env } from "./utils/env.js";
+import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
+import { createSessionMiddleware } from "./utils/session.js";
 
 export interface BackendAppOptions {
   /**
@@ -33,36 +42,74 @@ export interface BackendAppOptions {
    * MCP servers configured — a no-op, zero-behavior-change default.
    */
   mcp?: McpToolsHandle;
+  /**
+   * Manages user-initiated, per-browser-session MCP OAuth connections (e.g. a
+   * "Connect to Cesium ion" UI button) — distinct from `mcp`'s
+   * operator-configured, always-on servers. When provided, mounts
+   * `/api/mcp/*` routes and requires session middleware, and every chat
+   * request's tool set is augmented with that session's connected tools.
+   * Omit to run with no session-connectable MCP servers — a no-op default.
+   */
+  sessionMcp?: SessionMcpManager;
+  /**
+   * `express-session` store for session middleware. Only meaningful alongside
+   * `sessionMcp`. Defaults to the in-memory `MemoryStore` — pass a real store
+   * (e.g. `connect-redis`) so sessions survive a restart / are shared across
+   * replicas in production. See `./utils/session.js` for why this alone
+   * doesn't make session-scoped MCP connections multi-instance-safe.
+   */
+  sessionStore?: SessionOptions["store"];
 }
 
 /**
  * Composes the backend Express application: CORS, JSON body parsing, the
- * `/health` probe, the per-IP rate limiter, and the chat router with this app's
- * curated CesiumJS tool surface.
+ * `/health` probe, `/api/tools` (introspection of the resolved tool registry),
+ * the per-IP rate limiter, and the chat router with this app's curated
+ * CesiumJS tool surface.
  *
  * Split out from {@link file://./index.ts} (which resolves env + model and calls
  * `listen`) so the fully-wired app — real middleware in real order, real tool
  * registry — can be started on an ephemeral port and driven over HTTP in tests.
  */
-export function createBackendApp({ env, model, mcp }: BackendAppOptions): Express {
+export function createBackendApp({
+  env,
+  model,
+  mcp,
+  sessionMcp,
+  sessionStore,
+}: BackendAppOptions): Express {
   const app = express();
 
-  app.use(cors({ origin: env.ALLOWED_ORIGIN }));
+  app.use(cors({ origin: env.ALLOWED_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "256kb" }));
 
-  app.get("/health", (_req, res) => {
-    res.json({
-      status: "ok",
-      provider: env.AI_PROVIDER,
-      providerConfigured: model !== undefined,
-      ...(mcp ? { mcpServers: mcp.servers } : {}),
-    });
-  });
+  if (sessionMcp) {
+    if (!env.SESSION_SECRET) {
+      throw new Error(
+        "SESSION_SECRET must be set when session-scoped MCP connections are enabled.",
+      );
+    }
+    // Marks the session cookie `Secure` (HTTPS-only) whenever `PUBLIC_URL` is
+    // itself HTTPS — avoids sending the session cookie in plaintext over the
+    // network in any deployment reachable at an https:// URL, with no extra
+    // env var needed. Stays `false` for local http://localhost dev.
+    const secure = env.PUBLIC_URL.startsWith("https://");
+    app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, secure, store: sessionStore }));
+    app.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+    // No `frontendUrl` needed: `/api/mcp/callback` renders its own plain
+    // result page directly (see @cesium-ai/server/mcp's mcp-session-router.ts)
+    // rather than redirecting back to "the" frontend — this app may be
+    // shared by more than one frontend origin, and there's no single one
+    // always correct to bounce back to.
+    app.use(createMcpSessionRouter(sessionMcp));
+  }
+
+  app.use(createHealthRouter({ env, modelConfigured: model !== undefined, mcp }));
 
   app.use("/api/chat", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
   // Curate tools via ENABLED_CESIUM_TOOLS allowlist; add custom flyTo schema.
   // Only include executeCesiumCode when a model is configured.
-  const tools: ToolSet = {
+  const staticTools: ToolSet = {
     ...createCesiumTools({
       enabled: ENABLED_CESIUM_TOOLS,
       flyTo: { inputSchema: flyToInputSchema },
@@ -86,23 +133,53 @@ export function createBackendApp({ env, model, mcp }: BackendAppOptions): Expres
     ...(mcp?.tools ?? {}),
   };
 
+  // Resolved per-request rather than once: a request's own session may have
+  // user-initiated MCP connections (see `sessionMcp`) not known statically
+  // at server-construction time. `createChatRouter`'s `tools` option accepts
+  // a `(req) => ToolSet | Promise<ToolSet>` for exactly this reason.
+  const buildTools = async (req: Request): Promise<Record<string, McpTool>> => ({
+    ...staticTools,
+    ...(await resolveMcpTools({ sessionMcp }, req.sessionID)),
+  });
+
+  app.use("/api/tools", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+  app.use(createToolsRouter({ buildTools }));
+
+  // Bridge for a rendered MCP App widget's own host<->iframe postMessage
+  // protocol: fetching its `ui://` HTML resource and (after the frontend's
+  // own inline user-approval step) calling tools back on its own MCP server.
+  // Mounted whenever either kind of MCP connection exists — a no-op 404 for
+  // every route otherwise.
+  if (mcp || sessionMcp) {
+    app.use("/api/mcp-app", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+    app.use(createMcpAppRouter({ mcp, sessionMcp, timeoutMs: env.MCP_TOOL_TIMEOUT_MS }));
+  }
+
   app.use(
     createChatRouter({
       model,
-      tools,
-      toolApproval: {
+      tools: buildTools,
+      resolveToolApproval: (resolvedTools): ToolApprovalConfiguration<ToolSet, never> => ({
         // Gate executeCesiumCode behind a human approval decision — the current,
         // non-deprecated replacement for setting `needsApproval` directly on the
         // tool object (see `./tools/execute-cesium-code-tool.ts`).
         [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval",
-        // Every MCP tool is approval-gated by default too, for the same reason:
-        // it's third-party code this app doesn't control. Unlike
-        // executeCesiumCode, an MCP tool's `execute()` result is already the
-        // real, final outcome (no later client-side execution phase), so this
-        // doesn't need the extra `stopAfterTools`/response-suppression
+        // Every MCP tool is approval-gated too, for the same reason: it's
+        // third-party code this app doesn't control. Unlike executeCesiumCode,
+        // an MCP tool's `execute()` result is already the real, final outcome,
+        // so this doesn't need the extra `stopAfterTools`/response-suppression
         // machinery executeCesiumCode required (see @cesium-ai/server's README).
-        ...Object.fromEntries(Object.keys(mcp?.tools ?? {}).map((name) => [name, "user-approval"])),
-      },
+        //
+        // Matched by the `mcp__<server>__<tool>` naming convention rather than
+        // a fixed list, since `resolvedTools` also includes this request's own
+        // session's user-initiated MCP connections, not known statically at
+        // server-construction time.
+        ...Object.fromEntries(
+          Object.keys(resolvedTools)
+            .filter((name) => name.startsWith("mcp__"))
+            .map((name) => [name, "user-approval"]),
+        ),
+      }),
       // executeCesiumCode's server-side result only means the generated code
       // passed static verification — not that it has actually run
       // successfully in the browser sandbox yet (that happens client-side,
