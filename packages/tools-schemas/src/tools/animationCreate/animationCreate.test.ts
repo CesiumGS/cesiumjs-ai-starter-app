@@ -25,6 +25,18 @@ describe("buildAnimationCreateInputSchema", () => {
     expect(schema.shape.showPath.description).toBe(
       DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.showPath,
     );
+    expect(schema.shape.pathLeadTime.description).toBe(
+      DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.pathLeadTime,
+    );
+    expect(schema.shape.pathTrailTime.description).toBe(
+      DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.pathTrailTime,
+    );
+    expect(schema.shape.pathWidth.description).toBe(
+      DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.pathWidth,
+    );
+    expect(schema.shape.pathColor.description).toBe(
+      DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.pathColor,
+    );
     expect(schema.shape.modelPreset.description).toBe(
       DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS.modelPreset,
     );

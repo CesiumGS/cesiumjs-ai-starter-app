@@ -19,7 +19,7 @@ import {
   type FlyToInput,
 } from "@cesium-ai/tools-schemas/schemas";
 import { parseArgs } from "../utils/validate.js";
-import { ok, fail } from "../utils/result.js";
+import { success, failure } from "../utils/result.js";
 import type { ToolExecutor } from "../types.js";
 
 /** Camera height above the ellipsoid, in metres, used when the model omits one. */
@@ -72,7 +72,7 @@ export function createFlyToExecutor<Args extends FlyToInput = FlyToInput>(
 
   return (viewer: Viewer, rawArgs: unknown) => {
     const parsed = parseArgs(shape, rawArgs);
-    if (!parsed.ok) return Promise.resolve(fail(`Invalid flyTo arguments: ${parsed.error}`));
+    if (!parsed.ok) return Promise.resolve(failure(`Invalid flyTo arguments: ${parsed.error}`));
 
     const { latitude, longitude, altitude } = parsed.data;
     const extraOptions = buildFlyToOptions?.(parsed.data) ?? {};
@@ -82,11 +82,11 @@ export function createFlyToExecutor<Args extends FlyToInput = FlyToInput>(
         viewer.camera.flyTo({
           ...extraOptions,
           destination: Cartesian3.fromDegrees(longitude, latitude, altitude ?? DEFAULT_ALTITUDE),
-          complete: () => resolve(ok()),
-          cancel: () => resolve(fail("Camera flight was cancelled before completing.")),
+          complete: () => resolve(success()),
+          cancel: () => resolve(failure("Camera flight was cancelled before completing.")),
         });
       } catch (err) {
-        resolve(fail(err instanceof Error ? err.message : String(err)));
+        resolve(failure(err instanceof Error ? err.message : String(err)));
       }
     });
   };
@@ -136,7 +136,7 @@ export function createCameraSetViewExecutor<Args extends CameraSetViewInput = Ca
   return (viewer: Viewer, rawArgs: unknown) => {
     const parsed = parseArgs(shape, rawArgs);
     if (!parsed.ok)
-      return Promise.resolve(fail(`Invalid cameraSetView arguments: ${parsed.error}`));
+      return Promise.resolve(failure(`Invalid cameraSetView arguments: ${parsed.error}`));
 
     const { destination, orientation } = parsed.data;
     const extraOptions = buildSetViewOptions?.(parsed.data) ?? {};
@@ -156,9 +156,9 @@ export function createCameraSetViewExecutor<Args extends CameraSetViewInput = Ca
             }
           : undefined,
       });
-      return Promise.resolve(ok());
+      return Promise.resolve(success());
     } catch (err) {
-      return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+      return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
     }
   };
 }
@@ -170,7 +170,7 @@ export const cameraSetView: ToolExecutor = createCameraSetViewExecutor();
 export const cameraLookAtTransform: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(cameraLookAtTransformInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid cameraLookAtTransform arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid cameraLookAtTransform arguments: ${parsed.error}`));
   }
 
   const { target, offset } = parsed.data;
@@ -189,9 +189,9 @@ export const cameraLookAtTransform: ToolExecutor = (viewer, rawArgs) => {
         offset?.range ?? 1000,
       ),
     );
-    return Promise.resolve(ok());
+    return Promise.resolve(success());
   } catch (err) {
-    return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+    return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
   }
 };
 
@@ -211,12 +211,12 @@ const orbitRemovers = new WeakMap<Viewer, () => void>();
 export const cameraOrbit: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(cameraOrbitInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid cameraOrbit arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid cameraOrbit arguments: ${parsed.error}`));
   }
 
   stopOrbit(viewer);
   if (parsed.data.action === "stop") {
-    return Promise.resolve(ok());
+    return Promise.resolve(success());
   }
 
   const speed = parsed.data.speed ?? 1;
@@ -225,7 +225,7 @@ export const cameraOrbit: ToolExecutor = (viewer, rawArgs) => {
     viewer.camera.rotateRight(sign * speed * ORBIT_RADIANS_PER_TICK);
   });
   orbitRemovers.set(viewer, remove);
-  return Promise.resolve(ok());
+  return Promise.resolve(success());
 };
 
 function stopOrbit(viewer: Viewer): void {
@@ -240,12 +240,12 @@ function stopOrbit(viewer: Viewer): void {
 export const cameraGetPosition: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(cameraGetPositionInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid cameraGetPosition arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid cameraGetPosition arguments: ${parsed.error}`));
   }
   try {
     const cartographic = Cartographic.fromCartesian(viewer.camera.positionWC);
     return Promise.resolve(
-      ok({
+      success({
         longitude: CesiumMath.toDegrees(cartographic.longitude),
         latitude: CesiumMath.toDegrees(cartographic.latitude),
         height: cartographic.height,
@@ -255,7 +255,7 @@ export const cameraGetPosition: ToolExecutor = (viewer, rawArgs) => {
       }),
     );
   } catch (err) {
-    return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+    return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
   }
 };
 
@@ -263,7 +263,9 @@ export const cameraGetPosition: ToolExecutor = (viewer, rawArgs) => {
 export const cameraSetControllerOptions: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(cameraSetControllerOptionsInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid cameraSetControllerOptions arguments: ${parsed.error}`));
+    return Promise.resolve(
+      failure(`Invalid cameraSetControllerOptions arguments: ${parsed.error}`),
+    );
   }
 
   const controller = viewer.scene.screenSpaceCameraController;
@@ -282,5 +284,5 @@ export const cameraSetControllerOptions: ToolExecutor = (viewer, rawArgs) => {
   if (options.minimumZoomDistance !== undefined) {
     controller.minimumZoomDistance = options.minimumZoomDistance;
   }
-  return Promise.resolve(ok());
+  return Promise.resolve(success());
 };

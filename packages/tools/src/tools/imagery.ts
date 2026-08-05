@@ -18,7 +18,7 @@ import {
   type ImageryAddInput,
 } from "@cesium-ai/tools-schemas/schemas";
 import { parseArgs } from "../utils/validate.js";
-import { ok, fail } from "../utils/result.js";
+import { success, failure } from "../utils/result.js";
 import {
   findImageryLayerByName,
   forgetImageryLayer,
@@ -86,7 +86,7 @@ export const IMAGERY_PROVIDER_FACTORIES: Record<
 /** Default `imageryAdd` executor: constructs the provider then adds it as a new imagery layer. */
 export const imageryAdd: ToolExecutor = async (viewer, rawArgs) => {
   const parsed = parseArgs(imageryAddInputShape, rawArgs);
-  if (!parsed.ok) return fail(`Invalid imageryAdd arguments: ${parsed.error}`);
+  if (!parsed.ok) return failure(`Invalid imageryAdd arguments: ${parsed.error}`);
 
   try {
     const provider = await IMAGERY_PROVIDER_FACTORIES[parsed.data.type](parsed.data);
@@ -95,21 +95,22 @@ export const imageryAdd: ToolExecutor = async (viewer, rawArgs) => {
     if (parsed.data.show !== undefined) layer.show = parsed.data.show;
     const name = parsed.data.name ?? parsed.data.type;
     registerImageryLayerName(viewer, layer, name);
-    return ok({ name, index: viewer.imageryLayers.indexOf(layer) });
+    return success({ name, index: viewer.imageryLayers.indexOf(layer) });
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err));
+    return failure(err instanceof Error ? err.message : String(err));
   }
 };
 
 /** Default `imageryRemove` executor: removes by index, by name, or clears every layer. */
 export const imageryRemove: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(imageryRemoveInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid imageryRemove arguments: ${parsed.error}`));
+  if (!parsed.ok)
+    return Promise.resolve(failure(`Invalid imageryRemove arguments: ${parsed.error}`));
   const { index, name, removeAll } = parsed.data;
 
   if (removeAll) {
     viewer.imageryLayers.removeAll();
-    return Promise.resolve(ok());
+    return Promise.resolve(success());
   }
 
   const layer =
@@ -119,16 +120,16 @@ export const imageryRemove: ToolExecutor = (viewer, rawArgs) => {
         ? findImageryLayerByName(viewer, name)
         : undefined;
 
-  if (!layer) return Promise.resolve(fail("No matching imagery layer found to remove."));
+  if (!layer) return Promise.resolve(failure("No matching imagery layer found to remove."));
   viewer.imageryLayers.remove(layer);
   forgetImageryLayer(viewer, layer);
-  return Promise.resolve(ok());
+  return Promise.resolve(success());
 };
 
 /** Default `imageryList` executor. */
 export const imageryList: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(imageryListInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid imageryList arguments: ${parsed.error}`));
+  if (!parsed.ok) return Promise.resolve(failure(`Invalid imageryList arguments: ${parsed.error}`));
 
   const layers: Record<string, unknown>[] = [];
   for (let index = 0; index < viewer.imageryLayers.length; index++) {
@@ -141,5 +142,5 @@ export const imageryList: ToolExecutor = (viewer, rawArgs) => {
     if (parsed.data.includeDetails) entry.alpha = layer.alpha;
     layers.push(entry);
   }
-  return Promise.resolve(ok({ layers }));
+  return Promise.resolve(success({ layers }));
 };

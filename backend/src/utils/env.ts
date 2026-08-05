@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
-import { DEFAULT_MCP_TOOL_TIMEOUT_MS, type McpServerConfig } from "@cesium-ai/mcp-tools";
+import { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "@cesium-ai/mcp-tools/constants";
+import type { McpServerConfig } from "@cesium-ai/mcp-tools/types";
 import dotenv from "dotenv";
 import { z } from "zod";
 import { resolveMcpServersConfig } from "./mcp-servers-config.js";

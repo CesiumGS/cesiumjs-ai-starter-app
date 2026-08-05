@@ -1,10 +1,10 @@
 export {
   createMcpTools,
-  DEFAULT_MCP_TOOL_TIMEOUT_MS,
   type CreateMcpToolsOptions,
   type McpServerStatus,
   type McpToolsHandle,
 } from "./connection/create-mcp-tools.js";
+export { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "./constants.js";
 export { namespacedToolName, type SelectedMcpTool } from "./connection/connect-mcp-server.js";
 export { getMcpAppToolMeta, type McpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
 export {

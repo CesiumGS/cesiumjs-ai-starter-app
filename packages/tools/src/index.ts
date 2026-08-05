@@ -10,7 +10,6 @@ import {
 import { entityAdd, entityList, entityRemove } from "./tools/entities.js";
 import {
   animationCameraTracking,
-  animationControl,
   animationCreate,
   animationListActive,
   animationRemove,
@@ -80,7 +79,6 @@ export {
 } from "./utils/create-entity-add-executor.js";
 export {
   animationCameraTracking,
-  animationControl,
   animationCreate,
   animationListActive,
   animationRemove,
@@ -111,14 +109,13 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
   [CESIUM_TOOL_NAMES.cameraGetPosition]: cameraGetPosition,
   [CESIUM_TOOL_NAMES.cameraSetControllerOptions]: cameraSetControllerOptions,
   // entity — entityAdd is the single model-facing entry point; the per-type
-  // executors below still back its internal dispatch (see entities.ts) but are
-  // no longer separately registered under their own CESIUM_TOOL_NAMES entry.
+  // executors below still back its internal dispatch (see entities.ts) but are not
+  // separately registered under their own CESIUM_TOOL_NAMES entry.
   [CESIUM_TOOL_NAMES.entityAdd]: entityAdd,
   [CESIUM_TOOL_NAMES.entityList]: entityList,
   [CESIUM_TOOL_NAMES.entityRemove]: entityRemove,
   // animation
   [CESIUM_TOOL_NAMES.animationCreate]: animationCreate,
-  [CESIUM_TOOL_NAMES.animationControl]: animationControl,
   [CESIUM_TOOL_NAMES.animationRemove]: animationRemove,
   [CESIUM_TOOL_NAMES.animationListActive]: animationListActive,
   [CESIUM_TOOL_NAMES.animationUpdatePath]: animationUpdatePath,

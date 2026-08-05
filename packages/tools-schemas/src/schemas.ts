@@ -89,10 +89,6 @@ export {
   type AnimationCreateInput,
 } from "./tools/animationCreate/animationCreate.schema.js";
 export {
-  animationControlInputShape,
-  type AnimationControlInput,
-} from "./tools/animationControl/animationControl.schema.js";
-export {
   animationRemoveInputShape,
   type AnimationRemoveInput,
 } from "./tools/animationRemove/animationRemove.schema.js";

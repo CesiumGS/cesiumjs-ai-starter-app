@@ -50,5 +50,4 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-mcp.config.json
 site/

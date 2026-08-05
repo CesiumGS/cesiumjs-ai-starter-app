@@ -3,11 +3,11 @@ import type { Viewer } from "cesium";
 /**
  * Tracks which `viewer.entities` ids were created via `animationCreate`, keyed
  * per-`Viewer` (a `WeakMap` so nothing leaks once a `Viewer` is destroyed).
- * `animationControl`/`animationRemove`/`animationUpdatePath`/
- * `animationCameraTracking`/`animationListActive` only ever act on ids this
- * package itself registered — not arbitrary app entities that happen to share
- * the same `viewer.entities` collection — so a plain unrelated entity can
- * never accidentally be treated as an "animation".
+ * `animationRemove`/`animationUpdatePath`/`animationCameraTracking`/
+ * `animationListActive` only ever act on ids this package itself registered
+ * — not arbitrary app entities that happen to share the same
+ * `viewer.entities` collection — so a plain unrelated entity can never
+ * accidentally be treated as an "animation".
  */
 const animationIdsByViewer = new WeakMap<Viewer, Set<string>>();
 

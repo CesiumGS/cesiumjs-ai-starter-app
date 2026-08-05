@@ -16,7 +16,6 @@ import {
 } from "cesium";
 import {
   animationCameraTrackingInputShape,
-  animationControlInputShape,
   animationCreateInputShape,
   animationListActiveInputShape,
   animationRemoveInputShape,
@@ -25,8 +24,8 @@ import {
   globeSetLightingInputShape,
 } from "@cesium-ai/tools-schemas/schemas";
 import { parseArgs } from "../utils/validate.js";
-import { ok, fail } from "../utils/result.js";
-import { generateEntityId } from "../utils/cesium-values.js";
+import { success, failure } from "../utils/result.js";
+import { generateEntityId, rgbaToColor } from "../utils/cesium-values.js";
 import {
   isKnownAnimation,
   listAnimationIds,
@@ -58,7 +57,7 @@ const INTERPOLATION_ALGORITHMS = {
 export const animationCreate: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(animationCreateInputShape, rawArgs);
   if (!parsed.ok)
-    return Promise.resolve(fail(`Invalid animationCreate arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid animationCreate arguments: ${parsed.error}`));
 
   const {
     positionSamples,
@@ -67,6 +66,10 @@ export const animationCreate: ToolExecutor = (viewer, rawArgs) => {
     stopTime,
     interpolationAlgorithm,
     showPath,
+    pathLeadTime,
+    pathTrailTime,
+    pathWidth,
+    pathColor,
     modelUri,
     modelScale,
     loopMode,
@@ -105,7 +108,15 @@ export const animationCreate: ToolExecutor = (viewer, rawArgs) => {
       availability,
       position: property,
       orientation: new VelocityOrientationProperty(property),
-      path: showPath === false ? undefined : { leadTime: 10, trailTime: 10, width: 2 },
+      path:
+        showPath === false
+          ? undefined
+          : {
+              leadTime: pathLeadTime ?? 10,
+              trailTime: pathTrailTime ?? 10,
+              width: pathWidth ?? 2,
+              material: pathColor ? rgbaToColor(pathColor) : undefined,
+            },
       model: modelUri ? { uri: modelUri, scale: modelScale ?? 1, minimumPixelSize: 32 } : undefined,
       point: modelUri ? undefined : { pixelSize: 12, color: Color.YELLOW },
     });
@@ -118,46 +129,26 @@ export const animationCreate: ToolExecutor = (viewer, rawArgs) => {
     if (autoPlay !== false) viewer.clock.shouldAnimate = true;
     if (trackCamera) viewer.trackedEntity = viewer.entities.getById(animationId);
 
-    return Promise.resolve(ok({ animationId }));
+    return Promise.resolve(success({ animationId }));
   } catch (err) {
-    return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+    return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
   }
-};
-
-/**
- * Default `animationControl` executor. Every entity created by
- * `animationCreate` moves off the same shared `viewer.clock`, so play/pause is
- * necessarily global rather than per-animation in this default implementation
- * — override this executor if independent per-animation playback is needed
- * (e.g. by driving each entity's own `SampledPositionProperty` sampling
- * window instead of the shared clock).
- */
-export const animationControl: ToolExecutor = (viewer, rawArgs) => {
-  const parsed = parseArgs(animationControlInputShape, rawArgs);
-  if (!parsed.ok)
-    return Promise.resolve(fail(`Invalid animationControl arguments: ${parsed.error}`));
-  const { animationId, action } = parsed.data;
-  if (!isKnownAnimation(viewer, animationId)) {
-    return Promise.resolve(fail(`Unknown animationId "${animationId}".`));
-  }
-  viewer.clock.shouldAnimate = action === "play";
-  return Promise.resolve(ok());
 };
 
 /** Default `animationRemove` executor. */
 export const animationRemove: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(animationRemoveInputShape, rawArgs);
   if (!parsed.ok)
-    return Promise.resolve(fail(`Invalid animationRemove arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid animationRemove arguments: ${parsed.error}`));
   const { animationId } = parsed.data;
   if (!isKnownAnimation(viewer, animationId)) {
-    return Promise.resolve(fail(`Unknown animationId "${animationId}".`));
+    return Promise.resolve(failure(`Unknown animationId "${animationId}".`));
   }
   if (viewer.trackedEntity?.id === animationId) viewer.trackedEntity = undefined;
   const removed = viewer.entities.removeById(animationId);
   unregisterAnimation(viewer, animationId);
   return Promise.resolve(
-    removed ? ok() : fail(`No entity found for animationId "${animationId}".`),
+    removed ? success() : failure(`No entity found for animationId "${animationId}".`),
   );
 };
 
@@ -165,27 +156,27 @@ export const animationRemove: ToolExecutor = (viewer, rawArgs) => {
 export const animationListActive: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(animationListActiveInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid animationListActive arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid animationListActive arguments: ${parsed.error}`));
   }
   const animations = listAnimationIds(viewer)
     .map((animationId) => viewer.entities.getById(animationId))
     .filter((entity): entity is NonNullable<typeof entity> => entity !== undefined)
     .map((entity) => ({ animationId: entity.id, name: entity.name ?? undefined }));
-  return Promise.resolve(ok({ animations }));
+  return Promise.resolve(success({ animations }));
 };
 
 /** Default `animationUpdatePath` executor: adjusts the trail graphics of an existing animation entity. */
 export const animationUpdatePath: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(animationUpdatePathInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid animationUpdatePath arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid animationUpdatePath arguments: ${parsed.error}`));
   }
   const { animationId, leadTime, trailTime, width, color } = parsed.data;
   if (!isKnownAnimation(viewer, animationId)) {
-    return Promise.resolve(fail(`Unknown animationId "${animationId}".`));
+    return Promise.resolve(failure(`Unknown animationId "${animationId}".`));
   }
   const entity = viewer.entities.getById(animationId);
-  if (!entity) return Promise.resolve(fail(`No entity found for animationId "${animationId}".`));
+  if (!entity) return Promise.resolve(failure(`No entity found for animationId "${animationId}".`));
 
   try {
     entity.path ??= new PathGraphics();
@@ -193,13 +184,11 @@ export const animationUpdatePath: ToolExecutor = (viewer, rawArgs) => {
     if (trailTime !== undefined) entity.path.trailTime = new ConstantProperty(trailTime);
     if (width !== undefined) entity.path.width = new ConstantProperty(width);
     if (color) {
-      entity.path.material = new ColorMaterialProperty(
-        new Color(color.red, color.green, color.blue, color.alpha ?? 1),
-      );
+      entity.path.material = new ColorMaterialProperty(rgbaToColor(color));
     }
-    return Promise.resolve(ok());
+    return Promise.resolve(success());
   } catch (err) {
-    return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+    return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
   }
 };
 
@@ -212,23 +201,24 @@ export const animationUpdatePath: ToolExecutor = (viewer, rawArgs) => {
 export const animationCameraTracking: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(animationCameraTrackingInputShape, rawArgs);
   if (!parsed.ok) {
-    return Promise.resolve(fail(`Invalid animationCameraTracking arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid animationCameraTracking arguments: ${parsed.error}`));
   }
   const { animationId, track } = parsed.data;
   if (!isKnownAnimation(viewer, animationId)) {
-    return Promise.resolve(fail(`Unknown animationId "${animationId}".`));
+    return Promise.resolve(failure(`Unknown animationId "${animationId}".`));
   }
   const entity = viewer.entities.getById(animationId);
-  if (!entity) return Promise.resolve(fail(`No entity found for animationId "${animationId}".`));
+  if (!entity) return Promise.resolve(failure(`No entity found for animationId "${animationId}".`));
 
   viewer.trackedEntity = track ? entity : undefined;
-  return Promise.resolve(ok());
+  return Promise.resolve(success());
 };
 
 /** Default `clockControl` executor. */
 export const clockControl: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(clockControlInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid clockControl arguments: ${parsed.error}`));
+  if (!parsed.ok)
+    return Promise.resolve(failure(`Invalid clockControl arguments: ${parsed.error}`));
   const { action, clock, currentTime, multiplier } = parsed.data;
 
   try {
@@ -250,9 +240,9 @@ export const clockControl: ToolExecutor = (viewer, rawArgs) => {
     if (action === "setMultiplier" && multiplier !== undefined) {
       viewer.clock.multiplier = multiplier;
     }
-    return Promise.resolve(ok());
+    return Promise.resolve(success());
   } catch (err) {
-    return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+    return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
   }
 };
 
@@ -260,12 +250,12 @@ export const clockControl: ToolExecutor = (viewer, rawArgs) => {
 export const globeSetLighting: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(globeSetLightingInputShape, rawArgs);
   if (!parsed.ok)
-    return Promise.resolve(fail(`Invalid globeSetLighting arguments: ${parsed.error}`));
+    return Promise.resolve(failure(`Invalid globeSetLighting arguments: ${parsed.error}`));
   const { enableLighting, enableDynamicAtmosphere, enableSunLighting } = parsed.data;
   const globe = viewer.scene.globe;
   globe.enableLighting = enableLighting;
   if (enableDynamicAtmosphere !== undefined)
     globe.dynamicAtmosphereLighting = enableDynamicAtmosphere;
   if (enableSunLighting !== undefined) globe.dynamicAtmosphereLightingFromSun = enableSunLighting;
-  return Promise.resolve(ok());
+  return Promise.resolve(success());
 };

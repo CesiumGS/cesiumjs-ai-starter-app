@@ -26,10 +26,6 @@ import {
   type AnimationCreateConfig,
 } from "./tools/animationCreate/animationCreate.js";
 import {
-  createAnimationControl,
-  type AnimationControlConfig,
-} from "./tools/animationControl/animationControl.js";
-import {
   createAnimationRemove,
   type AnimationRemoveConfig,
 } from "./tools/animationRemove/animationRemove.js";
@@ -172,18 +168,6 @@ export {
   defaultAnimationCreateInputSchema,
   type AnimationCreateFieldDescriptions,
 } from "./tools/animationCreate/animationCreate.js";
-export {
-  createAnimationControl,
-  animationControl,
-  type AnimationControlConfig,
-} from "./tools/animationControl/animationControl.js";
-export {
-  DEFAULT_ANIMATION_CONTROL_DESCRIPTION,
-  DEFAULT_ANIMATION_CONTROL_FIELD_DESCRIPTIONS,
-  buildAnimationControlInputSchema,
-  defaultAnimationControlInputSchema,
-  type AnimationControlFieldDescriptions,
-} from "./tools/animationControl/animationControl.js";
 export {
   createAnimationRemove,
   animationRemove,
@@ -329,8 +313,6 @@ export interface CesiumToolsConfig {
   entityRemove?: EntityRemoveConfig | false;
   /** Override `animationCreate`'s description / input schema, or `false` to exclude it. */
   animationCreate?: AnimationCreateConfig | false;
-  /** Override `animationControl`'s description / input schema, or `false` to exclude it. */
-  animationControl?: AnimationControlConfig | false;
   /** Override `animationRemove`'s description / input schema, or `false` to exclude it. */
   animationRemove?: AnimationRemoveConfig | false;
   /** Override `animationListActive`'s description / input schema, or `false` to exclude it. */
@@ -420,9 +402,6 @@ export function createCesiumTools(config: CesiumToolsConfig = {}): ToolSet {
   }
   if (config.animationCreate !== false && allowed(CESIUM_TOOL_NAMES.animationCreate)) {
     tools[CESIUM_TOOL_NAMES.animationCreate] = createAnimationCreate(config.animationCreate);
-  }
-  if (config.animationControl !== false && allowed(CESIUM_TOOL_NAMES.animationControl)) {
-    tools[CESIUM_TOOL_NAMES.animationControl] = createAnimationControl(config.animationControl);
   }
   if (config.animationRemove !== false && allowed(CESIUM_TOOL_NAMES.animationRemove)) {
     tools[CESIUM_TOOL_NAMES.animationRemove] = createAnimationRemove(config.animationRemove);

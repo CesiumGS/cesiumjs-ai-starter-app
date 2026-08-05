@@ -27,7 +27,6 @@ const VALID: Record<string, unknown> = {
       { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
     ],
   },
-  animationControl: { animationId: "a1", action: "play" },
   animationRemove: { animationId: "a1" },
   animationListActive: {},
   animationUpdatePath: { animationId: "a1", width: 4 },
@@ -49,7 +48,6 @@ const INVALID: Record<string, unknown> = {
   animationCreate: {
     positionSamples: [{ time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 }],
   }, // < 2 samples
-  animationControl: { animationId: "a1", action: "stop" }, // invalid enum
   animationRemove: {}, // missing animationId
   animationUpdatePath: { animationId: "a1", color: { red: 2, green: 0, blue: 0 } }, // red out of range
   animationCameraTracking: { animationId: "a1" }, // missing track

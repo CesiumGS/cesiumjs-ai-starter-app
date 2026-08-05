@@ -38,8 +38,13 @@ import {
   type EntityAddWallInput,
 } from "@cesium-ai/tools-schemas/schemas";
 import { parseArgs } from "../utils/validate.js";
-import { ok, fail } from "../utils/result.js";
-import { parseColor, positionToCartesian3, toCartesian2 } from "../utils/cesium-values.js";
+import { success, failure } from "../utils/result.js";
+import {
+  parseColor,
+  positionToCartesian3,
+  solidMaterialOptions,
+  toCartesian2,
+} from "../utils/cesium-values.js";
 import {
   createEntityAddExecutor,
   type EntityAddExecutorConfig,
@@ -234,9 +239,7 @@ export function createEntityAddBoxExecutor<Args extends EntityAddBoxInput = Enti
             data.box.dimensions.y,
             data.box.dimensions.z,
           ),
-          material: parseColor(data.box.material, Color.WHITE),
-          outline: data.box.outline,
-          outlineColor: parseColor(data.box.outlineColor, Color.BLACK),
+          ...solidMaterialOptions(data.box.material, data.box.outline, data.box.outlineColor),
         },
       };
     },
@@ -264,9 +267,11 @@ export function createEntityAddCorridorExecutor<
         cornerType: data.corridor.cornerType ? CornerType[data.corridor.cornerType] : undefined,
         height: data.corridor.height,
         extrudedHeight: data.corridor.extrudedHeight,
-        material: parseColor(data.corridor.material, Color.WHITE),
-        outline: data.corridor.outline,
-        outlineColor: parseColor(data.corridor.outlineColor, Color.BLACK),
+        ...solidMaterialOptions(
+          data.corridor.material,
+          data.corridor.outline,
+          data.corridor.outlineColor,
+        ),
       },
     }),
     config,
@@ -295,9 +300,11 @@ export function createEntityAddCylinderExecutor<
           length: data.cylinder.length,
           topRadius: data.cylinder.topRadius,
           bottomRadius: data.cylinder.bottomRadius,
-          material: parseColor(data.cylinder.material, Color.WHITE),
-          outline: data.cylinder.outline,
-          outlineColor: parseColor(data.cylinder.outlineColor, Color.BLACK),
+          ...solidMaterialOptions(
+            data.cylinder.material,
+            data.cylinder.outline,
+            data.cylinder.outlineColor,
+          ),
         },
       };
     },
@@ -329,9 +336,11 @@ export function createEntityAddEllipseExecutor<
             : undefined,
         height: data.ellipse.height,
         extrudedHeight: data.ellipse.extrudedHeight,
-        material: parseColor(data.ellipse.material, Color.WHITE),
-        outline: data.ellipse.outline,
-        outlineColor: parseColor(data.ellipse.outlineColor, Color.BLACK),
+        ...solidMaterialOptions(
+          data.ellipse.material,
+          data.ellipse.outline,
+          data.ellipse.outlineColor,
+        ),
       },
     }),
     config,
@@ -358,9 +367,11 @@ export function createEntityAddRectangleExecutor<
           coordinates: Rectangle.fromDegrees(west, south, east, north),
           height: data.rectangle.height,
           extrudedHeight: data.rectangle.extrudedHeight,
-          material: parseColor(data.rectangle.material, Color.WHITE),
-          outline: data.rectangle.outline,
-          outlineColor: parseColor(data.rectangle.outlineColor, Color.BLACK),
+          ...solidMaterialOptions(
+            data.rectangle.material,
+            data.rectangle.outline,
+            data.rectangle.outlineColor,
+          ),
         },
       };
     },
@@ -386,9 +397,7 @@ export function createEntityAddWallExecutor<Args extends EntityAddWallInput = En
         positions: data.wall.positions.map(positionToCartesian3),
         minimumHeights: data.wall.minimumHeights,
         maximumHeights: data.wall.maximumHeights,
-        material: parseColor(data.wall.material, Color.WHITE),
-        outline: data.wall.outline,
-        outlineColor: parseColor(data.wall.outlineColor, Color.BLACK),
+        ...solidMaterialOptions(data.wall.material, data.wall.outline, data.wall.outlineColor),
       },
     }),
     config,
@@ -422,7 +431,7 @@ const ENTITY_ADD_DISPATCH: {
  */
 export const entityAdd: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(entityAddInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid entityAdd arguments: ${parsed.error}`));
+  if (!parsed.ok) return Promise.resolve(failure(`Invalid entityAdd arguments: ${parsed.error}`));
 
   const handler = ENTITY_ADD_DISPATCH[parsed.data.type];
   return handler(viewer, parsed.data.data);
@@ -435,12 +444,12 @@ export const entityAdd: ToolExecutor = (viewer, rawArgs) => {
  */
 export const entityList: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(entityListInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid entityList arguments: ${parsed.error}`));
+  if (!parsed.ok) return Promise.resolve(failure(`Invalid entityList arguments: ${parsed.error}`));
   const entities = viewer.entities.values.map((entity) => ({
     id: entity.id,
     name: entity.name ?? undefined,
   }));
-  return Promise.resolve(ok({ entities }));
+  return Promise.resolve(success({ entities }));
 };
 
 /**
@@ -450,9 +459,12 @@ export const entityList: ToolExecutor = (viewer, rawArgs) => {
  */
 export const entityRemove: ToolExecutor = (viewer, rawArgs) => {
   const parsed = parseArgs(entityRemoveInputShape, rawArgs);
-  if (!parsed.ok) return Promise.resolve(fail(`Invalid entityRemove arguments: ${parsed.error}`));
+  if (!parsed.ok)
+    return Promise.resolve(failure(`Invalid entityRemove arguments: ${parsed.error}`));
   const removed = viewer.entities.removeById(parsed.data.id);
   return Promise.resolve(
-    removed ? ok({ id: parsed.data.id }) : fail(`No entity found with id "${parsed.data.id}".`),
+    removed
+      ? success({ id: parsed.data.id })
+      : failure(`No entity found with id "${parsed.data.id}".`),
   );
 };

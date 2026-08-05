@@ -4,7 +4,7 @@ Zod-schemed CesiumJS viewer tool definitions for the AI SDK, covering camera, en
 
 ## Supported viewer tools
 
-The model-facing catalogue currently contains 20 tools (`CESIUM_TOOL_NAMES`):
+The model-facing catalogue currently contains 19 tools (`CESIUM_TOOL_NAMES`):
 
 | Domain    | Tool                         | Notes                                                                 |
 | --------- | ---------------------------- | --------------------------------------------------------------------- |
@@ -18,7 +18,6 @@ The model-facing catalogue currently contains 20 tools (`CESIUM_TOOL_NAMES`):
 | Entity    | `entityList`                 | List entities visible to the tool layer.                              |
 | Entity    | `entityRemove`               | Remove an entity by id.                                               |
 | Animation | `animationCreate`            | Create an animation track/entity.                                     |
-| Animation | `animationControl`           | Play/pause animation state.                                           |
 | Animation | `animationRemove`            | Remove animation by id.                                               |
 | Animation | `animationListActive`        | List active animations.                                               |
 | Animation | `animationUpdatePath`        | Update animation path settings.                                       |

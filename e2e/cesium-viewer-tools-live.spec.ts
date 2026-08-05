@@ -492,27 +492,6 @@ test.describe("Cesium viewer tools — end-to-end against the live backend", () 
     ).toBe(true);
   });
 
-  test("animationControl", async ({ page }) => {
-    test.setTimeout(5 * 60_000);
-
-    await runToolStep(page, { prompt: ANIMATION_CREATE_PROMPT, toolName: "animationCreate" });
-
-    await runToolStep(page, {
-      prompt: 'Using animationControl, pause the animation you just created (action "pause").',
-      toolName: "animationControl",
-    });
-
-    // No result data — verify the shared clock actually stopped animating.
-    const shouldAnimate = await page.evaluate(
-      () =>
-        (window as unknown as { __cesiumViewerForE2E?: any }).__cesiumViewerForE2E.clock
-          .shouldAnimate,
-    );
-    expect(shouldAnimate, "expected viewer.clock.shouldAnimate to be false after pause").toBe(
-      false,
-    );
-  });
-
   test("animationCameraTracking", async ({ page }) => {
     test.setTimeout(5 * 60_000);
 

@@ -30,7 +30,6 @@ export const CESIUM_TOOL_NAMES = {
   entityRemove: "entityRemove",
   // animation
   animationCreate: "animationCreate",
-  animationControl: "animationControl",
   animationRemove: "animationRemove",
   animationListActive: "animationListActive",
   animationUpdatePath: "animationUpdatePath",

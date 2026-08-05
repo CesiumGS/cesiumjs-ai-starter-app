@@ -35,3 +35,35 @@ export function parseColor(css?: string, fallback?: Color): Color | undefined {
 export function generateEntityId(prefix: string): string {
   return `${prefix}-${globalThis.crypto.randomUUID()}`;
 }
+
+/** Structural shape shared by every `{red, green, blue, alpha?}` color field (0-1 each). */
+export interface RgbaColor {
+  red: number;
+  green: number;
+  blue: number;
+  alpha?: number;
+}
+
+/** Converts a validated `{red, green, blue, alpha?}` object into a Cesium `Color`. */
+export function rgbaToColor(color: RgbaColor): Color {
+  return new Color(color.red, color.green, color.blue, color.alpha ?? 1);
+}
+
+/**
+ * Builds the `material`/`outline`/`outlineColor` trio shared by every solid
+ * entity graphics object (box/corridor/cylinder/ellipse/rectangle/wall) —
+ * defaults `material` to opaque white and `outlineColor` to black, the same
+ * convention every other `*Color`/`material` field in this package follows
+ * via {@link parseColor}.
+ */
+export function solidMaterialOptions(
+  material?: string,
+  outline?: boolean,
+  outlineColor?: string,
+): { material: Color | undefined; outline: boolean | undefined; outlineColor: Color | undefined } {
+  return {
+    material: parseColor(material, Color.WHITE),
+    outline,
+    outlineColor: parseColor(outlineColor, Color.BLACK),
+  };
+}

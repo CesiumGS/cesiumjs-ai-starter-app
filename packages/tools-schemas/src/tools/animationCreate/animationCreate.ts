@@ -14,6 +14,10 @@ export interface AnimationCreateFieldDescriptions {
   stopTime?: string;
   interpolationAlgorithm?: string;
   showPath?: string;
+  pathLeadTime?: string;
+  pathTrailTime?: string;
+  pathWidth?: string;
+  pathColor?: string;
   modelPreset?: string;
   modelUri?: string;
   modelScale?: string;
@@ -34,6 +38,11 @@ export const DEFAULT_ANIMATION_CREATE_FIELD_DESCRIPTIONS: Required<AnimationCrea
     stopTime: "Animation stop time (ISO 8601). Defaults to the last sample's time.",
     interpolationAlgorithm: "Path interpolation method. Defaults to LAGRANGE.",
     showPath: "Show the path trail visualization. Defaults to true.",
+    pathLeadTime: "Seconds of path shown ahead of the entity. Defaults to 10.",
+    pathTrailTime: "Seconds of path shown behind the entity. Defaults to 10.",
+    pathWidth: "Width in pixels of the path trail. Defaults to 2.",
+    pathColor:
+      "Color of the path trail as {red, green, blue, alpha?} (0-1 each). Defaults to Cesium's path color.",
     modelPreset: "Built-in model preset. Defaults to cesium_man.",
     modelUri: "Custom glTF/glb model URI, overriding modelPreset.",
     modelScale: "Model scale factor. Defaults to 1.",

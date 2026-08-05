@@ -142,7 +142,6 @@ export const ENABLED_CESIUM_TOOLS = [
   CESIUM_TOOL_NAMES.entityRemove,
   // animation
   CESIUM_TOOL_NAMES.animationCreate,
-  CESIUM_TOOL_NAMES.animationControl,
   CESIUM_TOOL_NAMES.animationRemove,
   CESIUM_TOOL_NAMES.animationListActive,
   CESIUM_TOOL_NAMES.animationUpdatePath,
@@ -169,7 +168,19 @@ After editing, rebuild the shared package so both tiers pick up the change: `npm
 npm test -- enabled-tools
 ```
 
-> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts)) if it runs directly against the live `Viewer`, or add it to `@cesium-ai/codegen-cesium` instead if — like `executeCesiumCode` — it needs the codegen/verification pipeline first; (2) add its schema/definition module under that package's `src/` and wire it into `createCesiumTools` ([`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts)) if it's a viewer tool; (3) add its default executor to `@cesium-ai/tools` ([`packages/tools/src/index.ts`](packages/tools/src/index.ts)) — or, for an app-specific tool that shouldn't ship as a package default, write it directly under `frontend/src/tools/` and pass it as an override to `createCesiumToolExecutors`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+> **Adding a brand-new tool** follows the same flow, with one extra distinction up front:
+>
+> 1. **Choose the tool family first**.
+>    - If the tool runs directly against the live `Viewer`, register its canonical name in `CESIUM_TOOL_NAMES` at [`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts).
+>    - If the tool needs the codegen/verification pipeline (like `executeCesiumCode`), add it under `@cesium-ai/codegen-cesium` instead.
+> 2. **Add the tool definition in the owning package**.
+>    - Viewer tool: add its schema/definition module under `packages/tools-schemas/src/` and wire it into `createCesiumTools` in [`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts).
+>    - Codegen tool: wire it through the `@cesium-ai/codegen-cesium` exports/registry for that tool family.
+> 3. **Add or override the frontend executor**.
+>    - Package default executor: add it to `@cesium-ai/tools` in [`packages/tools/src/index.ts`](packages/tools/src/index.ts).
+>    - App-only executor: implement it under `frontend/src/tools/` and pass it via `createCesiumToolExecutors` overrides.
+> 4. **Enable it for this app** by adding its name to `ENABLED_CESIUM_TOOLS` in [`shared/src/enabled-tools.ts`](shared/src/enabled-tools.ts).
+> 5. **Verify end to end** with `npm run build:packages` and `npm test -- enabled-tools`.
 
 ### Update a tool's schema
 

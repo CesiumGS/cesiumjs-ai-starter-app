@@ -1,7 +1,7 @@
 import type { Entity, Viewer } from "cesium";
 import type { z } from "zod";
 import { parseArgs } from "./validate.js";
-import { ok, fail } from "./result.js";
+import { success, failure } from "./result.js";
 import type { ToolExecutor } from "../types.js";
 
 /** Config accepted by an `entityAdd*` tool's `createXExecutor` factory. */
@@ -46,16 +46,17 @@ export function createEntityAddExecutor<Base, Args extends Base = Base>(
 
   return (viewer: Viewer, rawArgs: unknown) => {
     const parsed = parseArgs(shape, rawArgs);
-    if (!parsed.ok) return Promise.resolve(fail(`Invalid ${toolName} arguments: ${parsed.error}`));
+    if (!parsed.ok)
+      return Promise.resolve(failure(`Invalid ${toolName} arguments: ${parsed.error}`));
 
     try {
       const entity = viewer.entities.add({
         ...buildBaseOptions(parsed.data),
         ...config.extendEntityOptions?.(parsed.data),
       });
-      return Promise.resolve(ok({ id: entity.id }));
+      return Promise.resolve(success({ id: entity.id }));
     } catch (err) {
-      return Promise.resolve(fail(err instanceof Error ? err.message : String(err)));
+      return Promise.resolve(failure(err instanceof Error ? err.message : String(err)));
     }
   };
 }

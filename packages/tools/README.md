@@ -22,7 +22,6 @@ These are the executors included in `DEFAULT_CESIUM_TOOL_EXECUTORS` and keyed by
 | Entity    | `entityList`                 | `entityList`                 |
 | Entity    | `entityRemove`               | `entityRemove`               |
 | Animation | `animationCreate`            | `animationCreate`            |
-| Animation | `animationControl`           | `animationControl`           |
 | Animation | `animationRemove`            | `animationRemove`            |
 | Animation | `animationListActive`        | `animationListActive`        |
 | Animation | `animationUpdatePath`        | `animationUpdatePath`        |
@@ -163,7 +162,6 @@ A few tools' defaults are intentionally simple starting points rather than exhau
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | `cameraOrbit`             | Cesium has no built-in continuous orbit API; the default `action: "start"` is a simple `camera.rotateRight` nudge per `clock.onTick`.      | Override `cameraOrbit`.                                                    |
 | `animationCreate`         | `modelPreset` (a named preset like `"car"`) isn't resolved to a real asset URI; `clampToGround` and `loopMode: "pingpong"` aren't applied. | Pass `modelUri` directly, or override `animationCreate`.                   |
-| `animationControl`        | Play/pause is global (Cesium's `Clock` is shared across every entity), not truly per-animation.                                            | Override `animationControl` for independent playback.                      |
 | `animationCameraTracking` | `range`/`pitch`/`heading` aren't applied — only `trackedEntity` is toggled.                                                                | Override `animationCameraTracking` for a custom chase-cam offset.          |
 | `imageryAdd`              | `GoogleEarthEnterpriseImageryProvider` isn't implemented.                                                                                  | Add an entry to the exported `IMAGERY_PROVIDER_FACTORIES` map (see above). |
 
