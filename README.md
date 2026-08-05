@@ -130,8 +130,31 @@ To **disable** a tool, remove its name from the array. To **enable** one, add it
 // shared/src/enabled-tools.ts
 export const ENABLED_CESIUM_TOOLS = [
   CESIUM_TOOL_NAMES.flyTo,
+  // camera
+  CESIUM_TOOL_NAMES.cameraSetView,
+  CESIUM_TOOL_NAMES.cameraLookAtTransform,
+  CESIUM_TOOL_NAMES.cameraOrbit,
+  CESIUM_TOOL_NAMES.cameraGetPosition,
+  CESIUM_TOOL_NAMES.cameraSetControllerOptions,
+  // entity — entityAdd's `type` field covers every entity variant in one tool
+  CESIUM_TOOL_NAMES.entityAdd,
+  CESIUM_TOOL_NAMES.entityList,
+  CESIUM_TOOL_NAMES.entityRemove,
+  // animation
+  CESIUM_TOOL_NAMES.animationCreate,
+  CESIUM_TOOL_NAMES.animationControl,
+  CESIUM_TOOL_NAMES.animationRemove,
+  CESIUM_TOOL_NAMES.animationListActive,
+  CESIUM_TOOL_NAMES.animationUpdatePath,
+  CESIUM_TOOL_NAMES.animationCameraTracking,
+  CESIUM_TOOL_NAMES.clockControl,
+  CESIUM_TOOL_NAMES.globeSetLighting,
+  // imagery
+  CESIUM_TOOL_NAMES.imageryAdd,
+  CESIUM_TOOL_NAMES.imageryRemove,
+  CESIUM_TOOL_NAMES.imageryList,
+  // codegen (server-executed, arbitrary CesiumJS code against the live Viewer)
   CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
-  // CESIUM_TOOL_NAMES.someOtherViewerTool,   // ← add to enable
 ] as const satisfies readonly (CesiumToolName | CodegenCesiumToolName)[];
 ```
 

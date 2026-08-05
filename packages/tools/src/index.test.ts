@@ -34,7 +34,7 @@ describe("createCesiumToolExecutors", () => {
   });
 
   test("overrides a tool with no dedicated extend-factory just as well as one with a factory", async () => {
-    // globeSetLighting/entityAddPoint/animationCreate/imageryAdd/etc. are all plain functions with no
+    // globeSetLighting/entityAdd/animationCreate/imageryAdd/etc. are all plain functions with no
     // createXExecutor — full override via createCesiumToolExecutors works identically for every tool
     // in the catalogue, factory or not.
     const customGlobeSetLighting = async () => ({ success: true, custom: true }) as const;
@@ -46,7 +46,7 @@ describe("createCesiumToolExecutors", () => {
       success: true,
       custom: true,
     });
-    expect(executors.entityAddPoint).toBe(DEFAULT_CESIUM_TOOL_EXECUTORS.entityAddPoint);
+    expect(executors.entityAdd).toBe(DEFAULT_CESIUM_TOOL_EXECUTORS.entityAdd);
   });
 
   test("overriding multiple tools at once only replaces those tools", () => {

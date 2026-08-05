@@ -8,6 +8,7 @@ import {
   Transforms,
 } from "cesium";
 import {
+  entityAddInputShape,
   entityAddBillboardInputShape,
   entityAddBoxInputShape,
   entityAddCorridorInputShape,
@@ -22,6 +23,7 @@ import {
   entityAddWallInputShape,
   entityListInputShape,
   entityRemoveInputShape,
+  type EntityAddInput,
   type EntityAddBillboardInput,
   type EntityAddBoxInput,
   type EntityAddCorridorInput,
@@ -395,6 +397,36 @@ export function createEntityAddWallExecutor<Args extends EntityAddWallInput = En
 
 /** Default `entityAddWall` executor. */
 export const entityAddWall: ToolExecutor = createEntityAddWallExecutor();
+
+/** Dispatch map for the additive `entityAdd` tool (`type` -> existing entityAdd* executor). */
+const ENTITY_ADD_DISPATCH: {
+  [K in EntityAddInput["type"]]: ToolExecutor;
+} = {
+  point: entityAddPoint,
+  billboard: entityAddBillboard,
+  label: entityAddLabel,
+  model: entityAddModel,
+  polygon: entityAddPolygon,
+  polyline: entityAddPolyline,
+  box: entityAddBox,
+  corridor: entityAddCorridor,
+  cylinder: entityAddCylinder,
+  ellipse: entityAddEllipse,
+  rectangle: entityAddRectangle,
+  wall: entityAddWall,
+};
+
+/**
+ * Additive `entityAdd` executor that keeps all existing `entityAdd*` tool
+ * contracts intact while offering one consolidated entry point.
+ */
+export const entityAdd: ToolExecutor = (viewer, rawArgs) => {
+  const parsed = parseArgs(entityAddInputShape, rawArgs);
+  if (!parsed.ok) return Promise.resolve(fail(`Invalid entityAdd arguments: ${parsed.error}`));
+
+  const handler = ENTITY_ADD_DISPATCH[parsed.data.type];
+  return handler(viewer, parsed.data.data);
+};
 
 /**
  * Default `entityList` executor. No factory — there's no per-tool args

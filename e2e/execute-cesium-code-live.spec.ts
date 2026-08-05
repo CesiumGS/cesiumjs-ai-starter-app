@@ -11,7 +11,7 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
  * cover verification-failure/runtime-failure/decline edge cases this real
  * pipeline can't reliably reproduce on demand).
  *
- * Requires the same setup as `fly-to-paris.spec.ts`:
+ * Requires the same setup as `cesium-viewer-tools-live.spec.ts`:
  *   1) npm run dev:backend     # backend on :3001 with .env loaded
  *   2) npm run test:e2e        # Playwright starts the frontend on :5173 and runs this
  *

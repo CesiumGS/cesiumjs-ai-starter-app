@@ -8,9 +8,14 @@ describe("formatToolPayload", () => {
     expect(formatToolPayload("hello")).toBe('"hello"');
   });
 
-  it("renders top-level string fields as raw text, other fields as JSON", () => {
+  it("renders top-level multi-line string fields as raw text with a blank line, other fields as compact JSON", () => {
     const result = formatToolPayload({ code: "line1\nline2", ok: true });
     expect(result).toBe("code:\nline1\nline2\n\nok: true");
+  });
+
+  it("renders scalar-only fields as pretty-printed JSON", () => {
+    const payload = { success: true, longitude: 25.28, latitude: 54.6872, heading: 360 };
+    expect(formatToolPayload(payload)).toBe(JSON.stringify(payload, null, 2));
   });
 
   it("pretty-prints an MCP text part that is itself a JSON string", () => {
@@ -52,12 +57,12 @@ describe("formatToolPayload", () => {
   it("falls back to generic formatting when content isn't the MCP text-part shape", () => {
     const payload = { content: [{ type: "image", data: "base64..." }] };
     const result = formatToolPayload(payload);
-    // Not recognized as MCP text content -> generic per-field JSON formatting.
-    expect(result).toBe(`content: ${JSON.stringify(payload.content, null, 2)}`);
+    // Not recognized as MCP text content -> falls back to plain pretty-printed JSON.
+    expect(result).toBe(JSON.stringify(payload, null, 2));
   });
 
   it("falls back to generic formatting when content is an empty array", () => {
     const payload = { content: [] as unknown[] };
-    expect(formatToolPayload(payload)).toBe("content: []");
+    expect(formatToolPayload(payload)).toBe(JSON.stringify(payload, null, 2));
   });
 });

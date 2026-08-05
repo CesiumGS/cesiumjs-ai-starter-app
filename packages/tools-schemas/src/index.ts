@@ -9,14 +9,7 @@ import {
   createCameraLookAtTransform,
   type CameraLookAtTransformConfig,
 } from "./tools/cameraLookAtTransform/cameraLookAtTransform.js";
-import {
-  createCameraStartOrbit,
-  type CameraStartOrbitConfig,
-} from "./tools/cameraStartOrbit/cameraStartOrbit.js";
-import {
-  createCameraStopOrbit,
-  type CameraStopOrbitConfig,
-} from "./tools/cameraStopOrbit/cameraStopOrbit.js";
+import { createCameraOrbit, type CameraOrbitConfig } from "./tools/cameraOrbit/cameraOrbit.js";
 import {
   createCameraGetPosition,
   type CameraGetPositionConfig,
@@ -25,51 +18,7 @@ import {
   createCameraSetControllerOptions,
   type CameraSetControllerOptionsConfig,
 } from "./tools/cameraSetControllerOptions/cameraSetControllerOptions.js";
-import {
-  createEntityAddPoint,
-  type EntityAddPointConfig,
-} from "./tools/entityAddPoint/entityAddPoint.js";
-import {
-  createEntityAddBillboard,
-  type EntityAddBillboardConfig,
-} from "./tools/entityAddBillboard/entityAddBillboard.js";
-import {
-  createEntityAddLabel,
-  type EntityAddLabelConfig,
-} from "./tools/entityAddLabel/entityAddLabel.js";
-import {
-  createEntityAddModel,
-  type EntityAddModelConfig,
-} from "./tools/entityAddModel/entityAddModel.js";
-import {
-  createEntityAddPolygon,
-  type EntityAddPolygonConfig,
-} from "./tools/entityAddPolygon/entityAddPolygon.js";
-import {
-  createEntityAddPolyline,
-  type EntityAddPolylineConfig,
-} from "./tools/entityAddPolyline/entityAddPolyline.js";
-import { createEntityAddBox, type EntityAddBoxConfig } from "./tools/entityAddBox/entityAddBox.js";
-import {
-  createEntityAddCorridor,
-  type EntityAddCorridorConfig,
-} from "./tools/entityAddCorridor/entityAddCorridor.js";
-import {
-  createEntityAddCylinder,
-  type EntityAddCylinderConfig,
-} from "./tools/entityAddCylinder/entityAddCylinder.js";
-import {
-  createEntityAddEllipse,
-  type EntityAddEllipseConfig,
-} from "./tools/entityAddEllipse/entityAddEllipse.js";
-import {
-  createEntityAddRectangle,
-  type EntityAddRectangleConfig,
-} from "./tools/entityAddRectangle/entityAddRectangle.js";
-import {
-  createEntityAddWall,
-  type EntityAddWallConfig,
-} from "./tools/entityAddWall/entityAddWall.js";
+import { createEntityAdd, type EntityAddConfig } from "./tools/entityAdd/entityAdd.js";
 import { createEntityList, type EntityListConfig } from "./tools/entityList/entityList.js";
 import { createEntityRemove, type EntityRemoveConfig } from "./tools/entityRemove/entityRemove.js";
 import {
@@ -144,29 +93,17 @@ export {
   type CameraLookAtTransformFieldDescriptions,
 } from "./tools/cameraLookAtTransform/cameraLookAtTransform.js";
 export {
-  createCameraStartOrbit,
-  cameraStartOrbit,
-  type CameraStartOrbitConfig,
-} from "./tools/cameraStartOrbit/cameraStartOrbit.js";
+  createCameraOrbit,
+  cameraOrbit,
+  type CameraOrbitConfig,
+} from "./tools/cameraOrbit/cameraOrbit.js";
 export {
-  DEFAULT_CAMERA_START_ORBIT_DESCRIPTION,
-  DEFAULT_CAMERA_START_ORBIT_FIELD_DESCRIPTIONS,
-  buildCameraStartOrbitInputSchema,
-  defaultCameraStartOrbitInputSchema,
-  type CameraStartOrbitFieldDescriptions,
-} from "./tools/cameraStartOrbit/cameraStartOrbit.js";
-export {
-  createCameraStopOrbit,
-  cameraStopOrbit,
-  type CameraStopOrbitConfig,
-} from "./tools/cameraStopOrbit/cameraStopOrbit.js";
-export {
-  DEFAULT_CAMERA_STOP_ORBIT_DESCRIPTION,
-  DEFAULT_CAMERA_STOP_ORBIT_FIELD_DESCRIPTIONS,
-  buildCameraStopOrbitInputSchema,
-  defaultCameraStopOrbitInputSchema,
-  type CameraStopOrbitFieldDescriptions,
-} from "./tools/cameraStopOrbit/cameraStopOrbit.js";
+  DEFAULT_CAMERA_ORBIT_DESCRIPTION,
+  DEFAULT_CAMERA_ORBIT_FIELD_DESCRIPTIONS,
+  buildCameraOrbitInputSchema,
+  defaultCameraOrbitInputSchema,
+  type CameraOrbitFieldDescriptions,
+} from "./tools/cameraOrbit/cameraOrbit.js";
 export {
   createCameraGetPosition,
   cameraGetPosition,
@@ -191,150 +128,14 @@ export {
   defaultCameraSetControllerOptionsInputSchema,
   type CameraSetControllerOptionsFieldDescriptions,
 } from "./tools/cameraSetControllerOptions/cameraSetControllerOptions.js";
+export { createEntityAdd, entityAdd, type EntityAddConfig } from "./tools/entityAdd/entityAdd.js";
 export {
-  createEntityAddPoint,
-  entityAddPoint,
-  type EntityAddPointConfig,
-} from "./tools/entityAddPoint/entityAddPoint.js";
-export {
-  DEFAULT_ENTITY_ADD_POINT_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_POINT_FIELD_DESCRIPTIONS,
-  buildEntityAddPointInputSchema,
-  defaultEntityAddPointInputSchema,
-  type EntityAddPointFieldDescriptions,
-} from "./tools/entityAddPoint/entityAddPoint.js";
-export {
-  createEntityAddBillboard,
-  entityAddBillboard,
-  type EntityAddBillboardConfig,
-} from "./tools/entityAddBillboard/entityAddBillboard.js";
-export {
-  DEFAULT_ENTITY_ADD_BILLBOARD_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_BILLBOARD_FIELD_DESCRIPTIONS,
-  buildEntityAddBillboardInputSchema,
-  defaultEntityAddBillboardInputSchema,
-  type EntityAddBillboardFieldDescriptions,
-} from "./tools/entityAddBillboard/entityAddBillboard.js";
-export {
-  createEntityAddLabel,
-  entityAddLabel,
-  type EntityAddLabelConfig,
-} from "./tools/entityAddLabel/entityAddLabel.js";
-export {
-  DEFAULT_ENTITY_ADD_LABEL_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_LABEL_FIELD_DESCRIPTIONS,
-  buildEntityAddLabelInputSchema,
-  defaultEntityAddLabelInputSchema,
-  type EntityAddLabelFieldDescriptions,
-} from "./tools/entityAddLabel/entityAddLabel.js";
-export {
-  createEntityAddModel,
-  entityAddModel,
-  type EntityAddModelConfig,
-} from "./tools/entityAddModel/entityAddModel.js";
-export {
-  DEFAULT_ENTITY_ADD_MODEL_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_MODEL_FIELD_DESCRIPTIONS,
-  buildEntityAddModelInputSchema,
-  defaultEntityAddModelInputSchema,
-  type EntityAddModelFieldDescriptions,
-} from "./tools/entityAddModel/entityAddModel.js";
-export {
-  createEntityAddPolygon,
-  entityAddPolygon,
-  type EntityAddPolygonConfig,
-} from "./tools/entityAddPolygon/entityAddPolygon.js";
-export {
-  DEFAULT_ENTITY_ADD_POLYGON_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_POLYGON_FIELD_DESCRIPTIONS,
-  buildEntityAddPolygonInputSchema,
-  defaultEntityAddPolygonInputSchema,
-  type EntityAddPolygonFieldDescriptions,
-} from "./tools/entityAddPolygon/entityAddPolygon.js";
-export {
-  createEntityAddPolyline,
-  entityAddPolyline,
-  type EntityAddPolylineConfig,
-} from "./tools/entityAddPolyline/entityAddPolyline.js";
-export {
-  DEFAULT_ENTITY_ADD_POLYLINE_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_POLYLINE_FIELD_DESCRIPTIONS,
-  buildEntityAddPolylineInputSchema,
-  defaultEntityAddPolylineInputSchema,
-  type EntityAddPolylineFieldDescriptions,
-} from "./tools/entityAddPolyline/entityAddPolyline.js";
-export {
-  createEntityAddBox,
-  entityAddBox,
-  type EntityAddBoxConfig,
-} from "./tools/entityAddBox/entityAddBox.js";
-export {
-  DEFAULT_ENTITY_ADD_BOX_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_BOX_FIELD_DESCRIPTIONS,
-  buildEntityAddBoxInputSchema,
-  defaultEntityAddBoxInputSchema,
-  type EntityAddBoxFieldDescriptions,
-} from "./tools/entityAddBox/entityAddBox.js";
-export {
-  createEntityAddCorridor,
-  entityAddCorridor,
-  type EntityAddCorridorConfig,
-} from "./tools/entityAddCorridor/entityAddCorridor.js";
-export {
-  DEFAULT_ENTITY_ADD_CORRIDOR_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_CORRIDOR_FIELD_DESCRIPTIONS,
-  buildEntityAddCorridorInputSchema,
-  defaultEntityAddCorridorInputSchema,
-  type EntityAddCorridorFieldDescriptions,
-} from "./tools/entityAddCorridor/entityAddCorridor.js";
-export {
-  createEntityAddCylinder,
-  entityAddCylinder,
-  type EntityAddCylinderConfig,
-} from "./tools/entityAddCylinder/entityAddCylinder.js";
-export {
-  DEFAULT_ENTITY_ADD_CYLINDER_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_CYLINDER_FIELD_DESCRIPTIONS,
-  buildEntityAddCylinderInputSchema,
-  defaultEntityAddCylinderInputSchema,
-  type EntityAddCylinderFieldDescriptions,
-} from "./tools/entityAddCylinder/entityAddCylinder.js";
-export {
-  createEntityAddEllipse,
-  entityAddEllipse,
-  type EntityAddEllipseConfig,
-} from "./tools/entityAddEllipse/entityAddEllipse.js";
-export {
-  DEFAULT_ENTITY_ADD_ELLIPSE_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_ELLIPSE_FIELD_DESCRIPTIONS,
-  buildEntityAddEllipseInputSchema,
-  defaultEntityAddEllipseInputSchema,
-  type EntityAddEllipseFieldDescriptions,
-} from "./tools/entityAddEllipse/entityAddEllipse.js";
-export {
-  createEntityAddRectangle,
-  entityAddRectangle,
-  type EntityAddRectangleConfig,
-} from "./tools/entityAddRectangle/entityAddRectangle.js";
-export {
-  DEFAULT_ENTITY_ADD_RECTANGLE_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_RECTANGLE_FIELD_DESCRIPTIONS,
-  buildEntityAddRectangleInputSchema,
-  defaultEntityAddRectangleInputSchema,
-  type EntityAddRectangleFieldDescriptions,
-} from "./tools/entityAddRectangle/entityAddRectangle.js";
-export {
-  createEntityAddWall,
-  entityAddWall,
-  type EntityAddWallConfig,
-} from "./tools/entityAddWall/entityAddWall.js";
-export {
-  DEFAULT_ENTITY_ADD_WALL_DESCRIPTION,
-  DEFAULT_ENTITY_ADD_WALL_FIELD_DESCRIPTIONS,
-  buildEntityAddWallInputSchema,
-  defaultEntityAddWallInputSchema,
-  type EntityAddWallFieldDescriptions,
-} from "./tools/entityAddWall/entityAddWall.js";
+  DEFAULT_ENTITY_ADD_DESCRIPTION,
+  DEFAULT_ENTITY_ADD_FIELD_DESCRIPTIONS,
+  buildEntityAddInputSchema,
+  defaultEntityAddInputSchema,
+  type EntityAddFieldDescriptions,
+} from "./tools/entityAdd/entityAdd.js";
 export {
   createEntityList,
   entityList,
@@ -514,38 +315,14 @@ export interface CesiumToolsConfig {
   cameraSetView?: CameraSetViewConfig | false;
   /** Override `cameraLookAtTransform`'s description / input schema, or `false` to exclude it. */
   cameraLookAtTransform?: CameraLookAtTransformConfig | false;
-  /** Override `cameraStartOrbit`'s description / input schema, or `false` to exclude it. */
-  cameraStartOrbit?: CameraStartOrbitConfig | false;
-  /** Override `cameraStopOrbit`'s description / input schema, or `false` to exclude it. */
-  cameraStopOrbit?: CameraStopOrbitConfig | false;
+  /** Override `cameraOrbit`'s description / input schema, or `false` to exclude it. */
+  cameraOrbit?: CameraOrbitConfig | false;
   /** Override `cameraGetPosition`'s description / input schema, or `false` to exclude it. */
   cameraGetPosition?: CameraGetPositionConfig | false;
   /** Override `cameraSetControllerOptions`'s description / input schema, or `false` to exclude it. */
   cameraSetControllerOptions?: CameraSetControllerOptionsConfig | false;
-  /** Override `entityAddPoint`'s description / input schema, or `false` to exclude it. */
-  entityAddPoint?: EntityAddPointConfig | false;
-  /** Override `entityAddBillboard`'s description / input schema, or `false` to exclude it. */
-  entityAddBillboard?: EntityAddBillboardConfig | false;
-  /** Override `entityAddLabel`'s description / input schema, or `false` to exclude it. */
-  entityAddLabel?: EntityAddLabelConfig | false;
-  /** Override `entityAddModel`'s description / input schema, or `false` to exclude it. */
-  entityAddModel?: EntityAddModelConfig | false;
-  /** Override `entityAddPolygon`'s description / input schema, or `false` to exclude it. */
-  entityAddPolygon?: EntityAddPolygonConfig | false;
-  /** Override `entityAddPolyline`'s description / input schema, or `false` to exclude it. */
-  entityAddPolyline?: EntityAddPolylineConfig | false;
-  /** Override `entityAddBox`'s description / input schema, or `false` to exclude it. */
-  entityAddBox?: EntityAddBoxConfig | false;
-  /** Override `entityAddCorridor`'s description / input schema, or `false` to exclude it. */
-  entityAddCorridor?: EntityAddCorridorConfig | false;
-  /** Override `entityAddCylinder`'s description / input schema, or `false` to exclude it. */
-  entityAddCylinder?: EntityAddCylinderConfig | false;
-  /** Override `entityAddEllipse`'s description / input schema, or `false` to exclude it. */
-  entityAddEllipse?: EntityAddEllipseConfig | false;
-  /** Override `entityAddRectangle`'s description / input schema, or `false` to exclude it. */
-  entityAddRectangle?: EntityAddRectangleConfig | false;
-  /** Override `entityAddWall`'s description / input schema, or `false` to exclude it. */
-  entityAddWall?: EntityAddWallConfig | false;
+  /** Override `entityAdd`'s description / input schema, or `false` to exclude it. */
+  entityAdd?: EntityAddConfig | false;
   /** Override `entityList`'s description / input schema, or `false` to exclude it. */
   entityList?: EntityListConfig | false;
   /** Override `entityRemove`'s description / input schema, or `false` to exclude it. */
@@ -618,11 +395,8 @@ export function createCesiumTools(config: CesiumToolsConfig = {}): ToolSet {
       config.cameraLookAtTransform,
     );
   }
-  if (config.cameraStartOrbit !== false && allowed(CESIUM_TOOL_NAMES.cameraStartOrbit)) {
-    tools[CESIUM_TOOL_NAMES.cameraStartOrbit] = createCameraStartOrbit(config.cameraStartOrbit);
-  }
-  if (config.cameraStopOrbit !== false && allowed(CESIUM_TOOL_NAMES.cameraStopOrbit)) {
-    tools[CESIUM_TOOL_NAMES.cameraStopOrbit] = createCameraStopOrbit(config.cameraStopOrbit);
+  if (config.cameraOrbit !== false && allowed(CESIUM_TOOL_NAMES.cameraOrbit)) {
+    tools[CESIUM_TOOL_NAMES.cameraOrbit] = createCameraOrbit(config.cameraOrbit);
   }
   if (config.cameraGetPosition !== false && allowed(CESIUM_TOOL_NAMES.cameraGetPosition)) {
     tools[CESIUM_TOOL_NAMES.cameraGetPosition] = createCameraGetPosition(config.cameraGetPosition);
@@ -635,45 +409,8 @@ export function createCesiumTools(config: CesiumToolsConfig = {}): ToolSet {
       config.cameraSetControllerOptions,
     );
   }
-  if (config.entityAddPoint !== false && allowed(CESIUM_TOOL_NAMES.entityAddPoint)) {
-    tools[CESIUM_TOOL_NAMES.entityAddPoint] = createEntityAddPoint(config.entityAddPoint);
-  }
-  if (config.entityAddBillboard !== false && allowed(CESIUM_TOOL_NAMES.entityAddBillboard)) {
-    tools[CESIUM_TOOL_NAMES.entityAddBillboard] = createEntityAddBillboard(
-      config.entityAddBillboard,
-    );
-  }
-  if (config.entityAddLabel !== false && allowed(CESIUM_TOOL_NAMES.entityAddLabel)) {
-    tools[CESIUM_TOOL_NAMES.entityAddLabel] = createEntityAddLabel(config.entityAddLabel);
-  }
-  if (config.entityAddModel !== false && allowed(CESIUM_TOOL_NAMES.entityAddModel)) {
-    tools[CESIUM_TOOL_NAMES.entityAddModel] = createEntityAddModel(config.entityAddModel);
-  }
-  if (config.entityAddPolygon !== false && allowed(CESIUM_TOOL_NAMES.entityAddPolygon)) {
-    tools[CESIUM_TOOL_NAMES.entityAddPolygon] = createEntityAddPolygon(config.entityAddPolygon);
-  }
-  if (config.entityAddPolyline !== false && allowed(CESIUM_TOOL_NAMES.entityAddPolyline)) {
-    tools[CESIUM_TOOL_NAMES.entityAddPolyline] = createEntityAddPolyline(config.entityAddPolyline);
-  }
-  if (config.entityAddBox !== false && allowed(CESIUM_TOOL_NAMES.entityAddBox)) {
-    tools[CESIUM_TOOL_NAMES.entityAddBox] = createEntityAddBox(config.entityAddBox);
-  }
-  if (config.entityAddCorridor !== false && allowed(CESIUM_TOOL_NAMES.entityAddCorridor)) {
-    tools[CESIUM_TOOL_NAMES.entityAddCorridor] = createEntityAddCorridor(config.entityAddCorridor);
-  }
-  if (config.entityAddCylinder !== false && allowed(CESIUM_TOOL_NAMES.entityAddCylinder)) {
-    tools[CESIUM_TOOL_NAMES.entityAddCylinder] = createEntityAddCylinder(config.entityAddCylinder);
-  }
-  if (config.entityAddEllipse !== false && allowed(CESIUM_TOOL_NAMES.entityAddEllipse)) {
-    tools[CESIUM_TOOL_NAMES.entityAddEllipse] = createEntityAddEllipse(config.entityAddEllipse);
-  }
-  if (config.entityAddRectangle !== false && allowed(CESIUM_TOOL_NAMES.entityAddRectangle)) {
-    tools[CESIUM_TOOL_NAMES.entityAddRectangle] = createEntityAddRectangle(
-      config.entityAddRectangle,
-    );
-  }
-  if (config.entityAddWall !== false && allowed(CESIUM_TOOL_NAMES.entityAddWall)) {
-    tools[CESIUM_TOOL_NAMES.entityAddWall] = createEntityAddWall(config.entityAddWall);
+  if (config.entityAdd !== false && allowed(CESIUM_TOOL_NAMES.entityAdd)) {
+    tools[CESIUM_TOOL_NAMES.entityAdd] = createEntityAdd(config.entityAdd);
   }
   if (config.entityList !== false && allowed(CESIUM_TOOL_NAMES.entityList)) {
     tools[CESIUM_TOOL_NAMES.entityList] = createEntityList(config.entityList);

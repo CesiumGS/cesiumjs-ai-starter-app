@@ -4,6 +4,7 @@ import { EntityCollection } from "cesium";
 import type { Viewer } from "cesium";
 import { entityAddPointInputShape } from "@cesium-ai/tools-schemas/schemas";
 import {
+  entityAdd,
   createEntityAddPointExecutor,
   entityAddPoint,
   entityAddPolygon,
@@ -16,6 +17,35 @@ function fakeViewer(): Viewer {
 }
 
 describe("entity executors", () => {
+  test("entityAdd delegates to the matching specific executor", async () => {
+    const viewer = fakeViewer();
+
+    const addResult = await entityAdd(viewer, {
+      type: "point",
+      data: {
+        id: "point-1",
+        position: { longitude: 2.35, latitude: 48.85 },
+        color: "#ff0000",
+      },
+    });
+
+    expect(addResult).toEqual({ success: true, id: "point-1" });
+    expect(viewer.entities.getById("point-1")).toBeDefined();
+  });
+
+  test("entityAdd validates both type and payload shape", async () => {
+    const viewer = fakeViewer();
+
+    const result = await entityAdd(viewer, {
+      type: "point",
+      data: { position: { longitude: 0, latitude: 0 } },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid entityAdd arguments");
+    expect(viewer.entities.values).toHaveLength(0);
+  });
+
   test("entityAddPoint adds a point entity that entityList/entityRemove can see", async () => {
     const viewer = fakeViewer();
 

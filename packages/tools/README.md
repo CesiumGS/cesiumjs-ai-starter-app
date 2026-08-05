@@ -1,8 +1,37 @@
 # @cesium-ai/tools
 
-Default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue (`flyTo`, the camera tools, every `entityAdd*`, the animation tools, `clockControl`, `globeSetLighting`, the imagery tools). Each executor validates the model's tool-call args against the tool's shared structural shape (from `@cesium-ai/tools-schemas/schemas`) and runs the corresponding action against a live CesiumJS `Viewer`.
+Default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue (`flyTo`, camera tools, `entityAdd`, animation tools, and imagery tools). Each executor validates the model's tool-call args against the tool's shared structural shape (from `@cesium-ai/tools-schemas/schemas`) and runs the corresponding action against a live CesiumJS `Viewer`.
 
-This package is the missing "other half" of `@cesium-ai/tools-schemas`: that package only ever defines _what a tool call looks like_ (schema + description, model-facing) — it deliberately has no `execute`, since the AI SDK streams every one of these tool calls to the browser to run against the real `Viewer`. This package is the default implementation of that browser-side half, so a host app doesn't have to hand-write an executor for all 32 tools before it can turn one on.
+This package is the missing "other half" of `@cesium-ai/tools-schemas`: that package only ever defines _what a tool call looks like_ (schema + description, model-facing) — it deliberately has no `execute`, since the AI SDK streams every one of these tool calls to the browser to run against the real `Viewer`. This package is the default implementation of that browser-side half, so a host app doesn't have to hand-write an executor for all model-facing tools before it can turn one on.
+
+## Supported tools
+
+### Default model-facing executors
+
+These are the executors included in `DEFAULT_CESIUM_TOOL_EXECUTORS` and keyed by `CESIUM_TOOL_NAMES`:
+
+| Domain    | Tool                         | Default executor             |
+| --------- | ---------------------------- | ---------------------------- |
+| Camera    | `flyTo`                      | `flyTo`                      |
+| Camera    | `cameraSetView`              | `cameraSetView`              |
+| Camera    | `cameraLookAtTransform`      | `cameraLookAtTransform`      |
+| Camera    | `cameraOrbit`                | `cameraOrbit`                |
+| Camera    | `cameraGetPosition`          | `cameraGetPosition`          |
+| Camera    | `cameraSetControllerOptions` | `cameraSetControllerOptions` |
+| Entity    | `entityAdd`                  | `entityAdd`                  |
+| Entity    | `entityList`                 | `entityList`                 |
+| Entity    | `entityRemove`               | `entityRemove`               |
+| Animation | `animationCreate`            | `animationCreate`            |
+| Animation | `animationControl`           | `animationControl`           |
+| Animation | `animationRemove`            | `animationRemove`            |
+| Animation | `animationListActive`        | `animationListActive`        |
+| Animation | `animationUpdatePath`        | `animationUpdatePath`        |
+| Animation | `animationCameraTracking`    | `animationCameraTracking`    |
+| Animation | `clockControl`               | `clockControl`               |
+| Animation | `globeSetLighting`           | `globeSetLighting`           |
+| Imagery   | `imageryAdd`                 | `imageryAdd`                 |
+| Imagery   | `imageryRemove`              | `imageryRemove`              |
+| Imagery   | `imageryList`                | `imageryList`                |
 
 ## Usage
 
@@ -26,7 +55,7 @@ Pass a replacement executor for any tool name; every other tool keeps its defaul
 ```ts
 const executors = createCesiumToolExecutors({
   flyTo: myCustomFlyTo,
-  entityAddPoint: myCustomEntityAddPoint,
+  entityAdd: myCustomEntityAdd,
   globeSetLighting: myCustomGlobeSetLighting,
 });
 ```
@@ -43,7 +72,9 @@ A handful of tools share one shape: validate args, then make **one** Cesium API 
 | `cameraSetView`         | `createCameraSetViewExecutor` | `shape`, `buildSetViewOptions` (extra `Camera.setView` options)                                            |
 | every `entityAdd*` tool | `createEntityAddXExecutor`    | `shape`, `extendEntityOptions` (extra top-level `Entity.ConstructorOptions` fields — see the caveat below) |
 
-Every other tool (`cameraLookAtTransform`, `cameraStartOrbit`/`StopOrbit`, `cameraGetPosition`, `cameraSetControllerOptions`, `entityList`/`entityRemove`, every `animation*` tool, `clockControl`, `globeSetLighting`, `imageryAdd`/`Remove`/`List`) has **no** dedicated factory — either it has no natural "options object" to extend (`cameraLookAtTransform` takes two positional args; `entityList`/`entityRemove` have almost no input at all), or it does multi-step/registry-backed work that a single merged-options object can't capture (`animationCreate`, `imageryAdd`). Full override (above) is the way to customize these.
+`entityAdd` itself is additive and dispatches to those same `entityAdd*` executors by `type`, so hosts can choose one consolidated tool name without losing the existing per-type contracts.
+
+Every other tool (`cameraLookAtTransform`, `cameraOrbit`, `cameraGetPosition`, `cameraSetControllerOptions`, `entityList`/`entityRemove`, every `animation*` tool, `clockControl`, `globeSetLighting`, `imageryAdd`/`Remove`/`List`) has **no** dedicated factory — either it has no natural "options object" to extend (`cameraLookAtTransform` takes two positional args; `entityList`/`entityRemove` have almost no input at all), or it does multi-step/registry-backed work that a single merged-options object can't capture (`animationCreate`, `imageryAdd`). Full override (above) is the way to customize these.
 
 #### Worked example: extending `flyTo` with extra fields
 
@@ -88,7 +119,7 @@ const executors = createCesiumToolExecutors({
 
 #### Worked example: extending an `entityAdd*` tool
 
-Every `entityAdd*` tool's `createXExecutor` accepts an extended `shape` plus an `extendEntityOptions(data)` callback merging extra **top-level** `Entity.ConstructorOptions` fields (e.g. `properties` for custom metadata, `availability`) in after the tool's own base options:
+`entityAdd` is the only model-facing entity tool (`CESIUM_TOOL_NAMES.entityAdd`) — its `type` field dispatches internally to one of the 12 `entityAdd*` executors below by name. Each still has its own `createXExecutor` (`shape`, `extendEntityOptions`), so you can extend one variant's behavior without forking `entityAdd` itself:
 
 ```ts
 import { z } from "zod";
@@ -130,7 +161,7 @@ A few tools' defaults are intentionally simple starting points rather than exhau
 
 | Tool                      | Limitation                                                                                                                                 | Extension point                                                            |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
-| `cameraStartOrbit`        | Cesium has no built-in continuous orbit API; the default is a simple `camera.rotateRight` nudge per `clock.onTick`.                        | Override `cameraStartOrbit`/`cameraStopOrbit`.                             |
+| `cameraOrbit`             | Cesium has no built-in continuous orbit API; the default `action: "start"` is a simple `camera.rotateRight` nudge per `clock.onTick`.      | Override `cameraOrbit`.                                                    |
 | `animationCreate`         | `modelPreset` (a named preset like `"car"`) isn't resolved to a real asset URI; `clampToGround` and `loopMode: "pingpong"` aren't applied. | Pass `modelUri` directly, or override `animationCreate`.                   |
 | `animationControl`        | Play/pause is global (Cesium's `Clock` is shared across every entity), not truly per-animation.                                            | Override `animationControl` for independent playback.                      |
 | `animationCameraTracking` | `range`/`pitch`/`heading` aren't applied — only `trackedEntity` is toggled.                                                                | Override `animationCameraTracking` for a custom chase-cam offset.          |
@@ -138,7 +169,7 @@ A few tools' defaults are intentionally simple starting points rather than exhau
 
 ## File layout
 
-Executors are grouped by domain rather than one file per tool (unlike `@cesium-ai/tools-schemas`) — `src/tools/fly-to.ts`, `camera.ts`, `entities.ts`, `animation.ts`, `imagery.ts` — since there's no per-tool description/schema pair to keep isolated here, just a plain function per tool. Each function is still exported individually by name, so overriding or reading one doesn't require importing the whole registry.
+Executors are grouped by domain rather than one file per tool (unlike `@cesium-ai/tools-schemas`) — `src/tools/camera.ts`, `entities.ts`, `animation.ts`, `imagery.ts` — since there's no per-tool description/schema pair to keep isolated here, just a plain function per tool. Each function is still exported individually by name, so overriding or reading one doesn't require importing the whole registry.
 
 - `src/types.ts` — `ToolExecutor`, `ToolExecutionResult`, `CesiumToolExecutors`, `CesiumToolExecutorOverrides`.
 - `src/utils/validate.ts` — `parseArgs`, the shared "validate against a zod shape, never throw" helper every executor calls first.

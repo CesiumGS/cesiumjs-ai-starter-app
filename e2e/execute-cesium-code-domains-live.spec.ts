@@ -187,7 +187,7 @@ const assertImageryLayerAdded = (page: Page, before: ViewerSnapshot) =>
  * See `execute-cesium-code-domains.spec.ts` for the stubbed, deterministic counterpart, and
  * `execute-cesium-code-live.spec.ts` for the single-scenario test this generalizes.
  *
- * Setup (same as `fly-to-paris.spec.ts`):
+ * Setup (same as `cesium-viewer-tools-live.spec.ts`):
  *   1) npm run dev:backend     # backend on :3001 with .env loaded
  *   2) npm run test:e2e        # Playwright starts the frontend on :5173 and runs this
  *

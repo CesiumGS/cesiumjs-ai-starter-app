@@ -1,29 +1,13 @@
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
-import { flyTo } from "./tools/fly-to.js";
 import {
+  flyTo,
   cameraGetPosition,
   cameraLookAtTransform,
+  cameraOrbit,
   cameraSetControllerOptions,
   cameraSetView,
-  cameraStartOrbit,
-  cameraStopOrbit,
 } from "./tools/camera.js";
-import {
-  entityAddBillboard,
-  entityAddBox,
-  entityAddCorridor,
-  entityAddCylinder,
-  entityAddEllipse,
-  entityAddLabel,
-  entityAddModel,
-  entityAddPoint,
-  entityAddPolygon,
-  entityAddPolyline,
-  entityAddRectangle,
-  entityAddWall,
-  entityList,
-  entityRemove,
-} from "./tools/entities.js";
+import { entityAdd, entityList, entityRemove } from "./tools/entities.js";
 import {
   animationCameraTracking,
   animationControl,
@@ -44,19 +28,25 @@ export type {
   CesiumToolExecutorOverrides,
 } from "./types.js";
 
-export { flyTo, createFlyToExecutor } from "./tools/fly-to.js";
-export type { FlyToCameraOptions, FlyToExecutorConfig } from "./tools/fly-to.js";
 export {
+  createFlyToExecutor,
+  type FlyToCameraOptions,
+  type FlyToExecutorConfig,
+  createCameraSetViewExecutor,
+  type CameraSetViewExecutorConfig,
+  type CameraSetViewOptions,
+} from "./tools/camera.js";
+
+export {
+  flyTo,
   cameraGetPosition,
   cameraLookAtTransform,
+  cameraOrbit,
   cameraSetControllerOptions,
   cameraSetView,
-  cameraStartOrbit,
-  cameraStopOrbit,
-  createCameraSetViewExecutor,
 } from "./tools/camera.js";
-export type { CameraSetViewExecutorConfig, CameraSetViewOptions } from "./tools/camera.js";
 export {
+  entityAdd,
   entityAddBillboard,
   entityAddBox,
   entityAddCorridor,
@@ -117,23 +107,13 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
   // camera
   [CESIUM_TOOL_NAMES.cameraSetView]: cameraSetView,
   [CESIUM_TOOL_NAMES.cameraLookAtTransform]: cameraLookAtTransform,
-  [CESIUM_TOOL_NAMES.cameraStartOrbit]: cameraStartOrbit,
-  [CESIUM_TOOL_NAMES.cameraStopOrbit]: cameraStopOrbit,
+  [CESIUM_TOOL_NAMES.cameraOrbit]: cameraOrbit,
   [CESIUM_TOOL_NAMES.cameraGetPosition]: cameraGetPosition,
   [CESIUM_TOOL_NAMES.cameraSetControllerOptions]: cameraSetControllerOptions,
-  // entity
-  [CESIUM_TOOL_NAMES.entityAddPoint]: entityAddPoint,
-  [CESIUM_TOOL_NAMES.entityAddBillboard]: entityAddBillboard,
-  [CESIUM_TOOL_NAMES.entityAddLabel]: entityAddLabel,
-  [CESIUM_TOOL_NAMES.entityAddModel]: entityAddModel,
-  [CESIUM_TOOL_NAMES.entityAddPolygon]: entityAddPolygon,
-  [CESIUM_TOOL_NAMES.entityAddPolyline]: entityAddPolyline,
-  [CESIUM_TOOL_NAMES.entityAddBox]: entityAddBox,
-  [CESIUM_TOOL_NAMES.entityAddCorridor]: entityAddCorridor,
-  [CESIUM_TOOL_NAMES.entityAddCylinder]: entityAddCylinder,
-  [CESIUM_TOOL_NAMES.entityAddEllipse]: entityAddEllipse,
-  [CESIUM_TOOL_NAMES.entityAddRectangle]: entityAddRectangle,
-  [CESIUM_TOOL_NAMES.entityAddWall]: entityAddWall,
+  // entity — entityAdd is the single model-facing entry point; the per-type
+  // executors below still back its internal dispatch (see entities.ts) but are
+  // no longer separately registered under their own CESIUM_TOOL_NAMES entry.
+  [CESIUM_TOOL_NAMES.entityAdd]: entityAdd,
   [CESIUM_TOOL_NAMES.entityList]: entityList,
   [CESIUM_TOOL_NAMES.entityRemove]: entityRemove,
   // animation
