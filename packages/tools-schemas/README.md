@@ -6,31 +6,14 @@
 
 The model-facing catalogue currently contains 19 tools (`CESIUM_TOOL_NAMES`):
 
-| Domain    | Tool                         | Notes                                                                 |
-| --------- | ---------------------------- | --------------------------------------------------------------------- |
-| Camera    | `flyTo`                      | Fly camera to lon/lat/altitude.                                       |
-| Camera    | `cameraSetView`              | Set destination and orientation.                                      |
-| Camera    | `cameraLookAtTransform`      | Look at a transform with an offset.                                   |
-| Camera    | `cameraOrbit`                | Start or stop orbiting via `action`.                                  |
-| Camera    | `cameraGetPosition`          | Read geodetic camera state.                                           |
-| Camera    | `cameraSetControllerOptions` | Configure controller behavior flags.                                  |
-| Entity    | `entityAdd`                  | Discriminated-union tool by `type` (point, model, polygon, and more). |
-| Entity    | `entityList`                 | List entities visible to the tool layer.                              |
-| Entity    | `entityRemove`               | Remove an entity by id.                                               |
-| Animation | `animationCreate`            | Create an animation track/entity.                                     |
-| Animation | `animationRemove`            | Remove animation by id.                                               |
-| Animation | `animationListActive`        | List active animations.                                               |
-| Animation | `animationUpdatePath`        | Update animation path settings.                                       |
-| Animation | `animationCameraTracking`    | Toggle camera tracking for animation.                                 |
-| Animation | `clockControl`               | Control viewer clock behavior.                                        |
-| Animation | `globeSetLighting`           | Toggle globe lighting.                                                |
-| Imagery   | `imageryAdd`                 | Add imagery layer/provider.                                           |
-| Imagery   | `imageryRemove`              | Remove imagery layer(s).                                              |
-| Imagery   | `imageryList`                | List imagery layers.                                                  |
+- **Camera** — `flyTo`, `cameraSetView`, `cameraLookAtTransform`, `cameraOrbit`, `cameraGetPosition`, `cameraSetControllerOptions`
+- **Entity** — `entityAdd` (a discriminated-union tool: the model picks `type` — point, billboard, label, model, polygon, and more), `entityList`, `entityRemove`
+- **Animation** — `animationCreate`, `animationRemove`, `animationListActive`, `animationUpdatePath`, `animationCameraTracking`, `clockControl`, `globeSetLighting`
+- **Imagery** — `imageryAdd`, `imageryRemove`, `imageryList`
 
-Every tool follows the exact same shape as `flyTo` (see below): a `<toolName>.schema.ts` with no description text, a `<toolName>.ts` with the default description/field hints and a `create<ToolName>` factory, an entry in `CESIUM_TOOL_NAMES`, and a corresponding key on `CesiumToolsConfig`. `entityAdd`'s per-variant payload shapes (`entityAddPoint`, `entityAddBillboard`, and others) still exist as internal schema modules under `src/tools/entityAdd*/` and are re-exported from the `/schemas` subpath, but are no longer separately registered `CESIUM_TOOL_NAMES` entries or model-facing tools. `entityAdd`'s `type` field is the single model entry point for all entity variants.
+Every tool follows the exact same shape as `flyTo` (see below): a `<toolName>.schema.ts` with no description text, a `<toolName>.ts` with the default description/field hints and a `create<ToolName>` factory, an entry in `CESIUM_TOOL_NAMES`, and a corresponding key on `CesiumToolsConfig`. `entityAdd`'s per-variant payload shapes (`entityAddPoint`, `entityAddBillboard`, and others) still exist as internal schema modules under [`src/tools/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas/src/tools) and are re-exported from the `/schemas` subpath, but are no longer separately registered `CESIUM_TOOL_NAMES` entries or model-facing tools. `entityAdd`'s `type` field is the single model entry point for all entity variants.
 
-See the [full Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) for per-tool details.
+See the [Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) for what each tool does, per-field.
 
 ## Usage
 

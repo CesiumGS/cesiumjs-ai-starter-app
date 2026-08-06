@@ -185,7 +185,7 @@ are labeled as diagnostic data rather than instructions.
 
 **Purpose:** Describes complex custom camera/entity/scene manipulation by natural-language intent (complements `@cesium-ai/tools-cesium`'s `flyTo` for non-simple requests).
 
-**Design:** Library copy is **schema only by design** — no `execute` method. Host apps wire their own executable version on top (e.g., `backend/src/tools/execute-cesium-code-tool.ts` in this sample app).
+**Design:** Library copy is **schema only by design** — no `execute` method. Host apps wire their own executable version on top (e.g., [`backend/src/tools/execute-cesium-code-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/execute-cesium-code-tool.ts) in this sample app).
 
 **File structure:**
 
@@ -196,9 +196,9 @@ are labeled as diagnostic data rather than instructions.
 
 **Tool naming (single source of truth):**
 
-- **Source:** `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode` (from `tool-names.ts`, re-exported at `/names`)
+- **Source:** `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode` (from [`tool-names.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tool-names.ts), re-exported at `/names`)
 - **Backend:** Imported by tool registry
-- **Frontend:** Imported by result handler (`frontend/src/tools/execute-cesium-code.ts`'s `isExecuteCesiumCodeTool`)
+- **Frontend:** Imported by result handler ([`frontend/src/tools/execute-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/execute-cesium-code.ts)'s `isExecuteCesiumCodeTool`)
 
 ## File layout
 
