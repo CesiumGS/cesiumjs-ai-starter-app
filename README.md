@@ -85,6 +85,7 @@ Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://de
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
 - **`@cesium-ai/tools-schemas`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute`, and scoped strictly to tools that run directly against a live `Viewer`.
+- **`@cesium-ai/tools`** — default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s catalogue (`flyTo`, camera, entity, animation, and imagery tools) — the browser-side "other half" of that schema-only package, so a host app doesn't have to hand-write an executor for every tool before it can turn one on. `createCesiumToolExecutors({ ... })` lets a host override or extend any individual tool (e.g. this app's own `flyTo`, which validates against an extended shape — see below) without forking the rest. See [`packages/tools/README.md`](packages/tools/README.md).
 - **`@cesium-ai/codegen-cesium`** — backend-only pipeline that turns `executeCesiumCode`'s natural-language `intent` into statically-verified CesiumJS code (skills-grounded generation + an AST verifier), and also owns `executeCesiumCode`'s tool definition itself (schema-only, no `execute`) — that tool can't run directly against a `Viewer` like `flyTo` does, so it lives here rather than in `tools-schemas`. Parse-only — it never executes generated code itself.
 - **`@cesium-ai/codegen-sandbox`** — frontend-only QuickJS-WASM execution sandbox used to run verified generated CesiumJS snippets under strict memory/time limits and a guarded bridge to the live `Viewer`.
 - **`@cesium-ai/mcp-tools`** — optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) client bridge. Connects to MCP servers (SSE/HTTP — stdio is deliberately unsupported), namespaces + allowlist-filters their tools, and merges them into an AI SDK `ToolSet` a host app spreads alongside `createCesiumTools()` — this is the "MCP-backed tool group" the split-execution diagram above refers to. Entirely opt-in through an `mcp.config.json` file, with no MCP client created when the file is absent. See [`packages/mcp-tools/README.md`](packages/mcp-tools/README.md) for the full security model and API.
@@ -185,6 +186,7 @@ cesiumjs-ai-starter-app/
 ├── packages/
 │   ├── server/            # @cesium-ai/server — chat router + agent loop
 │   ├── tools-schemas/     # @cesium-ai/tools-schemas — viewer tool schemas
+│   ├── tools/             # @cesium-ai/tools — default client-side tool executors
 │   ├── codegen-cesium/    # @cesium-ai/codegen-cesium — codegen pipeline + executeCesiumCode tool
 │   ├── codegen-sandbox/   # @cesium-ai/codegen-sandbox — frontend sandbox for generated code
 │   ├── mcp-tools/         # @cesium-ai/mcp-tools — optional MCP client bridge

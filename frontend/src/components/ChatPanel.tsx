@@ -1,10 +1,9 @@
 import { useCallback, useRef } from "react";
 import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
-import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
-import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
+import type { EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-import { flyToLocation } from "../tools/camera";
+import { ENABLED_TOOLS, TOOL_EXECUTORS } from "../tools/cesium-tool-executors";
 import {
   handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
@@ -16,23 +15,6 @@ import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
 }
-
-/** A client-side executor: runs one tool call against the live Viewer. */
-type ToolExecutor = (viewer: Viewer, args: unknown) => Promise<unknown>;
-
-/** Client-side executors for enabled tools, keyed by type for compile-time safety. */
-const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
-  [CESIUM_TOOL_NAMES.flyTo]: (viewer, args) => flyToLocation(viewer, args),
-  // executeCesiumCode is server-resolved; stub serves as defense-in-depth.
-  [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: () =>
-    Promise.resolve({
-      success: false,
-      error: "executeCesiumCode is resolved server-side; no client-side executor runs for it.",
-    }),
-};
-
-/** Runtime set of enabled tools for defense-in-depth validation. */
-const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {

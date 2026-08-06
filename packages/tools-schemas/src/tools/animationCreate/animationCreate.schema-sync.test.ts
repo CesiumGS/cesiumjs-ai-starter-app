@@ -35,6 +35,10 @@ const CASES: ReadonlyArray<{ name: string; input: unknown; valid: boolean }> = [
       stopTime: "2026-01-01T00:05:00Z",
       interpolationAlgorithm: "LAGRANGE",
       showPath: true,
+      pathLeadTime: 15,
+      pathTrailTime: 15,
+      pathWidth: 3,
+      pathColor: { red: 0, green: 1, blue: 0 },
       modelPreset: "car",
       modelUri: "https://example.com/car.glb",
       modelScale: 1.5,
@@ -144,6 +148,42 @@ const CASES: ReadonlyArray<{ name: string; input: unknown; valid: boolean }> = [
         { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
       ],
       interpolationAlgorithm: "CATMULL_ROM",
+    },
+    valid: false,
+  },
+  {
+    name: "path styling fields",
+    input: {
+      positionSamples: [
+        { time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 },
+        { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
+      ],
+      pathLeadTime: 5,
+      pathTrailTime: 20,
+      pathWidth: 4,
+      pathColor: { red: 1, green: 0, blue: 0, alpha: 0.5 },
+    },
+    valid: true,
+  },
+  {
+    name: "negative pathWidth",
+    input: {
+      positionSamples: [
+        { time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 },
+        { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
+      ],
+      pathWidth: -1,
+    },
+    valid: false,
+  },
+  {
+    name: "pathColor channel out of range",
+    input: {
+      positionSamples: [
+        { time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 },
+        { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
+      ],
+      pathColor: { red: 2, green: 0, blue: 0 },
     },
     valid: false,
   },

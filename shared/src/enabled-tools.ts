@@ -27,7 +27,9 @@ import {
  * to compile) while preserving the literal element types.
  */
 export const ENABLED_CESIUM_TOOLS = [
-  CESIUM_TOOL_NAMES.flyTo,
+  // all viewer tools from the schema catalogue
+  ...(Object.values(CESIUM_TOOL_NAMES) as CesiumToolName[]),
+  // codegen (server-executed, arbitrary CesiumJS code against the live Viewer)
   CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
 ] as const satisfies readonly (CesiumToolName | CodegenCesiumToolName)[];
 

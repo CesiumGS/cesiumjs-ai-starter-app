@@ -14,6 +14,17 @@ export const animationCreateInputShape = z.object({
   stopTime: z.string().optional(),
   interpolationAlgorithm: z.enum(["LINEAR", "LAGRANGE", "HERMITE"]).optional(),
   showPath: z.boolean().optional(),
+  pathLeadTime: z.number().nonnegative().optional(),
+  pathTrailTime: z.number().nonnegative().optional(),
+  pathWidth: z.number().positive().optional(),
+  pathColor: z
+    .object({
+      red: z.number().min(0).max(1),
+      green: z.number().min(0).max(1),
+      blue: z.number().min(0).max(1),
+      alpha: z.number().min(0).max(1).optional(),
+    })
+    .optional(),
   modelPreset: z.enum(["cesium_man", "car", "bike", "airplane"]).optional(),
   modelUri: z.string().optional(),
   modelScale: z.number().positive().optional(),

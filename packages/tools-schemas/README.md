@@ -2,14 +2,33 @@
 
 [Zod](https://zod.dev)-schemed CesiumJS viewer tool definitions for the [AI SDK](https://sdk.vercel.ai/docs) — schemas only, no `execute`. The AI SDK streams tool calls to the browser, which runs them against the live `Viewer` and posts results back to the agent loop.
 
-## Tool catalogue
+## Supported viewer tools
 
-| Domain    | Tools                                                                                                                                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Camera    | `flyTo`, `cameraSetView`, `cameraLookAtTransform`, `cameraStartOrbit`, `cameraStopOrbit`, `cameraGetPosition`, `cameraSetControllerOptions`                                                                                                                            |
-| Entity    | `entityAddPoint`, `entityAddBillboard`, `entityAddLabel`, `entityAddModel`, `entityAddPolygon`, `entityAddPolyline`, `entityAddBox`, `entityAddCorridor`, `entityAddCylinder`, `entityAddEllipse`, `entityAddRectangle`, `entityAddWall`, `entityList`, `entityRemove` |
-| Animation | `animationCreate`, `animationControl`, `animationRemove`, `animationListActive`, `animationUpdatePath`, `animationCameraTracking`, `clockControl`, `globeSetLighting`                                                                                                  |
-| Imagery   | `imageryAdd`, `imageryRemove`, `imageryList`                                                                                                                                                                                                                           |
+The model-facing catalogue currently contains 19 tools (`CESIUM_TOOL_NAMES`):
+
+| Domain    | Tool                         | Notes                                                                 |
+| --------- | ---------------------------- | --------------------------------------------------------------------- |
+| Camera    | `flyTo`                      | Fly camera to lon/lat/altitude.                                       |
+| Camera    | `cameraSetView`              | Set destination and orientation.                                      |
+| Camera    | `cameraLookAtTransform`      | Look at a transform with an offset.                                   |
+| Camera    | `cameraOrbit`                | Start or stop orbiting via `action`.                                  |
+| Camera    | `cameraGetPosition`          | Read geodetic camera state.                                           |
+| Camera    | `cameraSetControllerOptions` | Configure controller behavior flags.                                  |
+| Entity    | `entityAdd`                  | Discriminated-union tool by `type` (point, model, polygon, and more). |
+| Entity    | `entityList`                 | List entities visible to the tool layer.                              |
+| Entity    | `entityRemove`               | Remove an entity by id.                                               |
+| Animation | `animationCreate`            | Create an animation track/entity.                                     |
+| Animation | `animationRemove`            | Remove animation by id.                                               |
+| Animation | `animationListActive`        | List active animations.                                               |
+| Animation | `animationUpdatePath`        | Update animation path settings.                                       |
+| Animation | `animationCameraTracking`    | Toggle camera tracking for animation.                                 |
+| Animation | `clockControl`               | Control viewer clock behavior.                                        |
+| Animation | `globeSetLighting`           | Toggle globe lighting.                                                |
+| Imagery   | `imageryAdd`                 | Add imagery layer/provider.                                           |
+| Imagery   | `imageryRemove`              | Remove imagery layer(s).                                              |
+| Imagery   | `imageryList`                | List imagery layers.                                                  |
+
+Every tool follows the exact same shape as `flyTo` (see below): a `<toolName>.schema.ts` with no description text, a `<toolName>.ts` with the default description/field hints and a `create<ToolName>` factory, an entry in `CESIUM_TOOL_NAMES`, and a corresponding key on `CesiumToolsConfig`. `entityAdd`'s per-variant payload shapes (`entityAddPoint`, `entityAddBillboard`, and others) still exist as internal schema modules under `src/tools/entityAdd*/` and are re-exported from the `/schemas` subpath, but are no longer separately registered `CESIUM_TOOL_NAMES` entries or model-facing tools. `entityAdd`'s `type` field is the single model entry point for all entity variants.
 
 See the [full Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) for per-tool details.
 
@@ -27,13 +46,11 @@ createChatRouter({
 
 ## Entry points
 
-| Subpath                            | Exports                                 | Consumer     |
-| ---------------------------------- | --------------------------------------- | ------------ |
-| `@cesium-ai/tools-schemas`         | Full tool definitions with descriptions | Backend only |
-| `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`   | Both         |
-| `@cesium-ai/tools-schemas/schemas` | `flyToInputShape`, `FlyToInput`         | Both         |
-
-Never import the root from client code — it pulls in model-facing descriptions that should not ship in the client bundle.
+| Subpath                            | Exports                                                                                            | Who imports it                                                                                                                                                                |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@cesium-ai/tools-schemas`         | Everything below — full tool definitions, incl. model-facing descriptions                          | Backend only. **Never** import the root entry point from client code — it pulls in the human-readable descriptions the LLM reads, which should not ship in the client bundle. |
+| `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`                                                              | Both. Schema-free — safe for the frontend to key its tool-call executors off of.                                                                                              |
+| `@cesium-ai/tools-schemas/schemas` | All `*InputShape`/`*Input` exports (for every tool, e.g. `flyToInputShape`, `entityAddInputShape`) | Both. Structural shapes only, no `.describe()` hints — safe for the frontend to validate untrusted tool-call args against.                                                    |
 
 ## Security
 

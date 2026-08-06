@@ -12,7 +12,7 @@ src/
 │   ├── ChatPanel.tsx            # Host-side tool-call listener — TOOL_EXECUTORS map
 │   └── RegisteredToolsList.tsx  # "Tools (N)" disclosure listing the backend's full tool registry
 ├── tools/
-│   ├── camera.ts                       # flyToLocation — client-side flyTo executor
+│   ├── camera.ts                       # flyToLocation — this app's extended flyTo executor (duration/easingFunction), overrides @cesium-ai/tools' default
 │   ├── execute-cesium-code-result.ts    # Result-shape validation + isExecuteCesiumCodeTool tool-name check
 │   ├── render-error-watch.ts           # waitForRenderError — delayed render-loop crash detection
 │   └── execute-cesium-code.ts          # Sandbox execution (executeApprovedCesiumCode) + orchestration (handleExecuteCesiumCodeResult)
@@ -27,7 +27,9 @@ src/
 
 `ChatPanel.tsx` keys `TOOL_EXECUTORS` by `EnabledCesiumTool` from `ENABLED_CESIUM_TOOLS` (see [`@cesium-ai/sample-config`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/sample-config/)). It is compile-time checked in both directions — a missing executor or a non-enabled tool both fail to build — and gates every incoming tool call at runtime as defense-in-depth.
 
-The frontend imports only tool **names** (`/names`) and structural **shapes** (`/schemas`) from shared packages — never model-facing descriptions, which stay backend-only.
+Most of those executors come straight from `@cesium-ai/tools`'s `createCesiumToolExecutors()` — the default, ready-to-use implementation for every `@cesium-ai/tools-schemas` tool (see [`packages/tools/README.md`](../packages/tools/README.md)). This app overrides just one entry, `flyTo`, with its own `flyToLocation` (`src/tools/camera.ts`) — built on the package's `createFlyToExecutor` factory rather than a from-scratch executor, so it reuses the default's validation/promise/error-handling plumbing and only extends the accepted shape (`duration`/`easingFunction`, see [`shared/`](../shared)) and the extra `Camera.flyTo` options those fields translate to. Every other enabled tool uses the package's default untouched.
+
+The frontend imports only schema-free pieces from `@cesium-ai/tools-schemas` directly: tool **names** (`/names`, to wire executors) and structural input **shapes** (`/schemas`, to validate untrusted args) — never the model-facing descriptions, which stay backend-only. `executeCesiumCode`'s name/shape come from `@cesium-ai/codegen-cesium`, which owns that tool since it can't run directly against a `Viewer` the way the other viewer tools do (see [`packages/tools-schemas/README.md`](../packages/tools-schemas/README.md)).
 
 ## `executeCesiumCode`: server-verified, client-executed
 
