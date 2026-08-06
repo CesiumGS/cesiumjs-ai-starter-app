@@ -56,23 +56,24 @@ flowchart TD
 
 `tools-schemas` is the shared foundation everything builds on; `tools` is its default,
 ready-to-use client-side executor implementation (frontend-only, depends only on `tools-schemas`
-+ `cesium`); `codegen-cesium` (intent-to-code generation + static verification) and `mcp-tools`
-(optional MCP client bridge) are server-only dependencies (never bundled into the client);
-`codegen-sandbox` (execution of already-verified code against a live `Viewer`) is frontend-only
-(depends on `cesium` + `quickjs-emscripten`) and never imported server-side; `backend` and
-`frontend` are leaves — they depend on everything and nothing depends on them.
+
+- `cesium`); `codegen-cesium` (intent-to-code generation + static verification) and `mcp-tools`
+  (optional MCP client bridge) are server-only dependencies (never bundled into the client);
+  `codegen-sandbox` (execution of already-verified code against a live `Viewer`) is frontend-only
+  (depends on `cesium` + `quickjs-emscripten`) and never imported server-side; `backend` and
+  `frontend` are leaves — they depend on everything and nothing depends on them.
 
 ## Build order
 
 Because of the graph above, packages must be built before the apps that depend on them:
 
-| Command                  | What it does                                                                                                                 |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| Command                  | What it does                                                                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm run build:packages` | Builds `tools-schemas` → `tools` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `sample-config` → `server` in dependency order |
-| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                       |
-| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                  |
-| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                             |
-| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                               |
+| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                                 |
+| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                            |
+| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                                       |
+| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                         |
 
 ## Packages
 
