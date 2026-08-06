@@ -1,6 +1,6 @@
 # How Codegen Works: The Generation Pipeline
 
-This guide explains what happens inside `@cesium-ai/codegen-cesium` from the moment a user
+This guide explains what happens inside [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium) from the moment a user
 submits an intent to the moment verified code (or an error) is returned. It is a companion to
 the [Codegen Tool Tutorial](codegen-tool-tutorial.md), which covers configuration and
 day-to-day use.
@@ -28,7 +28,7 @@ flowchart TD
 
 The pipeline is entirely server-side and model-agnostic — the caller supplies the
 `LanguageModel` instance. No API key is read, no provider is selected, and no code is
-executed inside `@cesium-ai/codegen-cesium`.
+executed inside [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium).
 
 ---
 
@@ -104,7 +104,7 @@ thrown and caught at the tool's `execute` handler, which returns `{ error }`.
 
 ## Stage 4 — Cleanup
 
-Still in `generate-verified-cesium-code.ts`.
+Still in [`packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts).
 
 Models sometimes wrap their output in Markdown code fences (` ```javascript … ``` `) even
 when instructed not to. The cleanup step strips any leading or trailing fence markers from

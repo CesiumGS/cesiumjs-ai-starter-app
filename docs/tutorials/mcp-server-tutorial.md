@@ -130,9 +130,11 @@ transport config:
 Omit `clientId` entirely to use [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) dynamic client registration — the server registers the
 client automatically on first connection. `scope` is normally discovered from the server's [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728)
 Protected Resource Metadata; only set it explicitly when a provider requires it but omits
-`scopes_supported` (Cesium ion currently does — see the `mcp.config.json.example` for the full
-example). The callback redirect URL is always `<PUBLIC_URL>/api/mcp/callback` — register that
+`scopes_supported`. The callback redirect URL is always `<PUBLIC_URL>/api/mcp/callback` — register that
 single URL with the OAuth provider before initiating a connection.
+
+**`SESSION_SECRET`** must be set in your `.env` whenever any OAuth-authenticated server is
+configured — the session cookie that carries per-user tokens depends on it.
 
 For the full OAuth flow sequence diagram, see
 [MCP Support Architecture § Session-scoped interactive OAuth connect](../architectures/architecture-mcp.md#session-scoped-interactive-oauth-connect).
@@ -324,11 +326,8 @@ inside the tool card — it can display rich UI, and can itself call tools back 
 server (with a per-call inline Approve/Reject prompt).
 
 No extra configuration is required — if a server's tool declares a widget, it renders
-automatically. Two things to be aware of:
+automatically. One thing to be aware of:
 
-- **`SESSION_SECRET`** must be set whenever any session-connectable server exists (see
-  [§ OAuth-authenticated servers](#oauth-authenticated-servers)) — the `/api/mcp-app/*` routes
-  rely on the session cookie.
 - **`frontend/public/sandbox_proxy.html`** is the iframe sandbox proxy required by `AppRenderer`.
   It is already included in the repo and served at `/sandbox_proxy.html`. Pass a different URL
   via `AiChatPanel`'s `mcpAppSandboxUrl` prop if you host the frontend on a different origin.

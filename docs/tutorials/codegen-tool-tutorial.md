@@ -51,8 +51,7 @@ and the frontend gate rejects any stale call.
 
 ## 3. Human-in-the-loop approval
 
-`executeCesiumCode` is the only tool in this starter that runs with `toolApproval: "user-approval"`.
-Before the backend generates any code, the browser shows the raw `intent` string and waits for an
+`executeCesiumCode` runs with `toolApproval: "user-approval"`. Before the backend generates any code, the browser shows the raw `intent` string and waits for an
 explicit click. This approval step exists because code generation is irreversible from the model's
 perspective — once the LLM runs, tokens are spent and code may be applied to the live globe.
 
@@ -76,16 +75,24 @@ abandon the request. No code is generated or executed.
 
 These are validated through [Zod](https://zod.dev) in [`backend/src/utils/env.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/env.ts) and read at startup.
 
-| Variable               | Default | Description                                                                                                                                                                            |
-| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CODEGEN_MAX_SKILLS`   | `1`     | Number of top BM25-matched skill domains injected into the generation prompt as context. Increasing this gives the model broader CesiumJS API coverage at the cost of a larger prompt. |
-| `CODEGEN_MAX_ATTEMPTS` | `3`     | How many times to retry generation if AST verification fails. Each retry feeds the violation list back to the model as a correction prompt.                                            |
+| Variable                     | Default   | Description                                                                                                                                                                            |
+| ---------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CODEGEN_MAX_SKILLS`         | `1`       | Number of top BM25-matched skill domains injected into the generation prompt as context. Increasing this gives the model broader CesiumJS API coverage at the cost of a larger prompt. |
+| `CODEGEN_MAX_ATTEMPTS`       | `3`       | How many times to retry generation if AST verification fails. Each retry feeds the violation list back to the model as a correction prompt.                                            |
+| `CODEGEN_MAX_CODE_LENGTH`    | `4000`    | Maximum generated source length (characters) allowed by static verification (`verifyCesiumCode` `maxLength`).                                                                          |
+| `CODEGEN_MAX_CODE_LINES`     | `100`     | Maximum generated line count allowed by static verification (`verifyCesiumCode` `maxLines`).                                                                                           |
+| `CODEGEN_ALLOWED_SYMBOLS`    | _(unset)_ | Optional comma-separated free-identifier allowlist passed to static verification (`verifyCesiumCode` `allowedSymbols`). Leave unset to disable allowlist enforcement.                  |
+| `CODEGEN_EXTRA_INSTRUCTIONS` | _(unset)_ | Optional operator-supplied instructions appended to the generation prompt output rules (for app-specific constraints or style preferences).                                            |
 
 Set them in your `.env` file:
 
 ```bash
 CODEGEN_MAX_SKILLS=2
 CODEGEN_MAX_ATTEMPTS=5
+CODEGEN_MAX_CODE_LENGTH=6000
+CODEGEN_MAX_CODE_LINES=140
+CODEGEN_ALLOWED_SYMBOLS=viewer,Cesium,scene
+CODEGEN_EXTRA_INSTRUCTIONS=Prefer deterministic output and avoid unnecessary comments.
 ```
 
 ### Programmatic options
@@ -101,6 +108,10 @@ const executeCesiumCodeTool = createExecuteCesiumCodeTool({
   model,
   maxSkills: 2, // override CODEGEN_MAX_SKILLS
   maxAttempts: 5, // override CODEGEN_MAX_ATTEMPTS
+  maxLength: 6000, // override CODEGEN_MAX_CODE_LENGTH
+  maxLines: 140, // override CODEGEN_MAX_CODE_LINES
+  allowedSymbols: ["viewer", "Cesium", "scene"], // override CODEGEN_ALLOWED_SYMBOLS
+  extraInstructions: "Prefer deterministic output and avoid unnecessary comments.", // override CODEGEN_EXTRA_INSTRUCTIONS
 });
 ```
 
@@ -108,10 +119,14 @@ The function signature for the underlying pipeline entry point is:
 
 ```ts
 generateVerifiedCesiumCode({
-  intent: string,     // natural-language description from the user
+  intent: string, // natural-language description from the user
   model: LanguageModel, // AI SDK LanguageModel — caller supplies this
   maxSkills?: number, // default 1
   maxAttempts?: number, // default 3
+  maxLength?: number, // default 4000
+  maxLines?: number, // default 100
+  allowedSymbols?: readonly string[], // default unset
+  extraInstructions?: string, // default unset
 }): Promise<{ verified: true; code: string } | { verified: false; error: string; violations?: string[] }>
 ```
 
@@ -200,12 +215,16 @@ the full sandbox architecture).
 
 ## 7. Quick reference
 
-| I want to…                                | Where to look                                                                        |
-| ----------------------------------------- | ------------------------------------------------------------------------------------ |
-| Enable the tool                           | `shared/src/enabled-tools.ts` — add `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`    |
-| Disable the tool                          | Same file — remove the name                                                          |
-| Change the number of skills in the prompt | `CODEGEN_MAX_SKILLS` env var or `maxSkills` in `createExecuteCesiumCodeTool`         |
-| Change how many retries are allowed       | `CODEGEN_MAX_ATTEMPTS` env var or `maxAttempts` in `createExecuteCesiumCodeTool`     |
-| Understand how the pipeline works         | [How Codegen Works](codegen-pipeline.md)                                             |
-| Review the security threat model          | [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md) |
-| Understand the architecture               | [Codegen Architecture](../architectures/architecture-codegen.md)                     |
+| I want to…                                | Where to look                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Enable the tool                           | `shared/src/enabled-tools.ts` — add `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`            |
+| Disable the tool                          | Same file — remove the name                                                                  |
+| Change the number of skills in the prompt | `CODEGEN_MAX_SKILLS` env var or `maxSkills` in `createExecuteCesiumCodeTool`                 |
+| Change how many retries are allowed       | `CODEGEN_MAX_ATTEMPTS` env var or `maxAttempts` in `createExecuteCesiumCodeTool`             |
+| Change max generated source length        | `CODEGEN_MAX_CODE_LENGTH` env var or `maxLength` in `createExecuteCesiumCodeTool`            |
+| Change max generated line count           | `CODEGEN_MAX_CODE_LINES` env var or `maxLines` in `createExecuteCesiumCodeTool`              |
+| Restrict free identifiers                 | `CODEGEN_ALLOWED_SYMBOLS` env var or `allowedSymbols` in `createExecuteCesiumCodeTool`       |
+| Append operator prompt rules              | `CODEGEN_EXTRA_INSTRUCTIONS` env var or `extraInstructions` in `createExecuteCesiumCodeTool` |
+| Understand how the pipeline works         | [How Codegen Works](codegen-pipeline.md)                                                     |
+| Review the security threat model          | [Security Considerations](../architectures/codegen-tool-security-attacks-vectors.md)         |
+| Understand the architecture               | [Codegen Architecture](../architectures/architecture-codegen.md)                             |

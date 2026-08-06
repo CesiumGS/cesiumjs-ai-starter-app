@@ -4,10 +4,21 @@ This note evaluates architecture options for the execution boundary that runs co
 `executeCesiumCode`: the current QuickJS-WASM executor, a sandboxed `<iframe>` restricted to an
 explicit command RPC API, and a disposable in-iframe `Viewer` with no capability boundary at all.
 It also summarizes how other real-world systems (SES/Hardened JavaScript, MetaMask Snaps,
-quickjs-wasi) solve the same guest-code-isolation problem, as external validation for the choice
+[quickjs-wasi](https://github.com/vercel-labs/quickjs-wasi)) solve the same guest-code-isolation problem, as external validation for the choice
 made here. It is a reference/architecture document, not an implementation plan — the current
 implementation remains the QuickJS-WASM executor in
 [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md).
+
+## Quick read guide
+
+If you are deciding quickly:
+
+- Start with [Recommendation](#recommendation).
+- Use [Comparing the three options for this repo](#comparing-the-three-options-for-this-repo) for side-by-side trade-offs.
+- Read one deep-dive section only:
+  - [Approach 1: QuickJS-WASM Guarded Bridge (Current)](#approach-1-quickjs-wasm-guarded-bridge-current)
+  - [Approach 2: Sandboxed Iframe with Command RPC](#approach-2-sandboxed-iframe-with-command-rpc)
+  - [Approach 3: Disposable In-Iframe Viewer, No RPC Layer](#approach-3-disposable-in-iframe-viewer-no-rpc-layer)
 
 ## Options at a Glance
 
@@ -21,15 +32,26 @@ The sections below go into each option's architecture, setup, and trade-offs in 
 
 ## Where does guest code actually run?
 
-The three families below classify both this repo's three options and the external systems this
-note compares them against for validation: **SES / Hardened JavaScript** and **MetaMask Snaps**
-(built on SES) as one family, and **quickjs-wasi** as another (see
-[External validation](#external-validation-how-other-systems-solve-this) for details on each). The
-key structural question for any of these — internal or external — is: **does guest code share a JS
-heap/realm with the host, or a genuinely separate one?** That answer predicts the whole
-vulnerability class each approach is exposed to (or immune from).
+Jump to a specific option:
 
-### Family A — separate WASM-hosted heap (Approach 1, this repo's current approach; also quickjs-wasi)
+- [Approach 1: QuickJS-WASM Guarded Bridge](#approach-1-quickjs-wasm-guarded-bridge-current)
+- [Approach 2: Sandboxed Iframe with Command RPC](#approach-2-sandboxed-iframe-with-command-rpc)
+- [Approach 3: Disposable In-Iframe Viewer, No RPC Layer](#approach-3-disposable-in-iframe-viewer-no-rpc-layer)
+
+The families below give you one comparison frame for both the options evaluated in this document and related external
+systems. In other words, they answer the same core architecture question for everything discussed
+in this doc.
+
+That core question is: **does guest code run in the same JS realm/heap as host code, or in a truly
+separate one?**
+
+This single distinction predicts most of the security and failure modes you should expect. For how
+external systems map to these families (for example, SES/MetaMask Snaps and [quickjs-wasi](https://github.com/vercel-labs/quickjs-wasi)), see
+[External validation](#external-validation-how-other-systems-solve-this).
+
+<a id="family-a"></a>
+
+### [Family A](#family-a) — separate WASM-hosted heap ([Approach 1](#approach-1-quickjs-wasm-guarded-bridge-current), this repo's current approach; also [quickjs-wasi](https://github.com/vercel-labs/quickjs-wasi))
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
@@ -48,7 +70,9 @@ Guest and host objects can never be confused because they live in physically sep
 different internal representations — the family this repo uses today (see
 [Approach 1](#approach-1-quickjs-wasm-guarded-bridge-current) below).
 
-### Family B — separate browsing context (Approaches 2 & 3, `<iframe>` + `postMessage`)
+<a id="family-b"></a>
+
+### [Family B](#family-b) — separate browsing context ([Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) & [Approach 3](#approach-3-disposable-in-iframe-viewer-no-rpc-layer), `<iframe>` + `postMessage`)
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
@@ -63,14 +87,16 @@ flowchart LR
     end
 ```
 
-Isolation is as strong as Family A (arguably stronger — a different browsing context, not just a
+Isolation is as strong as [Family A](#family-a) (arguably stronger — a different browsing context, not just a
 different heap), but plain-string message-passing costs `async`/`await` ergonomics and the overhead
-of serializing state on every call. This repo's two iframe-based options both live in this family:
+of serializing state on every call. The two iframe-based options evaluated here both live in this family:
 [Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) keeps a capability-checked command RPC
 layer in the parent, while [Approach 3](#approach-3-disposable-in-iframe-viewer-no-rpc-layer) drops
 that layer and gives guest code direct, unrestricted access to a disposable in-iframe `Viewer`.
 
-### Family C — same realm, hardened via frozen intrinsics (SES, MetaMask Snaps — not used by any option here)
+<a id="family-c"></a>
+
+### [Family C](#family-c) — same realm, hardened via frozen intrinsics (SES, MetaMask Snaps — not used by any option here)
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%
@@ -88,26 +114,42 @@ flowchart LR
 Guest and host code run in the **same engine instance** — isolation comes entirely from
 JavaScript-level bookkeeping (frozen prototypes, a fresh `globalThis`). This is fast and gives free
 devtools support, but a shared heap is a structurally riskier property than a separate one (see
-[External Validation](#external-validation-how-other-systems-solve-this) below). No option
-considered for this repo uses this family, since CesiumJS's huge API surface is a poor fit for the
+[External Validation](#external-validation-how-other-systems-solve-this) below). None of the
+options evaluated in this document use this family, since CesiumJS's huge API surface is a poor fit for the
 small, hand-curated allowlist that this family relies on for safety.
 
 ## Comparing the three options for this repo
 
-This table states, per option, whether a specific security property is actually guaranteed by the
-boundary itself — not by additional application-level code layered on top (AST verification, rate
-limits, caps) which should be kept regardless of runtime (see the cancellation/resource-limit
-caveat in [Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) below).
+The two tables below separate (1) boundary-enforced security properties and (2) product-fit
+trade-offs.
 
-| Property                                              | QuickJS-WASM guarded bridge (current)                          | Sandboxed iframe with command RPC                                       | Disposable in-iframe Viewer, no RPC layer                                             |
-| ----------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Isolation family                                      | Family A — separate WASM heap                                  | Family B — separate browsing context                                    | Family B — separate browsing context                                                  |
-| Blocks parent DOM/cookie/storage access               | ✅ Yes — no browser globals unless explicitly bound            | ✅ Yes — opaque origin (no `allow-same-origin`)                         | ⚠️ Only if served from a genuinely separate origin; same-origin removes the guarantee |
-| Blocks outbound network (`fetch`/`XHR`) by default    | ✅ Yes — unless the host deliberately exposes it               | ⚠️ Requires an explicit CSP (`connect-src 'none'`); not automatic       | ❌ No — real `fetch`/`XHR` unless a CSP is added separately                           |
-| Enforced CPU timeout / memory ceiling                 | ✅ Yes — QuickJS interrupt handler + configurable memory limit | ❌ No — no reliable parent-enforced deadline or portable memory ceiling | ❌ No — same limitation as command RPC                                                |
-| Capability surface is a small, reviewable allowlist   | ❌ No — broad `viewer`/`Cesium` proxy guarded by a denylist    | ✅ Yes — command names are a fixed, enumerable catalog                  | ❌ No — full, unrestricted Cesium/DOM surface, nothing reviewable                     |
-| Runs existing `viewer.*`/`Cesium.*` codegen unchanged | ✅ Yes — current, already-compatible executor                  | ❌ No — needs a new command-oriented generation contract                | ✅ Yes — arguably most compatible, no marshaling boundary at all                      |
-| Extra infrastructure required                         | ✅ None — runs entirely within the existing page               | ✅ None — an opaque `srcdoc` origin needs no separate origin/port       | ❌ Yes — requires provisioning a genuinely separate origin for the Viewer iframe      |
+- Boundary-enforced means guaranteed by the runtime boundary itself.
+- Application-level controls (AST verification, rate limits, caps) are still required regardless of
+  runtime (see the cancellation/resource-limit caveat in
+  [Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) below).
+
+Read this table left to right as a trade-off map:
+
+- Approach 1 maximizes enforceable runtime guardrails.
+- Approach 2 maximizes explicit capability control.
+- Approach 3 maximizes implementation simplicity and compatibility.
+
+### Security guarantees (boundary-enforced)
+
+| Property                                           | QuickJS-WASM guarded bridge (current)                          | Sandboxed iframe with command RPC                                       | Disposable in-iframe Viewer, no RPC layer                                             |
+| -------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Isolation family                                   | [Family A](#family-a) — separate WASM heap                     | [Family B](#family-b) — separate browsing context                       | [Family B](#family-b) — separate browsing context                                     |
+| Blocks parent DOM/cookie/storage access            | ✅ Yes — no browser globals unless explicitly bound            | ✅ Yes — opaque origin (no `allow-same-origin`)                         | ⚠️ Only if served from a genuinely separate origin; same-origin removes the guarantee |
+| Blocks outbound network (`fetch`/`XHR`) by default | ✅ Yes — unless the host deliberately exposes it               | ⚠️ Requires an explicit CSP (`connect-src 'none'`); not automatic       | ❌ No — real `fetch`/`XHR` unless a CSP is added separately                           |
+| Enforced CPU timeout / memory ceiling              | ✅ Yes — QuickJS interrupt handler + configurable memory limit | ❌ No — no reliable parent-enforced deadline or portable memory ceiling | ❌ No — same limitation as command RPC                                                |
+
+### Product fit and implementation trade-offs
+
+| Property                                              | QuickJS-WASM guarded bridge (current)                       | Sandboxed iframe with command RPC                                 | Disposable in-iframe Viewer, no RPC layer                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Capability surface is a small, reviewable allowlist   | ❌ No — broad `viewer`/`Cesium` proxy guarded by a denylist | ✅ Yes — command names are a fixed, enumerable catalog            | ❌ No — full, unrestricted Cesium/DOM surface, nothing reviewable                |
+| Runs existing `viewer.*`/`Cesium.*` codegen unchanged | ✅ Yes — current, already-compatible executor               | ❌ No — needs a new command-oriented generation contract          | ✅ Yes — arguably most compatible, no marshaling boundary at all                 |
+| Extra infrastructure required                         | ✅ None — runs entirely within the existing page            | ✅ None — an opaque `srcdoc` origin needs no separate origin/port | ❌ Yes — requires provisioning a genuinely separate origin for the Viewer iframe |
 
 ## Recommendation
 
@@ -116,14 +158,20 @@ per-run interruption and memory limits. If an iframe boundary is introduced inst
 use it only with an **explicit command RPC API** — do not pass the live Cesium `Viewer`, `Cesium`
 namespace, DOM nodes, or a generic `viewer.*` proxy to generated code. An iframe can be a useful
 additional browser boundary, but it does not independently enforce CPU or memory quotas for
-JavaScript that runs on the browser's main thread. A separate WASM-hosted heap (Family A) also
-structurally avoids the object-identity-confusion bug class that same-realm approaches (Family C)
+JavaScript that runs on the browser's main thread. A separate WASM-hosted heap ([Family A](#family-a)) also
+structurally avoids the object-identity-confusion bug class that same-realm approaches ([Family C](#family-c))
 are exposed to, and the denylist-guarded generic proxy is a deliberate trade-off — CesiumJS's API
 surface is too large for a hand-curated allowlist without a new, narrower codegen contract.
 
 ## Approach 1: QuickJS-WASM Guarded Bridge (Current)
 
-This is the executor already implemented and running in `@cesium-ai/codegen-sandbox` — see
+At a glance:
+
+- Best fit when enforceable CPU/memory limits are required.
+- Preserves compatibility with existing `viewer.*` and `Cesium.*` generated snippets.
+- Main cost is maintaining a safe generic bridge and paying WASM runtime overhead.
+
+This is the executor already implemented and running in [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md) — see
 [its README](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)
 for the full marshaling/handle/capability
 architecture. In summary: generated code runs inside a separate QuickJS interpreter compiled to
@@ -170,6 +218,12 @@ sequenceDiagram
 
 ## Approach 2: Sandboxed Iframe with Command RPC
 
+At a glance:
+
+- Best fit when you want a small, explicit, reviewable command surface.
+- Strong browser-level boundary through a sandboxed iframe and message passing.
+- Main limitation is lack of reliable parent-enforced CPU/memory limits for sync loops.
+
 The parent application keeps the live `Viewer`, credentials, UI, approval decision, network
 policy, and all mutations. Generated code runs in an iframe with an opaque origin (no
 `allow-same-origin`) and can only request a small, schema-validated catalog of named commands over
@@ -210,6 +264,12 @@ bounds are required, keep QuickJS-WASM or move execution to an independently res
 process/service.
 
 ## Approach 3: Disposable In-Iframe Viewer, No RPC Layer
+
+At a glance:
+
+- Best fit only when a disposable, iframe-local Viewer per run is acceptable.
+- Easiest runtime model: generated code directly controls its own Viewer instance.
+- Main trade-off is no capability boundary and no enforceable CPU/memory limits.
 
 This approach skips a capability boundary entirely: run generated code with **full, unrestricted
 access to its own `Cesium.Viewer` instance**, constructed fresh inside the iframe on every
@@ -267,32 +327,39 @@ Other real-world systems face the same guest-code-isolation problem and land in 
 structural families described above:
 
 - **[SES](https://medium.com/agoric/ses-securing-javascript-in-the-real-world-4f309e6b66a6) / Hardened JavaScript** ([Agoric/endojs](https://github.com/endojs/endo/tree/master/packages/ses))
-  and **[MetaMask Snaps](https://github.com/MetaMask/snaps)** (built on SES) use Family C: a small,
+  and **[MetaMask Snaps](https://github.com/MetaMask/snaps)** (built on SES) use
+  [Family C](#family-c): a small,
   hand-curated, `harden()`-ed allowlist in a `lockdown()`-ed `Compartment`, with no built-in
   CPU/memory ceiling (SES relies entirely on an outer iframe/worker/process boundary). This is
   tractable for MetaMask because their API surface is small and finite; it is not practical here
   given CesiumJS's thousands of classes/methods, short of inventing a new, narrower codegen
   contract like Approach 2's command RPC.
 - **[quickjs-wasi](https://github.com/vercel-labs/quickjs-wasi)** is architecturally the same family
-  as this repo's current approach (Family A) and even offers a novel snapshot/restore feature, but
+  as this repo's current approach ([Family A](#family-a)) and even offers a novel
+  snapshot/restore feature, but
   is **not recommended today**: a stack overflow crashes the whole WASM instance instead of
   throwing a catchable exception, there's no Asyncify equivalent, and it's young (~70 stars, one
   active maintainer) — real regressions for a sandbox whose job is surviving hostile/broken guest
   code. Revisit if it matures.
-- A separate-origin **iframe + `postMessage`** boundary (Family B, i.e. this repo's Approaches 2
-  and 3) is also a well-established generic web-platform pattern for isolating untrusted code,
+- A separate-origin **iframe + `postMessage`** boundary ([Family B](#family-b), i.e. this repo's
+  [Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) and
+  [Approach 3](#approach-3-disposable-in-iframe-viewer-no-rpc-layer)) is also a well-established
+  generic web-platform pattern for isolating untrusted code,
   independent of any specific product.
 
 ## Why the current approach fits this repo
 
-- A **separate WASM-hosted JS heap** (Family A) structurally avoids the object-identity-confusion
-  bug class that same-realm approaches (Family C) are exposed to.
+- A **separate WASM-hosted JS heap** ([Family A](#family-a)) structurally avoids the
+  object-identity-confusion bug class that same-realm approaches ([Family C](#family-c)) are
+  exposed to.
 - The **denylist-guarded generic proxy** (vs. a small allowlist) is a deliberate trade-off —
   CesiumJS's API surface is too large for a hand-curated allowlist without a new, narrower codegen
   contract.
 - **VM-enforced memory/CPU limits** are a concrete advantage over both the SES/MetaMask model and
-  `quickjs-wasi`'s uncaught-stack-overflow behavior, and over either iframe-based option (Approaches
-  2 and 3), neither of which enforces a portable CPU deadline or memory ceiling.
+  `quickjs-wasi`'s uncaught-stack-overflow behavior, and over either iframe-based option
+  ([Approach 2](#approach-2-sandboxed-iframe-with-command-rpc) and
+  [Approach 3](#approach-3-disposable-in-iframe-viewer-no-rpc-layer)), neither of which enforces a
+  portable CPU deadline or memory ceiling.
 
 ## References & Related Material
 

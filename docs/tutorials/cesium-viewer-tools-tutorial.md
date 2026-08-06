@@ -1,7 +1,7 @@
 # Tutorial: Using and Extending CesiumJS Viewer Tools
 
 This guide covers how to enable, wire up, and disable tools from the
-`@cesium-ai/tools-schemas` library in this starter app. The library ships
+[`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas) library in this starter app. The library ships
 a catalogue of ready-made CesiumJS tools; you pick which ones your app exposes
 by configuring a couple of app-layer files — the library itself is never touched.
 
@@ -63,14 +63,14 @@ flowchart LR
 
 Six files make `flyTo` work. Each has one clearly scoped responsibility:
 
-| File                                                                                                                                                       | Tier     | What it does                                                                                                                                                                                                                                                           |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`shared/src/tools/flyto-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/flyto-schema.ts)                       | Shared   | Defines `flyToShape` — the structural args contract (lat/lon/altitude + `duration`/`easingFunction`). No description text. Imported by both sides.                                                                                                                     |
-| [`backend/src/tools/flyto-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts)                         | Backend  | Layers `.describe()` hints onto `flyToShape` to produce the model-facing schema. Never reaches the client bundle.                                                                                                                                                      |
-| [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)                                                   | Backend  | Wires the tool into the AI SDK registry via `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS, flyTo: { inputSchema } })`.                                                                                                                                            |
-| [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts)                               | Frontend | Builds `flyToLocation` from `@cesium-ai/tools`'s `createFlyToExecutor` factory — validates `rawArgs` against `flyToShape`, then calls `viewer.camera.flyTo(…)` with the extra `duration`/`easingFunction` options. Returns `{ success }` once the animation completes. |
-| [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts) | Frontend | `TOOL_EXECUTORS` — `@cesium-ai/tools`'s default executor for every catalogue tool, with `flyTo` overridden by `flyToLocation`. `ENABLED_TOOLS` — the runtime allowlist `Set` built from `ENABLED_CESIUM_TOOLS`.                                                        |
-| [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)             | Frontend | `onToolCall` checks the incoming tool name against `ENABLED_TOOLS`, then dispatches to the matching entry in `TOOL_EXECUTORS`.                                                                                                                                         |
+| File                                                                                                                                                       | Tier     | What it does                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`shared/src/tools/flyto-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/flyto-schema.ts)                       | Shared   | Defines `flyToShape` — the structural args contract (lat/lon/altitude + `duration`/`easingFunction`). No description text. Imported by both sides.                                                                                                                                                                                                     |
+| [`backend/src/tools/flyto-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts)                         | Backend  | Layers `.describe()` hints onto `flyToShape` to produce the model-facing schema. Never reaches the client bundle.                                                                                                                                                                                                                                      |
+| [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)                                                   | Backend  | Wires the tool into the AI SDK registry via `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS, flyTo: { inputSchema } })`.                                                                                                                                                                                                                            |
+| [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts)                               | Frontend | Builds `flyToLocation` from [`@cesium-ai/tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools)'s `createFlyToExecutor` factory — validates `rawArgs` against `flyToShape`, then calls `viewer.camera.flyTo(…)` with the extra `duration`/`easingFunction` options. Returns `{ success }` once the animation completes. |
+| [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts) | Frontend | `TOOL_EXECUTORS` — [`@cesium-ai/tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools)'s default executor for every catalogue tool, with `flyTo` overridden by `flyToLocation`. `ENABLED_TOOLS` — the runtime allowlist `Set` built from `ENABLED_CESIUM_TOOLS`.                                                        |
+| [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)             | Frontend | `onToolCall` checks the incoming tool name against `ENABLED_TOOLS`, then dispatches to the matching entry in `TOOL_EXECUTORS`.                                                                                                                                                                                                                         |
 
 The shared shape (`flyToShape` in `shared/`) is the single contract both sides
 agree on. The backend adds descriptions on top; the frontend validates against
@@ -157,11 +157,11 @@ This separation also gives the design two security properties:
 
 The package therefore exposes three subpaths:
 
-| Subpath                            | Exports                                | Who imports it                                   |
-| ---------------------------------- | -------------------------------------- | ------------------------------------------------ |
-| `@cesium-ai/tools-schemas`         | Full definitions incl. descriptions    | **Backend only.** Never import from client code. |
-| `@cesium-ai/tools-schemas/names`   | `CESIUM_TOOL_NAMES`, `CesiumToolName`  | Both sides. String constants only.               |
-| `@cesium-ai/tools-schemas/schemas` | `<toolName>InputShape`, inferred types | Both sides. Structural shapes, no descriptions.  |
+| Subpath                                                                                                                    | Exports                                | Who imports it                                   |
+| -------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas)         | Full definitions incl. descriptions    | **Backend only.** Never import from client code. |
+| [`@cesium-ai/tools-schemas/names`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas)   | `CESIUM_TOOL_NAMES`, `CesiumToolName`  | Both sides. String constants only.               |
+| [`@cesium-ai/tools-schemas/schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas) | `<toolName>InputShape`, inferred types | Both sides. Structural shapes, no descriptions.  |
 
 A contract change — e.g. tightening the lat/lon ranges — is a **single edit** to
 the structural shape in `schemas.ts` that both tiers pick up automatically. A
@@ -212,7 +212,7 @@ const DEFAULT_FLY_TO_EXTENSION_DESCRIPTIONS = {
 
 Edit the string for whichever field you want to change. The base field hints
 (`latitude`, `longitude`, `altitude`) come from `DEFAULT_FLY_TO_FIELD_DESCRIPTIONS`
-exported by `@cesium-ai/tools-schemas` — override any of them by adding the key
+exported by [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas) — override any of them by adding the key
 explicitly:
 
 ```ts
@@ -278,12 +278,12 @@ and can be enabled in the starter app by following Section 6.
 
 ## 6. Enabling a tool
 
-Every viewer tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue
+Every viewer tool in [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas)'s `CESIUM_TOOL_NAMES` catalogue
 is already enabled in this app by default —
 [`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts)'s
 `ENABLED_CESIUM_TOOLS` spreads `Object.values(CESIUM_TOOL_NAMES)` directly, and
 every one of those tools already has a ready-to-use client-side executor via
-`@cesium-ai/tools`'s `createCesiumToolExecutors()`, wired up in
+[`@cesium-ai/tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools)'s `createCesiumToolExecutors()`, wired up in
 [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts).
 
 ### Configuring an explicit set of enabled tools
@@ -302,7 +302,7 @@ export const ENABLED_CESIUM_TOOLS = [
 ```
 
 The `satisfies` constraint catches typos at compile time — every entry is
-checked against `CesiumToolName` from `@cesium-ai/tools-schemas/names`, so a
+checked against `CesiumToolName` from [`@cesium-ai/tools-schemas/names`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas), so a
 name that isn't a real tool fails to build.
 
 Both tiers derive from this one array:
@@ -366,7 +366,7 @@ export const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
 };
 ```
 
-Every other tool keeps `@cesium-ai/tools`'s default untouched. See
+Every other tool keeps [`@cesium-ai/tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools)'s default untouched. See
 [`packages/tools/README.md`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/README.md)
 for the full set of override/extend patterns — a full override works for any
 tool, and narrower `createXExecutor` factories are also available for `flyTo`,

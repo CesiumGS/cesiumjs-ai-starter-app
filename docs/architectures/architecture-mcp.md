@@ -138,7 +138,7 @@ Key points this diagram makes explicit:
 
 For servers that returned a 401 at startup (auto-detected as `authRequired`), a user can connect
 them interactively via the chat panel's Tools popover. The session routes below are exposed by
-`@cesium-ai/server/mcp`'s `mcp-session-router.ts`:
+[`@cesium-ai/server/mcp`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md)'s `mcp-session-router.ts`:
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "16px"}, "sequence": {"actorFontSize": 16, "messageFontSize": 15, "noteFontSize": 14, "actorMargin": 60, "boxMargin": 10, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
@@ -263,7 +263,7 @@ packages/mcp-tools/
         └── in-memory-repositories.ts # Default in-process implementations (used unless overridden)
 ```
 
-`@cesium-ai/mcp-tools` has no dependency on `@cesium-ai/server` or `@cesium-ai/tools-schemas`, and
+[`@cesium-ai/mcp-tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/README.md) has no dependency on [`@cesium-ai/server`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md) or [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas), and
 is entirely optional.
 
 ---
@@ -287,15 +287,15 @@ is entirely optional.
 | **Logging**                | [`logger.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/logger.ts)                                                                                   | `McpToolsLogger` interface; `noopMcpToolsLogger` (default) and `createConsoleMcpToolsLogger(level)`. Logs every discovered tool's name + description at connect time.                                                                                                    |
 | **Backend wiring**         | [`backend/src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/index.ts)                                                                                    | Resolves `createMcpTools` once at startup, builds `createSessionMcpManager` from `authRequiredServers` when non-empty, logs per-server outcomes (connected / auth-required / error), closes all clients on `SIGTERM`/`SIGINT`.                                           |
 | **App composition**        | [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)                                                                                        | Spreads `mcp?.tools` into static tools, resolves session tools per-request via `resolveMcpTools`, approval-gates every `mcp__*` tool, mounts session + MCP-App routers, surfaces `mcp.servers` in `/health`.                                                             |
-| **Session routes**         | `@cesium-ai/server/mcp`'s `mcp-session-router.ts`                                                                                                                                               | `GET /api/mcp/session/servers`, `POST /api/mcp/:server/connect`, `GET /api/mcp/callback`, `GET /api/mcp/:server/status`, `POST /api/mcp/:server/disconnect` — the HTTP surface for the browser-side "Connect" UI flow.                                                   |
-| **MCP Apps bridge routes** | `@cesium-ai/server/mcp`'s `mcp-app-router.ts`                                                                                                                                                   | `GET /api/mcp-app/resource` (returns raw `ReadResourceResult` for `ui://` URIs) and `POST /api/mcp-app/tool-call` (validates against the request's tool registry before calling the MCP tool). Timeout-wrapped; `ui://` URI-gated.                                       |
-| **Tools introspection**    | `@cesium-ai/server`'s `createToolsRouter`                                                                                                                                                       | `GET /api/tools` — returns `{ tools: [{name, description, mcpApp?}] }` for the request's resolved tool set (session-cookie-aware); used by the chat panel's Tools popover.                                                                                               |
+| **Session routes**         | [`@cesium-ai/server/mcp`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md)'s `mcp-session-router.ts`                                                    | `GET /api/mcp/session/servers`, `POST /api/mcp/:server/connect`, `GET /api/mcp/callback`, `GET /api/mcp/:server/status`, `POST /api/mcp/:server/disconnect` — the HTTP surface for the browser-side "Connect" UI flow.                                                   |
+| **MCP Apps bridge routes** | [`@cesium-ai/server/mcp`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md)'s `mcp-app-router.ts`                                                        | `GET /api/mcp-app/resource` (returns raw `ReadResourceResult` for `ui://` URIs) and `POST /api/mcp-app/tool-call` (validates against the request's tool registry before calling the MCP tool). Timeout-wrapped; `ui://` URI-gated.                                       |
+| **Tools introspection**    | [`@cesium-ai/server`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md)'s `createToolsRouter`                                                            | `GET /api/tools` — returns `{ tools: [{name, description, mcpApp?}] }` for the request's resolved tool set (session-cookie-aware); used by the chat panel's Tools popover.                                                                                               |
 
 ---
 
 ## 5. Security model
 
-MCP tool calls run code you don't control, so `@cesium-ai/mcp-tools` is deliberately conservative
+MCP tool calls run code you don't control, so [`@cesium-ai/mcp-tools`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/README.md) is deliberately conservative
 by default:
 
 | Risk                                                                                                                                                          | Mitigation                                                                                                                                                                                                                                                    |

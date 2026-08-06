@@ -51,7 +51,7 @@ flowchart LR
     UI --> Viewer
 ```
 
-The `@cesium-ai/codegen-cesium` package is a pure server-side dependency — it is never
+The [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium) package is a pure server-side dependency — it is never
 bundled into the client.
 
 ### Request lifecycle
@@ -112,14 +112,14 @@ packages/codegen-cesium/
 
 ### Three-subpath export pattern
 
-Like `@cesium-ai/tools-schemas`, the codegen package uses a three-subpath export to enforce
+Like [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/tools-schemas), the codegen package uses a three-subpath export to enforce
 the server-only boundary for tool descriptions:
 
-| Subpath                             | Exports                                              | Consumer         |
-| ----------------------------------- | ---------------------------------------------------- | ---------------- |
-| `@cesium-ai/codegen-cesium`         | Full pipeline + model-facing descriptions            | **Backend only** |
-| `@cesium-ai/codegen-cesium/names`   | `CODEGEN_CESIUM_TOOL_NAMES`, `CodegenCesiumToolName` | Both tiers       |
-| `@cesium-ai/codegen-cesium/schemas` | `executeCesiumCodeInputShape`, inferred types        | Both tiers       |
+| Subpath                                                                                                                      | Exports                                              | Consumer         |
+| ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------- |
+| [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium)         | Full pipeline + model-facing descriptions            | **Backend only** |
+| [`@cesium-ai/codegen-cesium/names`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium)   | `CODEGEN_CESIUM_TOOL_NAMES`, `CodegenCesiumToolName` | Both tiers       |
+| [`@cesium-ai/codegen-cesium/schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium) | `executeCesiumCodeInputShape`, inferred types        | Both tiers       |
 
 Importing from the root subpath in client code would bundle the generation pipeline and tool
 descriptions into the browser — the package structure prevents this by design.
@@ -143,8 +143,8 @@ descriptions into the browser — the package structure prevents this by design.
 ## 4. Security gates
 
 The codegen system is designed around two security gates. Both are implemented: Gate 1 runs
-server-side in `@cesium-ai/codegen-cesium`; Gate 2 runs client-side in
-`@cesium-ai/codegen-sandbox`.
+server-side in [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium); Gate 2 runs client-side in
+[`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md).
 
 ```mermaid
 %%{init: {"themeVariables": {"fontSize": "20px"}, "flowchart": {"nodeSpacing": 50, "rankSpacing": 70, "padding": 15}}}%%

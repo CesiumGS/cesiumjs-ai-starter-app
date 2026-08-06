@@ -111,7 +111,7 @@ Key points this diagram makes explicit:
 - The agent loop is iterative: `stopWhen: stepCountIs(maxSteps)` bounds how many
   model-call ⇄ tool-call round trips a single request can make (default `5` — see
   [`DEFAULT_MAX_STEPS`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/agent.ts)
-  in `@cesium-ai/server`).
+  in [`@cesium-ai/server`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/README.md)).
 - Everything left of `Backend /api/chat` runs in the browser; everything right of it runs
   on the Node.js server. The LLM provider is only ever called server-side.
 

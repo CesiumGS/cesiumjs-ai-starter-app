@@ -9,7 +9,7 @@ For the component architecture and current implementation status of each gate, s
 [Codegen Architecture](architecture-codegen.md) document.
 
 **Current status:** The pipeline implements both gates. Gate 1 (server-side static AST
-verification) runs in `@cesium-ai/codegen-cesium`; Gate 2 (browser-side sandbox isolation)
+verification) runs in [`@cesium-ai/codegen-cesium`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-cesium); Gate 2 (browser-side sandbox isolation)
 runs in [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md) — verified code is executed inside a fresh
 QuickJS-wasm interpreter, bound to the live `Viewer` only through a guarded, opaque-handle
 bridge, after user approval.
@@ -172,13 +172,14 @@ the primary defence against whatever the LLM produces.
 1. **Static [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree) Verification (Gate 1)** — The verifier ([`ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts), powered by [`acorn`](https://github.com/acornjs/acorn)) operates in parse-only mode — it
    never evaluates the code — and uses a real AST walk rather than regex matching (regex
    can be bypassed via string concatenation or unicode escapes). It rejects:
-   - `eval(...)` and bare `eval` references
-   - `Function(...)` / `new Function(...)` and bare `Function` references
-   - Dynamic `import(...)`
-   - Computed member access (`obj[expr]`) — dot notation only
-   - Browser globals: `fetch`, `XMLHttpRequest`, `WebSocket`, `window`, `document`,
-     `localStorage`, `sessionStorage`, `indexedDB`, `navigator`, `Worker`,
-     `SharedWorker`, `postMessage`
+
+   | Rejected pattern                                                                                                                                                                   |
+   | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `eval(...)` and bare `eval` references                                                                                                                                             |
+   | `Function(...)` / `new Function(...)` and bare `Function` references                                                                                                               |
+   | Dynamic `import(...)`                                                                                                                                                              |
+   | Computed member access (`obj[expr]`) — dot notation only                                                                                                                           |
+   | Browser globals: `fetch`, `XMLHttpRequest`, `WebSocket`, `window`, `document`, `localStorage`, `sessionStorage`, `indexedDB`, `navigator`, `Worker`, `SharedWorker`, `postMessage` |
 
 2. **Allowlist-based validation (optional)** — The verifier accepts an optional
    `allowedSymbols` list. When provided, any free identifier not on the list is rejected,
@@ -191,7 +192,7 @@ the primary defence against whatever the LLM produces.
    ```
 
 3. **Sandbox execution (Gate 2)** — The QuickJS-wasm runtime sandbox in
-   `@cesium-ai/codegen-sandbox` provides a second containment layer for anything the static
+   [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md) provides a second containment layer for anything the static
    verifier misses. Code runs isolated from the page's global scope and cannot reach browser
    APIs directly.
 
@@ -229,7 +230,7 @@ The verifier already addresses the most common bypass routes: computed member ac
 
 ### 5. Resource Exhaustion / DoS
 
-**Where it occurs:** Browser-side code execution (Gate 2 sandbox, `@cesium-ai/codegen-sandbox`).
+**Where it occurs:** Browser-side code execution (Gate 2 sandbox, [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)).
 
 Generated code — accidentally or intentionally — could exhaust browser resources through
 infinite loops, deep recursion, memory allocation, or spamming Viewer entities. This only
@@ -269,13 +270,13 @@ The static verifier catches the simplest cases (`while (true)`, `for (;;)` witho
 
 Generated code running in the browser's global scope can, in principle, access browser
 APIs: cookies, `localStorage`, `sessionStorage`, geolocation, the clipboard, and same-
-origin `fetch` endpoints. Gate 2 (`@cesium-ai/codegen-sandbox`) removes direct access to
+origin `fetch` endpoints. Gate 2 ([`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md)) removes direct access to
 these surfaces.
 
 **Mitigations:**
 
 1. **Sandbox isolation (Gate 2)** — The primary control. Generated code runs in the
-   `@cesium-ai/codegen-sandbox` QuickJS-wasm interpreter, isolated from the page's global
+   [`@cesium-ai/codegen-sandbox`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-sandbox/README.md) QuickJS-wasm interpreter, isolated from the page's global
    scope, `window`, `document`, and storage APIs. It interacts with the viewer only through a
    controlled bridge with opaque handles.
 
