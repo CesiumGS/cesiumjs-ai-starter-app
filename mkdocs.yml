@@ -83,6 +83,7 @@ nav:
       - cesium-ai/tools-schemas:
           - Overview: packages/tools-schemas/index.md
           - Tool Catalogue: packages/tools-schemas/tools.md
+      - cesium-ai/tools: packages/tools/index.md
       - cesium-ai/server: packages/server/index.md
       - cesium-ai/chat-element: packages/chat-element/index.md
       - cesium-ai/sample-config: packages/sample-config/index.md

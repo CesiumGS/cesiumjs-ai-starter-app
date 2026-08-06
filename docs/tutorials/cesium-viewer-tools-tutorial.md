@@ -3,7 +3,7 @@
 This guide covers how to enable, wire up, and disable tools from the
 `@cesium-ai/tools-schemas` library in this starter app. The library ships
 a catalogue of ready-made CesiumJS tools; you pick which ones your app exposes
-by editing **three app-layer files** — the library itself is never touched.
+by configuring a couple of app-layer files — the library itself is never touched.
 
 ![flyTo tool result — Palm Jumeirah](../assets/fly-to-palm-jumeirah.png)
 
@@ -27,10 +27,13 @@ Here is what happens step by step:
 3. **The server streams the tool call to the browser.** It never executes
    anything — the server has no `Viewer`.
 4. **`ChatPanel.tsx` receives `onToolCall("flyTo", args)`.** It checks that
-   `"flyTo"` is in `ENABLED_CESIUM_TOOLS` (defense-in-depth), re-validates `args`
-   against the structural schema, then delegates to `flyToLocation` in
-   [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts),
-   which calls `viewer.camera.flyTo(…)`.
+   `"flyTo"` is in the `ENABLED_TOOLS` set from
+   [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts)
+   (defense-in-depth), then dispatches to that same module's `TOOL_EXECUTORS`
+   map, which delegates `flyTo` to `flyToLocation` in
+   [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts) —
+   re-validating `args` against the structural schema before it ever touches
+   the `Viewer`.
 5. **The executor returns a result.** The chat panel posts it back so the model
    can confirm the flight finished.
 
@@ -58,15 +61,16 @@ flowchart LR
 
 ### The files wired end to end
 
-Five files make `flyTo` work. Each has one clearly scoped responsibility:
+Six files make `flyTo` work. Each has one clearly scoped responsibility:
 
 | File                                                                                                                                           | Tier     | What it does                                                                                                                                       |
 | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`shared/src/tools/flyto-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/flyto-schema.ts)           | Shared   | Defines `flyToShape` — the structural args contract (lat/lon/altitude + `duration`/`easingFunction`). No description text. Imported by both sides. |
 | [`backend/src/tools/flyto-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts)             | Backend  | Layers `.describe()` hints onto `flyToShape` to produce the model-facing schema. Never reaches the client bundle.                                  |
 | [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)                                       | Backend  | Wires the tool into the AI SDK registry via `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS, flyTo: { inputSchema } })`.                        |
-| [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts)                   | Frontend | Validates `rawArgs` against `flyToShape`, then calls `viewer.camera.flyTo(…)`. Returns `{ success }` once the animation completes.                 |
-| [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) | Frontend | `TOOL_EXECUTORS` map routes the incoming tool call to `flyToLocation`. Also gates on `ENABLED_CESIUM_TOOLS` as defense-in-depth.                   |
+| [`frontend/src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/camera.ts)                   | Frontend | Builds `flyToLocation` from `@cesium-ai/tools`'s `createFlyToExecutor` factory — validates `rawArgs` against `flyToShape`, then calls `viewer.camera.flyTo(…)` with the extra `duration`/`easingFunction` options. Returns `{ success }` once the animation completes. |
+| [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts) | Frontend | `TOOL_EXECUTORS` — `@cesium-ai/tools`'s default executor for every catalogue tool, with `flyTo` overridden by `flyToLocation`. `ENABLED_TOOLS` — the runtime allowlist `Set` built from `ENABLED_CESIUM_TOOLS`.                                                          |
+| [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) | Frontend | `onToolCall` checks the incoming tool name against `ENABLED_TOOLS`, then dispatches to the matching entry in `TOOL_EXECUTORS`.                     |
 
 The shared shape (`flyToShape` in `shared/`) is the single contract both sides
 agree on. The backend adds descriptions on top; the frontend validates against
@@ -144,11 +148,12 @@ This separation also gives the design two security properties:
   The backend's `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS })` limits
   what the model is even offered, so a disabled tool is never called under
   normal operation. The frontend's `ENABLED_TOOLS` set in
-  [`ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)
-  enforces the same allowlist a second time — an unexpected tool name (disabled,
-  renamed, or injected via a prompt-injection attack) is rejected before the
-  executor map is consulted, so no tool call can drive the live `Viewer` unless
-  it is explicitly enabled on both sides.
+  [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts),
+  checked by `ChatPanel.tsx`'s `onToolCall`, enforces the same allowlist a
+  second time — an unexpected tool name (disabled, renamed, or injected via a
+  prompt-injection attack) is rejected before `TOOL_EXECUTORS` is consulted, so
+  no tool call can drive the live `Viewer` unless it is explicitly enabled on
+  both sides.
 
 The package therefore exposes three subpaths:
 
@@ -273,20 +278,26 @@ and can be enabled in the starter app by following Section 6.
 
 ## 6. Enabling a tool
 
-Enabling a tool from the library requires changes in exactly three files.
-We'll use `entityAddPoint` as a concrete example.
+Every viewer tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue
+is already enabled in this app by default —
+[`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts)'s
+`ENABLED_CESIUM_TOOLS` spreads `Object.values(CESIUM_TOOL_NAMES)` directly, and
+every one of those tools already has a ready-to-use client-side executor via
+`@cesium-ai/tools`'s `createCesiumToolExecutors()`, wired up in
+[`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts).
 
-### Step 1 — Add the name to the enabled-tools allowlist
+### Configuring an explicit set of enabled tools
 
-[`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts)
-is the **single source of truth** for which tools this app exposes, defined in
-the `@cesium-ai/sample-config` shared package. Add the tool name there:
+To curate this app's surface instead of exposing the whole catalogue, replace
+the spread in `shared/src/enabled-tools.ts` with an explicit list and add a
+name to turn that tool on:
 
 ```ts
 // shared/src/enabled-tools.ts
 export const ENABLED_CESIUM_TOOLS = [
   CESIUM_TOOL_NAMES.flyTo,
-  CESIUM_TOOL_NAMES.entityAddPoint, // ← add
+  CESIUM_TOOL_NAMES.entityAdd, // ← add
+  CESIUM_TOOL_NAMES.cameraOrbit,
 ] as const satisfies readonly CesiumToolName[];
 ```
 
@@ -294,170 +305,82 @@ The `satisfies` constraint catches typos at compile time — every entry is
 checked against `CesiumToolName` from `@cesium-ai/tools-schemas/names`, so a
 name that isn't a real tool fails to build.
 
-Both tiers import this array from `@cesium-ai/sample-config` and use it
-differently:
+Both tiers derive from this one array:
 
-**Backend** — [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)
-passes it to `createCesiumTools` from `@cesium-ai/tools-schemas`, which builds
-the tool registry the model is offered. A tool not in this list is never
-registered, so the model cannot call it:
+- **Backend** — [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)
+  passes it to `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS })`, so the
+  model is only ever offered tools in this list.
+- **Frontend** — [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts)
+  builds a runtime `ENABLED_TOOLS` set from the same array, checked by
+  `ChatPanel.tsx`'s `onToolCall` before a tool call ever reaches the `Viewer`.
 
-```ts
-// backend/src/app.ts
-createCesiumTools({
-  enabled: ENABLED_CESIUM_TOOLS, // ← model only sees tools in this list
-  flyTo: { inputSchema: flyToInputSchema },
-});
-```
+Rebuild the packages (`npm run build:packages`) and re-run the allowlist test
+(`npm test -- enabled-tools`) after changing the list.
 
-**Frontend** — [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)
-builds a runtime `Set` from the same array and checks every incoming tool call
-against it before the executor runs. This is the defense-in-depth gate: even if
-a disabled or spoofed tool name somehow arrives, it is rejected here:
+### Removing a tool
 
-```ts
-// frontend/src/components/ChatPanel.tsx
-const ENABLED_TOOLS = new Set<EnabledCesiumTool>(ENABLED_CESIUM_TOOLS);
-
-// inside handleToolCall:
-if (!ENABLED_TOOLS.has(toolName as EnabledCesiumTool)) {
-  return Promise.resolve({ success: false, error: `Unknown or disabled tool: ${toolName}` });
-}
-```
-
-After adding the name, the TypeScript compiler will report an error in
-`ChatPanel.tsx` until you complete Step 3 — that error is intentional and acts
-as a guard rail.
-
-### Step 2 — Write the client-side executor
-
-Create or add to a file under
-[`frontend/src/tools/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/).
-Group related tools in one file (e.g. all entity tools in `entity.ts`, all
-camera tools in `camera.ts`).
-
-The executor must:
-
-1. Import the tool's **structural shape** from `@cesium-ai/tools-schemas/schemas`
-   (never from the root — that would pull descriptions into the bundle).
-2. Re-validate `rawArgs` before touching the `Viewer` — the payload is
-   AI-generated and therefore untrusted.
-3. Return a result object the agent loop can use to confirm success or surface
-   an error to the user.
-
-```ts
-// frontend/src/tools/entity.ts
-import type { Viewer } from "cesium";
-import { Cartesian3, Color } from "cesium";
-import { entityAddPointInputShape } from "@cesium-ai/tools-schemas/schemas";
-
-export interface EntityResult {
-  success: boolean;
-  id?: string;
-  error?: string;
-}
-
-export function entityAddPointHandler(viewer: Viewer, rawArgs: unknown): EntityResult {
-  const parsed = entityAddPointInputShape.safeParse(rawArgs);
-  if (!parsed.success) {
-    const detail = parsed.error.issues.map((i) => i.message).join("; ");
-    return { success: false, error: `Invalid entityAddPoint arguments: ${detail}` };
-  }
-
-  const { latitude, longitude, height, color, pixelSize, id } = parsed.data;
-
-  const entity = viewer.entities.add({
-    id,
-    position: Cartesian3.fromDegrees(longitude, latitude, height ?? 0),
-    point: {
-      pixelSize: pixelSize ?? 8,
-      color: color ? Color.fromCssColorString(color) : Color.YELLOW,
-    },
-  });
-
-  return { success: true, id: entity.id };
-}
-```
-
-### Step 3 — Register the executor in `ChatPanel.tsx`
-
-Add the new executor to `TOOL_EXECUTORS` in
-[`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx).
-Because the map is typed `Record<EnabledCesiumTool, ToolExecutor>`, TypeScript
-requires an entry for every enabled tool — this is what fixes the compile error
-from Step 1.
-
-```ts
-// frontend/src/components/ChatPanel.tsx
-import { entityAddPointHandler } from "../tools/entity"; // ← add import
-
-const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
-  [CESIUM_TOOL_NAMES.flyTo]: (viewer, args) => flyToLocation(viewer, args),
-  [CESIUM_TOOL_NAMES.entityAddPoint]: (viewer, args) => entityAddPointHandler(viewer, args), // ← add
-};
-```
-
-That's it. Run `npm run dev` (or rebuild with `npm run build:packages && npm run build`)
-and ask the chat panel something like _"add a point at the Eiffel Tower"_.
-
----
-
-## 7. Disabling a tool
-
-Remove the tool's name from `ENABLED_CESIUM_TOOLS` in
-[`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts):
+Remove the tool's name from `ENABLED_CESIUM_TOOLS` in the same file — whether
+you're editing an explicit list (above) or filtering it out of the "every
+catalogue tool" default:
 
 ```ts
 // shared/src/enabled-tools.ts
 export const ENABLED_CESIUM_TOOLS = [
-  CESIUM_TOOL_NAMES.flyTo,
-  // CESIUM_TOOL_NAMES.entityAddPoint,  ← removed
+  ...(Object.values(CESIUM_TOOL_NAMES) as CesiumToolName[]).filter(
+    (name) => name !== CESIUM_TOOL_NAMES.imageryAdd, // ← removed
+  ),
 ] as const satisfies readonly CesiumToolName[];
 ```
 
-Removing the name propagates automatically to both tiers on the next build:
+The removal propagates automatically to both tiers on the next build: the
+backend no longer registers the tool, and the frontend's `ENABLED_TOOLS` gate
+rejects any call to it even if one somehow arrives.
 
-- **Backend** — `createCesiumTools({ enabled: ENABLED_CESIUM_TOOLS })` in
-  [`backend/src/app.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/app.ts)
-  no longer registers the tool, so the model is never offered it.
-- **Frontend** — the runtime `ENABLED_TOOLS` set in
-  [`ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx)
-  is rebuilt from the updated array, so the gate rejects any call to the removed
-  tool even if one somehow arrives.
-
-`ChatPanel.tsx` will also fail to compile because `TOOL_EXECUTORS` still has an
-entry for a non-enabled tool — remove that executor entry too to restore a clean
-build and confirm nothing still references the disabled tool.
-
-### Alternative: exclude via `createCesiumTools`
-
-`createCesiumTools` also accepts `false` for any per-tool key, which drops that
-tool from the registry independently of the `enabled` allowlist. This lets you
-suppress one or more specific tools at the backend level without touching the
-shared config:
+`createCesiumTools` also accepts `false` for any per-tool key, which drops a
+tool from the **backend** registry independently of the `enabled` allowlist —
+useful for suppressing one tool without touching the shared config. Note this
+alone doesn't update the frontend's `ENABLED_TOOLS` gate, so for a complete
+disable on both tiers, remove the name from `ENABLED_CESIUM_TOOLS` instead:
 
 ```ts
 // backend/src/app.ts
 createCesiumTools({
-  flyTo: false, // ← excluded from this backend's registry
+  flyTo: false, // ← excluded from this backend's registry only
 });
 ```
 
-Note that passing `false` here only stops the model from being offered the tool —
-it does **not** update `ENABLED_CESIUM_TOOLS`, so the frontend's `ENABLED_TOOLS`
-gate still admits the name. For a complete disable on both tiers, remove the name
-from `ENABLED_CESIUM_TOOLS` as described above.
+### Overriding a tool's execution
+
+Sometimes you don't want to turn a tool on or off — you want to change how it
+behaves for this app, without forking it. `flyTo` is the worked example
+already covered above (Sections 1 and 4): its accepted shape is extended with
+`duration`/`easingFunction` in
+[`shared/src/tools/flyto-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/flyto-schema.ts),
+and its client-side executor is overridden in
+[`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts):
+
+```ts
+// frontend/src/tools/cesium-tool-executors.ts
+export const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
+  ...createCesiumToolExecutors({ flyTo: flyToLocation }),
+};
+```
+
+Every other tool keeps `@cesium-ai/tools`'s default untouched. See
+[`packages/tools/README.md`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/README.md)
+for the full set of override/extend patterns — a full override works for any
+tool, and narrower `createXExecutor` factories are also available for `flyTo`,
+`cameraSetView`, and every `entityAdd*` variant.
 
 ---
 
-## 8. Quick reference
+## 7. Quick reference
 
 | I want to…                                   | Edit                                                                                                                                                                               |
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Turn a tool on                               | [`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts) — add name to `ENABLED_CESIUM_TOOLS`                    |
-| Turn a tool off                              | Same file — remove the name                                                                                                                                                        |
-| Change how a tool runs in the browser        | [`frontend/src/tools/<groupName>.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/) — edit the executor                                       |
-| Wire a new executor into the dispatch map    | [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) — add entry to `TOOL_EXECUTORS`     |
+| Add a tool to this app's enabled set         | [`shared/src/enabled-tools.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/enabled-tools.ts) — add the name to `ENABLED_CESIUM_TOOLS`                |
+| Remove a tool from this app                  | Same file — filter or remove the name from `ENABLED_CESIUM_TOOLS`                                                                                                                   |
+| Override how a tool runs in the browser       | [`frontend/src/tools/cesium-tool-executors.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/cesium-tool-executors.ts) — pass an override to `createCesiumToolExecutors` |
 | Extend a tool's input schema with new fields | [`shared/src/tools/<toolName>-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/shared/src/tools/) — spread the base shape and add fields                  |
 | Add guidance to the system prompt            | [`packages/server/src/agent.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/agent.ts) — extend `DEFAULT_SYSTEM_PROMPT`                      |
 | See what tools the library offers            | [Tool Catalogue](../packages/tools-schemas/tools.md) or [`packages/tools-schemas/src/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/src/) |
