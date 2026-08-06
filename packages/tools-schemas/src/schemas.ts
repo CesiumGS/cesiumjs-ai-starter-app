@@ -16,13 +16,9 @@ export {
   type CameraLookAtTransformInput,
 } from "./tools/cameraLookAtTransform/cameraLookAtTransform.schema.js";
 export {
-  cameraStartOrbitInputShape,
-  type CameraStartOrbitInput,
-} from "./tools/cameraStartOrbit/cameraStartOrbit.schema.js";
-export {
-  cameraStopOrbitInputShape,
-  type CameraStopOrbitInput,
-} from "./tools/cameraStopOrbit/cameraStopOrbit.schema.js";
+  cameraOrbitInputShape,
+  type CameraOrbitInput,
+} from "./tools/cameraOrbit/cameraOrbit.schema.js";
 export {
   cameraGetPositionInputShape,
   type CameraGetPositionInput,
@@ -31,54 +27,55 @@ export {
   cameraSetControllerOptionsInputShape,
   type CameraSetControllerOptionsInput,
 } from "./tools/cameraSetControllerOptions/cameraSetControllerOptions.schema.js";
+export { entityAddInputShape, type EntityAddInput } from "./tools/entityAdd/entityAdd.schema.js";
 export {
   entityAddPointInputShape,
   type EntityAddPointInput,
-} from "./tools/entityAddPoint/entityAddPoint.schema.js";
+} from "./tools/entityAdd/utils/entityAddPoint.schema.js";
 export {
   entityAddBillboardInputShape,
   type EntityAddBillboardInput,
-} from "./tools/entityAddBillboard/entityAddBillboard.schema.js";
+} from "./tools/entityAdd/utils/entityAddBillboard.schema.js";
 export {
   entityAddLabelInputShape,
   type EntityAddLabelInput,
-} from "./tools/entityAddLabel/entityAddLabel.schema.js";
+} from "./tools/entityAdd/utils/entityAddLabel.schema.js";
 export {
   entityAddModelInputShape,
   type EntityAddModelInput,
-} from "./tools/entityAddModel/entityAddModel.schema.js";
+} from "./tools/entityAdd/utils/entityAddModel.schema.js";
 export {
   entityAddPolygonInputShape,
   type EntityAddPolygonInput,
-} from "./tools/entityAddPolygon/entityAddPolygon.schema.js";
+} from "./tools/entityAdd/utils/entityAddPolygon.schema.js";
 export {
   entityAddPolylineInputShape,
   type EntityAddPolylineInput,
-} from "./tools/entityAddPolyline/entityAddPolyline.schema.js";
+} from "./tools/entityAdd/utils/entityAddPolyline.schema.js";
 export {
   entityAddBoxInputShape,
   type EntityAddBoxInput,
-} from "./tools/entityAddBox/entityAddBox.schema.js";
+} from "./tools/entityAdd/utils/entityAddBox.schema.js";
 export {
   entityAddCorridorInputShape,
   type EntityAddCorridorInput,
-} from "./tools/entityAddCorridor/entityAddCorridor.schema.js";
+} from "./tools/entityAdd/utils/entityAddCorridor.schema.js";
 export {
   entityAddCylinderInputShape,
   type EntityAddCylinderInput,
-} from "./tools/entityAddCylinder/entityAddCylinder.schema.js";
+} from "./tools/entityAdd/utils/entityAddCylinder.schema.js";
 export {
   entityAddEllipseInputShape,
   type EntityAddEllipseInput,
-} from "./tools/entityAddEllipse/entityAddEllipse.schema.js";
+} from "./tools/entityAdd/utils/entityAddEllipse.schema.js";
 export {
   entityAddRectangleInputShape,
   type EntityAddRectangleInput,
-} from "./tools/entityAddRectangle/entityAddRectangle.schema.js";
+} from "./tools/entityAdd/utils/entityAddRectangle.schema.js";
 export {
   entityAddWallInputShape,
   type EntityAddWallInput,
-} from "./tools/entityAddWall/entityAddWall.schema.js";
+} from "./tools/entityAdd/utils/entityAddWall.schema.js";
 export {
   entityListInputShape,
   type EntityListInput,
@@ -91,10 +88,6 @@ export {
   animationCreateInputShape,
   type AnimationCreateInput,
 } from "./tools/animationCreate/animationCreate.schema.js";
-export {
-  animationControlInputShape,
-  type AnimationControlInput,
-} from "./tools/animationControl/animationControl.schema.js";
 export {
   animationRemoveInputShape,
   type AnimationRemoveInput,

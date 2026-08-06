@@ -1,12 +1,12 @@
 import type { MCPClient } from "@ai-sdk/mcp";
 import { connectMcpServer } from "./connect-mcp-server.js";
+import { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "../constants.js";
 import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
 import type { McpTool } from "../mcp-app-meta.js";
 import { withTimeout } from "../tool-timeout.js";
 import type { McpServerConfig } from "../types.js";
 
-/** Default per-tool-call timeout, applied to every MCP tool unless overridden. */
-export const DEFAULT_MCP_TOOL_TIMEOUT_MS = 30_000;
+export { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "../constants.js";
 
 export interface CreateMcpToolsOptions {
   /** MCP servers to connect to. Server-only, trusted config — never derived from a chat request. */

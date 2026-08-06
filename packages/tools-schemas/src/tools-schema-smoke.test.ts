@@ -12,69 +12,12 @@ import { CESIUM_TOOL_NAMES } from "./tool-names.js";
 const VALID: Record<string, unknown> = {
   cameraSetView: { destination: { longitude: 0, latitude: 0, height: 1000 } },
   cameraLookAtTransform: { target: { longitude: 0, latitude: 0 } },
-  cameraStartOrbit: { speed: 2, direction: "clockwise" },
-  cameraStopOrbit: {},
+  cameraOrbit: { action: "start", speed: 2, direction: "clockwise" },
   cameraGetPosition: {},
   cameraSetControllerOptions: { enableZoom: false, maximumZoomDistance: 20000 },
-  entityAddPoint: { id: "p1", position: { longitude: 0, latitude: 0 }, color: "red" },
-  entityAddBillboard: {
-    id: "b1",
-    position: { longitude: 0, latitude: 0 },
-    image: "https://example.com/a.png",
-  },
-  entityAddLabel: { id: "l1", position: { longitude: 0, latitude: 0 }, text: "hi" },
-  entityAddModel: {
-    id: "m1",
-    position: { longitude: 0, latitude: 0 },
-    uri: "https://example.com/a.glb",
-  },
-  entityAddPolygon: {
-    id: "poly1",
-    positions: [
-      { longitude: 0, latitude: 0 },
-      { longitude: 1, latitude: 0 },
-      { longitude: 1, latitude: 1 },
-    ],
-  },
-  entityAddPolyline: {
-    id: "line1",
-    positions: [
-      { longitude: 0, latitude: 0 },
-      { longitude: 1, latitude: 1 },
-    ],
-  },
-  entityAddBox: {
-    position: { longitude: 0, latitude: 0 },
-    box: { dimensions: { x: 1, y: 1, z: 1 } },
-  },
-  entityAddCorridor: {
-    corridor: {
-      positions: [
-        { longitude: 0, latitude: 0 },
-        { longitude: 1, latitude: 1 },
-      ],
-      width: 10,
-    },
-  },
-  entityAddCylinder: {
-    position: { longitude: 0, latitude: 0 },
-    cylinder: { length: 10, topRadius: 1, bottomRadius: 2 },
-  },
-  entityAddEllipse: {
-    position: { longitude: 0, latitude: 0 },
-    ellipse: { semiMajorAxis: 10, semiMinorAxis: 5 },
-  },
-  entityAddRectangle: {
-    rectangle: { coordinates: { north: 1, south: 0, east: 1, west: 0 } },
-  },
-  entityAddWall: {
-    wall: {
-      positions: [
-        { longitude: 0, latitude: 0 },
-        { longitude: 1, latitude: 1 },
-      ],
-      maximumHeights: [10, 20],
-    },
+  entityAdd: {
+    type: "point",
+    data: { id: "p1", position: { longitude: 0, latitude: 0 }, color: "red" },
   },
   entityList: {},
   entityRemove: { id: "p1" },
@@ -84,7 +27,6 @@ const VALID: Record<string, unknown> = {
       { time: "2026-01-01T00:01:00Z", longitude: 1, latitude: 1 },
     ],
   },
-  animationControl: { animationId: "a1", action: "play" },
   animationRemove: { animationId: "a1" },
   animationListActive: {},
   animationUpdatePath: { animationId: "a1", width: 4 },
@@ -99,25 +41,13 @@ const VALID: Record<string, unknown> = {
 const INVALID: Record<string, unknown> = {
   cameraSetView: { destination: { longitude: 200, latitude: 0 } },
   cameraLookAtTransform: { target: { longitude: 0, latitude: 999 } },
-  cameraStartOrbit: { speed: 100 },
+  cameraOrbit: { action: "start", speed: 100 },
   cameraSetControllerOptions: { maximumZoomDistance: -5 },
-  entityAddPoint: { position: { longitude: 0, latitude: 0 } }, // missing id
-  entityAddBillboard: { id: "b1", position: { longitude: 0, latitude: 0 } }, // missing image
-  entityAddLabel: { id: "l1", position: { longitude: 0, latitude: 0 } }, // missing text
-  entityAddModel: { id: "m1", position: { longitude: 0, latitude: 0 } }, // missing uri
-  entityAddPolygon: { id: "poly1", positions: [{ longitude: 0, latitude: 0 }] }, // < 3 positions
-  entityAddPolyline: { id: "line1", positions: [{ longitude: 0, latitude: 0 }] }, // < 2 positions
-  entityAddBox: { position: { longitude: 0, latitude: 0 } }, // missing box
-  entityAddCorridor: { corridor: { positions: [{ longitude: 0, latitude: 0 }] } }, // missing width
-  entityAddCylinder: { position: { longitude: 0, latitude: 0 }, cylinder: { length: 10 } }, // missing radii
-  entityAddEllipse: { position: { longitude: 0, latitude: 0 }, ellipse: { semiMajorAxis: 10 } }, // missing semiMinorAxis
-  entityAddRectangle: { rectangle: { coordinates: { north: 100, south: 0, east: 1, west: 0 } } }, // north out of range
-  entityAddWall: { wall: { positions: [{ longitude: 0, latitude: 0 }] } }, // missing maximumHeights
+  entityAdd: { type: "point", data: { position: { longitude: 0, latitude: 0 } } }, // missing id
   entityRemove: {}, // missing id
   animationCreate: {
     positionSamples: [{ time: "2026-01-01T00:00:00Z", longitude: 0, latitude: 0 }],
   }, // < 2 samples
-  animationControl: { animationId: "a1", action: "stop" }, // invalid enum
   animationRemove: {}, // missing animationId
   animationUpdatePath: { animationId: "a1", color: { red: 2, green: 0, blue: 0 } }, // red out of range
   animationCameraTracking: { animationId: "a1" }, // missing track

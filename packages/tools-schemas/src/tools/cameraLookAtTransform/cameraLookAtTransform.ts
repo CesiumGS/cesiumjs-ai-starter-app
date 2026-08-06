@@ -4,7 +4,7 @@ import { cameraLookAtTransformInputShape } from "./cameraLookAtTransform.schema.
 
 /** Default natural-language description handed to the model for `cameraLookAtTransform`. */
 export const DEFAULT_CAMERA_LOOK_AT_TRANSFORM_DESCRIPTION =
-  "Lock the camera to look at a fixed target point on the globe, useful for inspecting a landmark or setting up an orbit. Pair with cameraStartOrbit to begin an automated orbit around this target.";
+  'Lock the camera to look at a fixed target point on the globe, useful for inspecting a landmark or setting up an orbit. Pair with cameraOrbit (action: "start") to begin an automated orbit around this target.';
 
 /** Per-field model-facing `.describe()` hints for the `cameraLookAtTransform` input schema. */
 export interface CameraLookAtTransformFieldDescriptions {

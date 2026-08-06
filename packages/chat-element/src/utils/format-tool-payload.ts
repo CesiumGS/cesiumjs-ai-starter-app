@@ -1,9 +1,13 @@
 /**
- * Renders a tool's `result` payload for display. Plain values fall back to
- * normal JSON formatting, but top-level string fields (e.g. an
- * `executeCesiumCode` result's `code`) are printed as their raw text instead
- * of a JSON-escaped, single-line string — so multi-line source code renders
- * with real line breaks instead of literal `\n` characters.
+ * Renders a tool's `result` payload for display. When none of `payload`'s
+ * top-level fields are a multi-line string, the whole thing is just rendered
+ * as pretty-printed JSON (e.g. a `cameraGetPosition` result). Otherwise —
+ * e.g. an `executeCesiumCode` result's `code` field — every multi-line string
+ * field is pulled out and printed as its own raw text block instead of a
+ * JSON-escaped, single-line string (so multi-line source code renders with
+ * real line breaks instead of literal `\n` characters), with a blank line
+ * around it to stay visually distinct; every other field still renders as
+ * its own compact `key: value` JSON line.
  *
  * MCP tool results (`mcp__<server>__<tool>`, see `@cesium-ai/mcp-tools`) are a
  * special case: every MCP `CallToolResult` is `{ content: [{ type: "text",
@@ -21,11 +25,23 @@ export function formatToolPayload(payload: unknown): string {
   }
   const mcpText = formatMcpContent(payload as Record<string, unknown>);
   if (mcpText !== undefined) return mcpText;
-  return Object.entries(payload as Record<string, unknown>)
-    .map(([key, value]) =>
-      typeof value === "string" ? `${key}:\n${value}` : `${key}: ${JSON.stringify(value, null, 2)}`,
-    )
-    .join("\n\n");
+
+  const entries = Object.entries(payload as Record<string, unknown>);
+  const isMultilineString = ([, value]: [string, unknown]) =>
+    typeof value === "string" && value.includes("\n");
+  if (!entries.some(isMultilineString)) return JSON.stringify(payload, null, 2);
+
+  // Mixed payload: multi-line string fields render as raw text blocks (with a blank line around
+  // them to stay visually distinct), every other field still renders as its own compact JSON line.
+  const lines: string[] = [];
+  let previousWasBlock = false;
+  for (const [key, value] of entries) {
+    const isBlock = isMultilineString([key, value]);
+    if (lines.length > 0 && (isBlock || previousWasBlock)) lines.push("");
+    lines.push(isBlock ? `${key}:\n${value}` : `${key}: ${JSON.stringify(value, null, 2)}`);
+    previousWasBlock = isBlock;
+  }
+  return lines.join("\n");
 }
 
 /**

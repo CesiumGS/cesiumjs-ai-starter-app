@@ -105,6 +105,7 @@ Browser                          Server
 
 - **`@cesium-ai/server`** — an Express router that mounts the AI SDK chat key-layer (`/api/chat`). It accepts a tool registry and a resolved language model and runs the `streamText` agent loop server-side, so the LLM API key never reaches the browser. The host app owns provider selection.
 - **`@cesium-ai/tools-schemas`** — Zod-schemed CesiumJS viewer tool definitions (`flyTo`, …). Schemas only, no `execute`, and scoped strictly to tools that run directly against a live `Viewer`.
+- **`@cesium-ai/tools`** — default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s catalogue (`flyTo`, camera, entity, animation, and imagery tools) — the browser-side "other half" of that schema-only package, so a host app doesn't have to hand-write an executor for every tool before it can turn one on. `createCesiumToolExecutors({ ... })` lets a host override or extend any individual tool (e.g. this app's own `flyTo`, which validates against an extended shape — see below) without forking the rest. See [`packages/tools/README.md`](packages/tools/README.md).
 - **`@cesium-ai/codegen-cesium`** — backend-only pipeline that turns `executeCesiumCode`'s natural-language `intent` into statically-verified CesiumJS code (skills-grounded generation + an AST verifier), and also owns `executeCesiumCode`'s tool definition itself (schema-only, no `execute`) — that tool can't run directly against a `Viewer` like `flyTo` does, so it lives here rather than in `tools-schemas`. Parse-only — it never executes generated code itself.
 - **`@cesium-ai/mcp-tools`** — optional, server-only [Model Context Protocol](https://modelcontextprotocol.io) client bridge. Connects to MCP servers (SSE/HTTP — stdio is deliberately unsupported), namespaces + allowlist-filters their tools, and merges them into an AI SDK `ToolSet` a host app spreads alongside `createCesiumTools()` — this is the "MCP-backed tool group" the split-execution diagram above refers to. Entirely opt-in through an `mcp.config.json` file, with no MCP client created when the file is absent. See [`packages/mcp-tools/README.md`](packages/mcp-tools/README.md) for the full security model and API.
 
@@ -129,8 +130,30 @@ To **disable** a tool, remove its name from the array. To **enable** one, add it
 // shared/src/enabled-tools.ts
 export const ENABLED_CESIUM_TOOLS = [
   CESIUM_TOOL_NAMES.flyTo,
+  // camera
+  CESIUM_TOOL_NAMES.cameraSetView,
+  CESIUM_TOOL_NAMES.cameraLookAtTransform,
+  CESIUM_TOOL_NAMES.cameraOrbit,
+  CESIUM_TOOL_NAMES.cameraGetPosition,
+  CESIUM_TOOL_NAMES.cameraSetControllerOptions,
+  // entity — entityAdd's `type` field covers every entity variant in one tool
+  CESIUM_TOOL_NAMES.entityAdd,
+  CESIUM_TOOL_NAMES.entityList,
+  CESIUM_TOOL_NAMES.entityRemove,
+  // animation
+  CESIUM_TOOL_NAMES.animationCreate,
+  CESIUM_TOOL_NAMES.animationRemove,
+  CESIUM_TOOL_NAMES.animationListActive,
+  CESIUM_TOOL_NAMES.animationUpdatePath,
+  CESIUM_TOOL_NAMES.animationCameraTracking,
+  CESIUM_TOOL_NAMES.clockControl,
+  CESIUM_TOOL_NAMES.globeSetLighting,
+  // imagery
+  CESIUM_TOOL_NAMES.imageryAdd,
+  CESIUM_TOOL_NAMES.imageryRemove,
+  CESIUM_TOOL_NAMES.imageryList,
+  // codegen (server-executed, arbitrary CesiumJS code against the live Viewer)
   CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
-  // CESIUM_TOOL_NAMES.someOtherViewerTool,   // ← add to enable
 ] as const satisfies readonly (CesiumToolName | CodegenCesiumToolName)[];
 ```
 
@@ -145,7 +168,19 @@ After editing, rebuild the shared package so both tiers pick up the change: `npm
 npm test -- enabled-tools
 ```
 
-> **Adding a brand-new tool** is a superset of the above: (1) register its canonical name in `CESIUM_TOOL_NAMES` ([`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts)) if it runs directly against the live `Viewer`, or add it to `@cesium-ai/codegen-cesium` instead if — like `executeCesiumCode` — it needs the codegen/verification pipeline first; (2) add its schema/definition module under that package's `src/` and wire it into `createCesiumTools` ([`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts)) if it's a viewer tool; (3) write its client-side executor under `frontend/src/tools/` and map it in `TOOL_EXECUTORS`; (4) add the name to `ENABLED_CESIUM_TOOLS` to turn it on.
+> **Adding a brand-new tool** follows the same flow, with one extra distinction up front:
+>
+> 1. **Choose the tool family first**.
+>    - If the tool runs directly against the live `Viewer`, register its canonical name in `CESIUM_TOOL_NAMES` at [`packages/tools-schemas/src/tool-names.ts`](packages/tools-schemas/src/tool-names.ts).
+>    - If the tool needs the codegen/verification pipeline (like `executeCesiumCode`), add it under `@cesium-ai/codegen-cesium` instead.
+> 2. **Add the tool definition in the owning package**.
+>    - Viewer tool: add its schema/definition module under `packages/tools-schemas/src/` and wire it into `createCesiumTools` in [`packages/tools-schemas/src/index.ts`](packages/tools-schemas/src/index.ts).
+>    - Codegen tool: wire it through the `@cesium-ai/codegen-cesium` exports/registry for that tool family.
+> 3. **Add or override the frontend executor**.
+>    - Package default executor: add it to `@cesium-ai/tools` in [`packages/tools/src/index.ts`](packages/tools/src/index.ts).
+>    - App-only executor: implement it under `frontend/src/tools/` and pass it via `createCesiumToolExecutors` overrides.
+> 4. **Enable it for this app** by adding its name to `ENABLED_CESIUM_TOOLS` in [`shared/src/enabled-tools.ts`](shared/src/enabled-tools.ts).
+> 5. **Verify end to end** with `npm run build:packages` and `npm test -- enabled-tools`.
 
 ### Update a tool's schema
 
@@ -281,6 +316,10 @@ cesiumjs-ai-tools-sample/
 │   │       ├── schemas.ts      # flyToInputShape — shared args contract (structural)
 │   │       ├── tools/flyTo/flyTo.ts # flyTo tool (model-facing schema + hints, no execute)
 │   │       └── index.ts        # createCesiumTools registry (enabled allowlist)
+│   ├── tools/                  # @cesium-ai/tools — default client-side tool executors
+│   │   └── src/
+│   │       ├── tools/          # One default executor per tool, grouped by domain
+│   │       └── index.ts        # DEFAULT_CESIUM_TOOL_EXECUTORS, createCesiumToolExecutors
 │   └── codegen-cesium/         # @cesium-ai/codegen-cesium — intent -> verified CesiumJS code pipeline + the executeCesiumCode tool
 │       └── src/
 │           ├── tool-names.ts   # CODEGEN_CESIUM_TOOL_NAMES — canonical codegen tool identifiers

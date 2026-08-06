@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { McpServerConfigsSchema, type McpServerConfig } from "@cesium-ai/mcp-tools";
+import { McpServerConfigsSchema, type McpServerConfig } from "@cesium-ai/mcp-tools/types";
 
 /**
  * Conventional on-disk MCP server config file, checked in this order — the

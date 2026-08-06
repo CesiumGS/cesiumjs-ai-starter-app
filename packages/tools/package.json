@@ -1,0 +1,36 @@
+{
+  "name": "@cesium-ai/tools",
+  "version": "0.0.1",
+  "description": "Default, ready-to-use client-side executors for every @cesium-ai/tools-schemas tool — runs a validated tool call against a live CesiumJS Viewer. Browser-only (depends on cesium); designed to be overridden or extended per tool without forking the whole registry.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@cesium-ai/tools-schemas": "*",
+    "cesium": "^1.127.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
