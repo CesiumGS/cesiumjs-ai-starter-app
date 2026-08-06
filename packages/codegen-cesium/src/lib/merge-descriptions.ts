@@ -3,9 +3,9 @@
  * dropping any override explicitly set to `undefined` so it falls back to the
  * default rather than clobbering it. Every codegen-cesium tool's
  * `buildXInputSchema` needs this exact merge — extracted here (mirroring
- * `@cesium-ai/tools-cesium`'s identical helper) so adding a tool doesn't mean
+ * `@cesium-ai/tools-schemas`'s identical helper) so adding a tool doesn't mean
  * re-deriving it. Deliberately duplicated rather than imported from
- * `@cesium-ai/tools-cesium`: that package is reserved for viewer-specific
+ * `@cesium-ai/tools-schemas`: that package is reserved for viewer-specific
  * tools, and this generic schema-building helper has no viewer dependency.
  */
 export function mergeDescriptions<T extends Record<string, string>>(

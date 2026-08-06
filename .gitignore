@@ -1,5 +1,5 @@
 # GitHub
-.github/
+.github/*
 !.github/workflows
 !.github/ISSUE_TEMPLATE
 
@@ -21,6 +21,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
+site/
 
 # Playwright output
 playwright-report/
@@ -51,3 +52,5 @@ npm-debug.log*
 Thumbs.db
 
 site/
+
+mcp.config.json

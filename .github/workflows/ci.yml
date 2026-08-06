@@ -44,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Build the reusable workspace packages first (@cesium-ai/tools-cesium,
+      # Build the reusable workspace packages first (@cesium-ai/tools-schemas,
       # @cesium-ai/server), then type-check and build the frontend and backend.
       - name: Build packages
         run: npm run build:packages

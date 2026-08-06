@@ -1,156 +1,55 @@
 # @cesium-ai/codegen-cesium
 
-Intent-to-**verified**-CesiumJS-code generation pipeline, plus the schema-only `executeCesiumCode`
-tool definition that fronts it: CesiumJS Agent Skills grounding (sourced from the
-`@cesium/cesiumjs-skills` package dependency), domain matching, model-agnostic generation, and
-AST-based static verification. Nothing in the generation pipeline
-executes generated code — verification is parse-only (static analysis of the generated JS/TS via an
-AST), never a runtime `eval`/sandbox.
+Intent-to-verified-CesiumJS-code generation pipeline, plus the `executeCesiumCode` tool definition. The pipeline covers domain matching, model-agnostic generation, and AST-based static verification — nothing in the pipeline executes generated code; runtime isolation is the frontend's responsibility.
 
-This package's generation/verification internals (`generateVerifiedCesiumCode`, `verifyCesiumCode`,
-the skills/domain-matching machinery) have no frontend consumer and are meant to run server-side, as
-part of building a tool call or code snippet before it's ever sent to the browser. The
-`executeCesiumCode` tool _definition_ (its schema and description), however, follows the same
-`/names` + `/schemas` subpath split as `@cesium-ai/tools-cesium` so the frontend can safely import
-just the tool name / structural args shape without pulling in `acorn`, `ai`, or the
-`@cesium/cesiumjs-skills` corpus.
+## Architecture
 
-This is the package this repo's sample app wires into its own executable `executeCesiumCode` tool —
-this package's own copy of that tool stays schema-only by design, and
-`backend/src/tools/execute-cesium-code-tool.ts` in the sample app calls `generateVerifiedCesiumCode`
-(from here) inside the `execute` it builds on top of this package's schema, the same way
-`backend/src/tools/flyto-tool.ts` extends `@cesium-ai/tools-cesium`'s `flyTo` shared schema.
-
-## Architecture: user input → output
-
-End-to-end, a call to `executeCesiumCode` flows through this pipeline. Steps 1–5 live in this
-package; steps 6–8 live in the consuming sample app (`backend/` and `frontend/`), shown here so the
-full trust boundary is visible in one place:
+Steps 1–5 live in this package; steps 6–8 are in the consuming app:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 65, "padding": 12}}}%%
 graph TD
-    A["🧑 User Intent<br/>Natural Language<br/>e.g., 'fly camera to Paris'"] -->|input| B["2️⃣ Domain Matching<br/>matchBestSkill<br/>domain-matcher.ts"]
+    A["🧑 User Intent"] -->|input| B["Domain Matching<br/>matchBestSkill"]
+    B -->|SKILL.md| C["Prompt Building<br/>buildCodegenPrompt"]
+    C -->|grounded prompt| D["Model Generation<br/>generateText (caller-supplied model)"]
+    D -->|raw code| E["AST Verification<br/>verifyCesiumCode (parse-only)"]
+    E -->|violations?| E_retry["Retry (up to 3 attempts)"]
+    E_retry -->|feedback| D
+    E -->|verified| F["✅ GATE 1: Static Analysis<br/>No execution"]
+    F --> BOUNDARY["@cesium-ai/codegen-cesium boundary<br/>Nothing above executes code"]
+    BOUNDARY --> G["Backend Tool Execution"]
+    G -->|stream to browser| H["🔒 GATE 2: Frontend Runtime Sandbox"]
+    H --> I["Output: Viewer modifications"]
+    E -->|fails| REJECT["❌ Return violations"]
 
-    B -->|selected SKILL.md| C["3️⃣ Prompt Building<br/>buildCodegenPrompt<br/>prompt-builder.ts<br/>Inlines skill context"]
-
-    C -->|grounded prompt| D["4️⃣ Model Generation<br/>generateText<br/>generate-verified-cesium-code.ts<br/>Caller-supplied model"]
-
-    D -->|unverified code| E["5️⃣ AST Verification<br/>verifyCesiumCode<br/>ast-verifier.ts<br/>Parse-only static analysis"]
-
-    E -->|violations?| E_retry["Retry Loop<br/>maxAttempts: 3"]
-    E_retry -->|feedback to model| D
-
-    E -->|verified| F["✅ GATE 1: Static Analysis<br/>Size, constructs, identifiers<br/>No execution"]
-
-    F -->|verified code| BOUNDARY["━━━━━━━━━━━━━━━<br/>@cesium-ai/codegen-cesium boundary<br/>Nothing above executes code<br/>━━━━━━━━━━━━━━━"]
-
-    BOUNDARY -->|verified code| G["6️⃣ Backend Tool Execution<br/>createExecuteCesiumCodeTool<br/>backend/tools/execute-cesium-code-tool.ts"]
-
-    G -->|stream to browser| H["7️⃣ Frontend Sandbox<br/>Sandboxed Code Execution<br/>Runtime isolation with resource limits"]
-
-    H -->|isolated execution| I["🔒 GATE 2: Runtime Isolation<br/>Memory/deadline limited<br/>Proxied Viewer access only<br/>Timeout protection"]
-
-    I -->|safe effects| J["8️⃣ Output<br/>Viewer modifications<br/>SandboxResult returned"]
-
-    J -->|camera moves,<br/>entities added| K["✨ Result<br/>Live updates in browser"]
-
-    E -->|unverified| REJECT["❌ Verification Failed<br/>Return violations"]
-    REJECT -->|user notified| K
-
-    style F fill:#20B2AA,stroke:#008B8B,stroke-width:3px,color:#fff
-    style I fill:#9370DB,stroke:#6A0DAD,stroke-width:3px,color:#fff
-    style BOUNDARY fill:#E6E6FA,stroke:#9370DB,stroke-width:2px,stroke-dasharray: 5 5
-    style E_retry fill:#FFA500,stroke:#FF8C00,stroke-width:2px,color:#000
-    style REJECT fill:#FF6B6B,stroke:#CC0000,stroke-width:2px,color:#fff
+    style F fill:#20B2AA,stroke:#008B8B,color:#fff
+    style H fill:#9370DB,stroke:#6A0DAD,color:#fff
+    style BOUNDARY fill:#E6E6FA,stroke:#9370DB,stroke-dasharray: 5 5
+    style E_retry fill:#FFA500,stroke:#FF8C00,color:#000
+    style REJECT fill:#FF6B6B,stroke:#CC0000,color:#fff
 ```
 
-**Key security boundaries:**
-
-- **GATE 1 (Green)**: Static AST verification in this package — parse-only, never executes code
-- **GATE 2 (Pink)**: Runtime sandbox in frontend — memory/deadline limited, proxied Viewer access only
-- **Package boundary (Gold)**: Nothing above this line executes code; runtime isolation is the frontend's responsibility
-
-Two independent gates sit between "the model said this" and "this touches a live `Viewer`": this
-package's static AST verifier (steps 4–5) and the frontend's runtime sandbox (step 7).
-Either one alone is not sufficient — see Security below.
+Two independent gates sit between model output and a live `Viewer`: this package's static AST verifier and the frontend's runtime sandbox.
 
 ## Entry points
 
-| Subpath                             | Exports                                                                                                                               | Who imports it                                                                                                                                                                            |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@cesium-ai/codegen-cesium`         | Everything — the generation/verification pipeline, plus the full `executeCesiumCode` tool definition (incl. model-facing description) | Backend only. **Never** import the root entry point from client code — it pulls in `acorn`, `ai`, the `@cesium/cesiumjs-skills` corpus, and the human-readable description the LLM reads. |
-| `@cesium-ai/codegen-cesium/names`   | `CODEGEN_CESIUM_TOOL_NAMES`, `CodegenCesiumToolName`                                                                                  | Both. Schema-free — safe for the frontend to key its tool-call/result handling off of.                                                                                                    |
-| `@cesium-ai/codegen-cesium/schemas` | `executeCesiumCodeInputShape`, `ExecuteCesiumCodeInput`                                                                               | Both. Structural shape only, no `.describe()` hints — safe for the frontend to validate untrusted tool-call/result args against.                                                          |
+| Subpath                             | Exports                                                                | Consumer     |
+| ----------------------------------- | ---------------------------------------------------------------------- | ------------ |
+| `@cesium-ai/codegen-cesium`         | Full pipeline + `executeCesiumCode` tool with model-facing description | Backend only |
+| `@cesium-ai/codegen-cesium/names`   | `CODEGEN_CESIUM_TOOL_NAMES`, `CodegenCesiumToolName`                   | Both         |
+| `@cesium-ai/codegen-cesium/schemas` | `executeCesiumCodeInputShape`, `ExecuteCesiumCodeInput`                | Both         |
 
-## File layout
-
-```
-packages/codegen-cesium/
-├── src/
-│   ├── index.ts                  # Public entry point — re-exports generateVerifiedCesiumCode, verifyCesiumCode, the executeCesiumCode tool, etc.
-│   ├── tool-names.ts              # CODEGEN_CESIUM_TOOL_NAMES — the /names subpath source
-│   ├── schemas.ts                 # Aggregates structural shapes — the /schemas subpath source
-│   ├── tools/
-│   │   └── executeCesiumCode/
-│   │       ├── executeCesiumCode.schema.ts   # executeCesiumCodeInputShape — structural { intent } shape, no description text
-│   │       └── executeCesiumCode.ts          # Model-facing description/schema + createExecuteCesiumCode factory (schema-only, no execute)
-│   ├── lib/                       # Generic schema-building helpers (duplicated from @cesium-ai/tools-cesium — see its README)
-│   │   ├── merge-descriptions.ts  # mergeDescriptions
-│   │   ├── describe-shape.ts      # buildDescribedSchema / describeShape
-│   │   └── client-tool.ts         # createClientTool / createToolFactory / ClientToolConfig
-│   └── pipeline/                  # Intent -> verified CesiumJS code generation pipeline
-│       ├── generate-verified-cesium-code.ts # generateVerifiedCesiumCode — the single orchestration entry point
-│       ├── ast-verifier.ts            # verifyCesiumCode — parse-only static verifier (acorn/acorn-walk)
-│       ├── domain-matcher.ts          # matchBestSkill — routes an intent to a vendored skill
-│       ├── prompt-builder.ts          # buildCodegenPrompt — grounded generation prompt builder
-│       └── skills-loader.ts           # Loads/parses SKILL.md from the @cesium/cesiumjs-skills package dependency
-├── package.json
-├── tsconfig.json
-└── tsconfig.typecheck.json
-```
-
-## Skills data (`@cesium/cesiumjs-skills` dependency)
-
-This package no longer vendors CesiumJS Agent Skills content directly — it depends on
-[`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills) (currently pinned to the
-`feat/npm-skills-support` branch via a `github:` dependency until the package is published to npm;
-see that repo's `docs/INSTALLATION.md` for the eventual `npm install @cesium/cesiumjs-skills` path).
-`pipeline/skills-loader.ts` resolves the installed package's `skills/` directory at runtime via
-`require.resolve("@cesium/cesiumjs-skills/package.json")`, so
-updating the dependency version is now the entire re-sync process — no more manual file copying.
-
-Each `skills/<name>/SKILL.md` file is a per-domain CesiumJS reference: YAML frontmatter with a `name`
-and a `description` written as trigger/activation text (the kind of prompt that should route to
-this domain), followed by a Markdown body of key symbols, usage notes, and short code samples for
-that area of the CesiumJS API. All 14 upstream domains (Viewer/Camera setup, Entities/DataSources,
-3D Tiles, Imagery, Terrain/Environment, Primitives, Materials/Shaders, Custom Shaders, Interaction,
-Models/Particles, spatial math, time/animation properties, and Core Utilities) are available through
-the dependency. `domain-matcher.ts`'s BM25 ranking matches an intent against each skill's
-`description` to pick which `SKILL.md` file(s) ground the generation prompt.
+Never import the root from client code — it pulls in `acorn`, `ai`, the `@cesium/cesiumjs-skills` corpus, and model-facing descriptions.
 
 ## Security
 
-Summary (see the Architecture diagram above for where each gate sits in the pipeline):
+- **GATE 1 — Static analysis (this package):** `verifyCesiumCode` parses generated code with [`acorn`](https://github.com/acornjs/acorn)/[`acorn-walk`](https://github.com/acornjs/acorn/tree/master/acorn-walk) and rejects banned constructs (`eval`, `Function`, dynamic `import()`, banned browser globals, computed member access), free identifiers outside the allowlist, oversized snippets, and unbounded loops — without ever running the code.
+- **GATE 2 — Runtime isolation (frontend):** A sandboxed execution context with memory/deadline limits and a proxied Viewer surface runs the verified code. This repo's sample app wires this up via [`@cesium-ai/codegen-sandbox`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/codegen-sandbox/) — a fresh QuickJS-WASM interpreter per run, bound to the live `Viewer` only through a guarded, opaque-handle host bridge.
+- **Neither gate substitutes for the other.** Verified output is still attacker-influenceable model output until the frontend validates and executes it safely.
 
-- **This package (server-side, steps 4–5): parse-only static verification, never execution.**
-  `verifyCesiumCode` (`src/pipeline/ast-verifier.ts`) parses generated code with `acorn`/`acorn-walk` and
-  rejects it — without ever running it — for banned constructs (`eval`, `Function`, dynamic
-  `import()`, banned browser globals, computed member access), free identifiers outside the
-  allowlist, oversized snippets, or unbounded loops.
-- **The consuming app's frontend (step 7): runtime isolation via a sandboxed execution environment.**
-  A sandboxed runtime actually executes the verified code, inside a fresh, memory- and deadline-limited
-  execution context with only a manifest of bound real CesiumJS symbols in scope — never a live `fetch`, `document`, or storage
-  access — and a timeout that interrupts execution if the script hangs.
-- **Neither gate substitutes for the other.** Static verification can't observe runtime behavior;
-  the sandbox can't be skipped just because the backend already verified the code, since verified
-  output is still attacker-influenceable model output.
+See [Codegen Security](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/codegen-tool-security-attacks-vectors/) for a full threat model.
 
-Static verification here means **parsing**, not running, generated code — an AST walk (via
-`acorn`/`acorn-walk`) checks that generated CesiumJS snippets only reference symbols present in the
-vendored domain allowlist and don't contain constructs the pipeline hasn't cleared for use.
-Verified output is still just JavaScript text; it carries no more trust than any other
-attacker-influenceable model output until the consuming app validates and executes it safely
-(within a runtime sandbox, never directly on a live Viewer).
+## Skills data
 
 This parse-only stance is a deliberate trade-off, not a shortcut: if this package ever _executed_
 generated code server-side (even in a `try`/`catch`), a shared backend process would need its own
@@ -161,19 +60,18 @@ independently validate and execute the code with appropriate isolation — it ca
 as a substitute for its own runtime isolation. This repo's sample app executes verified code in
 the frontend through `@cesium-ai/codegen-sandbox`: a fresh QuickJS-WASM interpreter with
 memory/deadline limits and a guarded bridge to the live Viewer. See
-[`frontend/README.md`](../../frontend/README.md).
+[`frontend/README.md`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/README.md).
 
-## AST verifier (`src/pipeline/ast-verifier.ts`)
+Domain grounding comes from [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills). Each `SKILL.md` covers a CesiumJS domain (camera, entities, 3D Tiles, imagery, etc.). [`domain-matcher.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/domain-matcher.ts) uses [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) ranking to select which skill grounds the generation prompt. Updating the dependency version is the entire re-sync process — no manual file copying.
 
-`verifyCesiumCode(code, options)` is a **parse-only** static verifier. It never `eval`s, never
-constructs `new Function(...)`, never dynamically `import()`s, and never otherwise executes the
-generated code — it only parses it with `acorn` and walks the AST with `acorn-walk`. Runtime
-sandboxing of generated code is the frontend's job (runtime isolation layer); this
-package stays entirely on the static-analysis side of that boundary.
+## `executeCesiumCode` tool
 
-### Verification Flow
+The library copy is **schema-only** — no `execute` method. Host apps wire their own executable version on top (e.g. [`backend/src/tools/execute-cesium-code-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/execute-cesium-code-tool.ts) calls `generateVerifiedCesiumCode` from this package, following the same pattern as [`flyto-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/flyto-tool.ts)).
+
+## File layout
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "16px"}, "flowchart": {"nodeSpacing": 40, "rankSpacing": 55, "padding": 10}}}%%
 graph TD
     A["Input: Code String"] --> B["Check 1: Size Limits"]
     B -->|exceeds maxLength<br/>or maxLines?| B_fail["❌ Size Violation"]
@@ -287,7 +185,7 @@ are labeled as diagnostic data rather than instructions.
 
 **Purpose:** Describes complex custom camera/entity/scene manipulation by natural-language intent (complements `@cesium-ai/tools-cesium`'s `flyTo` for non-simple requests).
 
-**Design:** Library copy is **schema only by design** — no `execute` method. Host apps wire their own executable version on top (e.g., `backend/src/tools/execute-cesium-code-tool.ts` in this sample app).
+**Design:** Library copy is **schema only by design** — no `execute` method. Host apps wire their own executable version on top (e.g., [`backend/src/tools/execute-cesium-code-tool.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/tools/execute-cesium-code-tool.ts) in this sample app).
 
 **File structure:**
 
@@ -298,6 +196,21 @@ are labeled as diagnostic data rather than instructions.
 
 **Tool naming (single source of truth):**
 
-- **Source:** `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode` (from `tool-names.ts`, re-exported at `/names`)
+- **Source:** `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode` (from [`tool-names.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tool-names.ts), re-exported at `/names`)
 - **Backend:** Imported by tool registry
-- **Frontend:** Imported by result handler (`frontend/src/tools/execute-cesium-code.ts`'s `isExecuteCesiumCodeTool`)
+- **Frontend:** Imported by result handler ([`frontend/src/tools/execute-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/tools/execute-cesium-code.ts)'s `isExecuteCesiumCodeTool`)
+
+## File layout
+
+| File                                                                                                                                                                                                       | Description                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/index.ts)                                                                                       | Public entry point                                                                                                                           |
+| [`src/tool-names.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tool-names.ts)                                                                             | `/names` subpath source                                                                                                                      |
+| [`src/schemas.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/schemas.ts)                                                                                   | `/schemas` subpath source                                                                                                                    |
+| [`src/tools/executeCesiumCode/executeCesiumCode.schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tools/executeCesiumCode/executeCesiumCode.schema.ts) | Structural `{ intent }` shape, no descriptions                                                                                               |
+| [`src/tools/executeCesiumCode/executeCesiumCode.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/tools/executeCesiumCode/executeCesiumCode.ts)               | Model-facing description + tool factory                                                                                                      |
+| [`src/pipeline/generate-verified-cesium-code.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/generate-verified-cesium-code.ts)                     | Main orchestration entry point                                                                                                               |
+| [`src/pipeline/ast-verifier.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/ast-verifier.ts)                                                       | Parse-only static verifier ([acorn](https://github.com/acornjs/acorn)/[acorn-walk](https://github.com/acornjs/acorn/tree/master/acorn-walk)) |
+| [`src/pipeline/domain-matcher.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/domain-matcher.ts)                                                   | [BM25](https://en.wikipedia.org/wiki/Okapi_BM25) skill selection                                                                             |
+| [`src/pipeline/prompt-builder.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/prompt-builder.ts)                                                   | Grounded prompt builder                                                                                                                      |
+| [`src/pipeline/skills-loader.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-cesium/src/pipeline/skills-loader.ts)                                                     | Loads `SKILL.md` from [`@cesium/cesiumjs-skills`](https://github.com/CesiumGS/cesiumjs-skills)                                               |
