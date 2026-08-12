@@ -6,6 +6,7 @@ import {
 } from "@cesium-ai/mcp-tools";
 import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
+import { noopServerLogger, type ServerLogger } from "../logger.js";
 // Type-only: pulls in express-session's ambient augmentation of Express's
 // `Request` (adds `sessionID`/`session`) without adding a runtime import —
 // every route below keys off `req.sessionID`, but the host app owns
@@ -17,6 +18,8 @@ export interface McpAppRouterOptions extends McpScope {
   timeoutMs?: number;
   /** Maximum resource fingerprints retained for drift detection. */
   maxTrackedResources?: number;
+  /** Structured logger for resource-drift warnings and proxied-call failures. Defaults to a no-op (silent) logger. */
+  logger?: ServerLogger;
 }
 
 const DEFAULT_MAX_TRACKED_RESOURCES = 256;
@@ -32,7 +35,7 @@ const DEFAULT_MAX_TRACKED_RESOURCES = 256;
  * `@ai-sdk/mcp`'s `readMCPAppResource`) so this never costs a second round
  * trip to the MCP server.
  */
-function createResourceDriftTracker(maxEntries: number) {
+function createResourceDriftTracker(maxEntries: number, logger: ServerLogger) {
   const baselines = new Map<string, string>();
   return function checkDrift(key: string, result: unknown): void {
     const fingerprint = createHash("sha256").update(JSON.stringify(result)).digest("base64url");
@@ -48,9 +51,10 @@ function createResourceDriftTracker(maxEntries: number) {
     baselines.delete(key);
     baselines.set(key, fingerprint);
     if (fingerprint !== baseline) {
-      console.warn(
-        `[mcp-app-router] MCP App resource "${key}" changed since it was first loaded — ` +
-          `possible content update or a rug-pull from the MCP server. Re-review before trusting it.`,
+      logger.warn(
+        `MCP App resource "${key}" changed since it was first loaded — possible content update ` +
+          `or a rug-pull from the MCP server. Re-review before trusting it.`,
+        { resourceKey: key },
       );
     }
   };
@@ -62,6 +66,7 @@ async function handleResourceRequest(
   options: McpAppRouterOptions,
   timeoutMs: number,
   checkDrift: (key: string, result: unknown) => void,
+  logger: ServerLogger,
 ): Promise<void> {
   const server = typeof req.query.server === "string" ? req.query.server : undefined;
   const uri = typeof req.query.uri === "string" ? req.query.uri : undefined;
@@ -88,7 +93,9 @@ async function handleResourceRequest(
     checkDrift(`${server}:${uri}`, result);
     res.json(result);
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("MCP App resource read failed", { server, uri, error: message });
+    res.status(502).json({ error: message });
   }
 }
 
@@ -97,6 +104,7 @@ async function handleToolCallRequest(
   res: Response,
   options: McpAppRouterOptions,
   timeoutMs: number,
+  logger: ServerLogger,
 ): Promise<void> {
   const {
     server,
@@ -140,7 +148,9 @@ async function handleToolCallRequest(
     });
     res.json(result);
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error("MCP App tool call failed", { server, toolName, error: message });
+    res.status(502).json({ error: message });
   }
 }
 
@@ -176,13 +186,14 @@ export function createMcpAppRouter(options: McpAppRouterOptions): Router {
     1,
     options.maxTrackedResources ?? DEFAULT_MAX_TRACKED_RESOURCES,
   );
-  const checkDrift = createResourceDriftTracker(maxTrackedResources);
+  const logger = options.logger ?? noopServerLogger;
+  const checkDrift = createResourceDriftTracker(maxTrackedResources, logger);
 
   router.get("/api/mcp-app/resource", (req, res) =>
-    handleResourceRequest(req, res, options, timeoutMs, checkDrift),
+    handleResourceRequest(req, res, options, timeoutMs, checkDrift, logger),
   );
   router.post("/api/mcp-app/tool-call", (req, res) =>
-    handleToolCallRequest(req, res, options, timeoutMs),
+    handleToolCallRequest(req, res, options, timeoutMs, logger),
   );
 
   return router;

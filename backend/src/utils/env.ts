@@ -7,9 +7,13 @@ import { resolveMcpServersConfig } from "./mcp-servers-config.js";
 
 // Loads .env files when present (local dev). quiet: true silently skips missing
 // files, so this is a no-op in production where env vars come from the runtime.
+// override: true makes .env win over any pre-existing process.env value (e.g. a
+// stray User/Machine-level OTEL_* var set for other local tools) so this app's
+// config is always exactly what .env says, without touching that other var.
 dotenv.config({
   path: [resolve(process.cwd(), "../.env"), resolve(process.cwd(), ".env")],
   quiet: true,
+  override: true,
 });
 
 // Treats blank/whitespace-only values as "unset". .env files spell an unset
@@ -28,6 +32,8 @@ const boolEnv = (defaultValue: boolean) =>
       if (!v || !v.trim()) return defaultValue;
       return ["1", "true", "yes", "on"].includes(v.trim().toLowerCase());
     });
+
+const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 
 const EnvSchema = z.object({
   PUBLIC_URL: z.url().default("http://localhost:3001"),
@@ -83,6 +89,18 @@ const EnvSchema = z.object({
 
   TELEMETRY_ENABLED: boolEnv(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
+  OTEL_EXPORTER_OTLP_HEADERS: z.preprocess(blankToUndefined, z.string().optional()),
+  OTEL_SERVICE_NAME: z
+    .preprocess(blankToUndefined, z.string().optional())
+    .default("cesiumjs-ai-starter-app-backend"),
+  OTEL_SERVICE_NAMESPACE: z
+    .preprocess(blankToUndefined, z.string().optional())
+    .default("cesium-ai"),
+  OTEL_RESOURCE_ATTRIBUTES: z.preprocess(blankToUndefined, z.string().optional()),
+  OTEL_LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
 
   // Per-tool-call timeout for MCP tools (ms). The server list is resolved
   // separately below from `mcp.config.json`, not as a plain zod field here.

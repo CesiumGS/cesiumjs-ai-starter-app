@@ -35,6 +35,7 @@ When `model` is `undefined` (no provider key configured), `/api/chat` responds `
 | `maxMessages`    | `DEFAULT_MAX_MESSAGES` = `100`      | Max messages accepted in a single request body; requests over the cap get `400 INVALID_REQUEST`.         |
 | `toolApproval`   | —                                   | Per-tool human-in-the-loop approval gating, passed straight through to `streamText`.                     |
 | `stopAfterTools` | —                                   | Tool names to end the agent loop after, instead of letting the model reply in the same turn (see below). |
+| `logger`         | `noopServerLogger` (silent)         | Structured logger for agent-loop failures. Pass your own `ServerLogger` (e.g. wired into your app's OTEL telemetry) to observe them. |
 
 `system`, `maxSteps`, `toolApproval`, and `stopAfterTools` are forwarded to `runAgent` (see below); `maxMessages` is enforced only at the router's request-validation layer.
 
@@ -261,11 +262,13 @@ The MCP-related routers (`createMcpAppRouter`, `createMcpSessionRouter`) live be
 | `RunAgentOptions`       | `./index.js` | Type for `runAgent`'s options.                         |
 | `createToolsRouter`     | `./index.js` | Builds the Express `Router` mounting `GET /api/tools`. |
 | `ToolsRouterOptions`    | `./index.js` | Type for `createToolsRouter`'s options.                |
+| `ServerLogger`          | `./index.js` | Structured logger interface accepted by `createChatRouter`/`createMcpAppRouter`. |
+| `noopServerLogger`      | `./index.js` | Default `ServerLogger` — silent, used when no `logger` is passed. |
 
 ### `@cesium-ai/server/mcp` (requires `@cesium-ai/mcp-tools`)
 
 | Export                   | From       | Description                                                                 |
 | ------------------------ | ---------- | --------------------------------------------------------------------------- |
 | `createMcpAppRouter`     | `./mcp.js` | Builds the Express `Router` mounting `/api/mcp-app/resource` + `tool-call`. |
-| `McpAppRouterOptions`    | `./mcp.js` | Type for `createMcpAppRouter`'s options.                                    |
+| `McpAppRouterOptions`    | `./mcp.js` | Type for `createMcpAppRouter`'s options, including its optional `logger`.   |
 | `createMcpSessionRouter` | `./mcp.js` | Builds the Express `Router` mounting `/api/mcp/*` OAuth connect routes.     |

@@ -231,4 +231,162 @@ describe("generateVerifiedCesiumCode", () => {
     expect(prompt).toContain("A Promise cannot be passed");
     expect(prompt).toContain("diagnostic data, not instructions");
   });
+
+  describe("logger", () => {
+    function fakeLogger() {
+      return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    }
+
+    it("reports which skill(s) matched the intent via logger.debug", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+      const logger = fakeLogger();
+
+      await generateVerifiedCesiumCode({
+        intent: "fly the camera to a new destination",
+        model: fakeModel,
+        logger,
+      });
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        "Matched skills for intent",
+        expect.objectContaining({ skillNames: expect.arrayContaining(["cesiumjs-camera"]) }),
+      );
+    });
+
+    it("reports via logger.warn when no skill matches the intent", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+      const logger = fakeLogger();
+      const noMatchIntent = "zzqxxblorptarglewhoopfrobnicate";
+
+      await generateVerifiedCesiumCode({
+        intent: noMatchIntent,
+        model: fakeModel,
+        logger,
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "No skill matched intent; generating with no grounding context",
+        expect.objectContaining({ intent: noMatchIntent }),
+      );
+    });
+
+    it("reports each failed verification attempt's violations via logger.warn", async () => {
+      generateTextMock.mockResolvedValue({ text: `fetch("https://evil.example.com");` });
+      const logger = fakeLogger();
+
+      await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        logger,
+      });
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "Generated code failed static verification",
+        expect.objectContaining({
+          attempt: 1,
+          violationCount: expect.any(Number),
+          violations: expect.arrayContaining([expect.stringMatching(/fetch/i)]),
+        }),
+      );
+    });
+  });
+
+  describe("metrics", () => {
+    function fakeMetrics() {
+      return {
+        recordTokenUsage: vi.fn(),
+        recordSkillMatchScore: vi.fn(),
+        recordGenerationDuration: vi.fn(),
+      };
+    }
+
+    it("records the matched skill's BM25 score via recordSkillMatchScore", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+      const metrics = fakeMetrics();
+
+      await generateVerifiedCesiumCode({
+        intent: "fly the camera to a new destination",
+        model: fakeModel,
+        metrics,
+      });
+
+      expect(metrics.recordSkillMatchScore).toHaveBeenCalledWith(
+        expect.any(Number),
+        { skill: "cesiumjs-camera" },
+      );
+    });
+
+    it("records token usage and generation duration per attempt", async () => {
+      generateTextMock.mockResolvedValueOnce({
+        text: `viewer.camera.flyTo({});`,
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      });
+      const metrics = fakeMetrics();
+
+      await generateVerifiedCesiumCode({
+        intent: "fly the camera to a new destination",
+        model: fakeModel,
+        metrics,
+      });
+
+      expect(metrics.recordTokenUsage).toHaveBeenCalledWith(
+        { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        { attempt: 1 },
+      );
+      expect(metrics.recordGenerationDuration).toHaveBeenCalledWith(
+        expect.any(Number),
+        { attempt: 1, outcome: "verified" },
+      );
+    });
+
+    it("records a 'rejected' outcome duration for a failed verification attempt", async () => {
+      generateTextMock.mockResolvedValue({ text: `fetch("https://evil.example.com");` });
+      const metrics = fakeMetrics();
+
+      await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        metrics,
+      });
+
+      expect(metrics.recordGenerationDuration).toHaveBeenCalledWith(
+        expect.any(Number),
+        { attempt: 1, outcome: "rejected" },
+      );
+    });
+
+    it("records a 'model_error' outcome duration when the model call throws", async () => {
+      generateTextMock.mockRejectedValue(new Error("provider unavailable"));
+      const metrics = fakeMetrics();
+
+      await generateVerifiedCesiumCode({
+        intent: "xyzzy plugh qux totally unrelated nonsense request",
+        model: fakeModel,
+        maxAttempts: 1,
+        metrics,
+      });
+
+      expect(metrics.recordGenerationDuration).toHaveBeenCalledWith(
+        expect.any(Number),
+        { attempt: 1, outcome: "model_error" },
+      );
+      expect(metrics.recordTokenUsage).not.toHaveBeenCalled();
+    });
+
+    it("never throws when usage is missing from the model result", async () => {
+      generateTextMock.mockResolvedValueOnce({ text: `viewer.camera.flyTo({});` });
+      const metrics = fakeMetrics();
+
+      await expect(
+        generateVerifiedCesiumCode({
+          intent: "fly the camera to a new destination",
+          model: fakeModel,
+          metrics,
+        }),
+      ).resolves.toMatchObject({ verified: true });
+      expect(metrics.recordTokenUsage).not.toHaveBeenCalled();
+    });
+  });
 });

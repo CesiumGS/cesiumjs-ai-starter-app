@@ -16,6 +16,7 @@ src/
 │   └── execute-cesium-code-tool.ts # This app's server-executed executeCesiumCode tool (wraps @cesium-ai/codegen-cesium)
 └── utils/
     ├── env.ts              # Zod-validated, typed environment config (loads .env)
+    ├── telemetry.ts        # OTEL logger + tracer provider, package logger adapters
     ├── mcp-servers-config.ts # Resolves MCP servers from mcp.config.json
     ├── providers.ts        # LLM provider factory — resolves an AI SDK LanguageModel from Env
     └── rate-limit.ts        # In-process per-IP sliding-window rate limiter
@@ -34,6 +35,10 @@ The backend builds its tool registry from `ENABLED_CESIUM_TOOLS` (`@cesium-ai/sa
 ## Environment
 
 Environment variables are parsed and validated by `src/utils/env.ts` (Zod). See the [Environment Variables](../README.md#environment-variables) table in the top-level README for the full list (`AI_PROVIDER`, provider API keys, `RATE_LIMIT_RPM`, `ALLOWED_ORIGIN`, etc.).
+
+Backend logging can be exported to any OTLP-compatible telemetry provider by setting `TELEMETRY_ENABLED=true` and either `OTEL_EXPORTER_OTLP_ENDPOINT` (base endpoint) or `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (explicit logs endpoint). Optional headers/resource attributes/service identity fields are also supported (`OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, `OTEL_SERVICE_NAMESPACE`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_LOG_LEVEL`).
+
+`src/index.ts` builds one scoped logger per package via `telemetry.createLogger(scope)`/`telemetry.createMcpToolsLogger(scope)` and threads it through every package that accepts one, so a single `TELEMETRY_ENABLED=true` covers this app's own logs plus `@cesium-ai/mcp-tools`, `@cesium-ai/codegen-cesium` (code generation attempts/failures), and `@cesium-ai/server` (agent-loop and MCP Apps proxy failures) — each log line carries a `log.scope` attribute identifying its package.
 
 ## Session middleware (MCP OAuth "Connect" flow)
 

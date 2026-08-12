@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { AddressInfo } from "node:net";
 import { tool, simulateReadableStream, type LanguageModel } from "ai";
@@ -391,5 +391,40 @@ describe("createChatRouter — streaming the agent loop", () => {
     // ...but the model's same-turn reply — based only on that preliminary
     // result — never reaches the client transcript.
     expect(res.text).not.toContain("Premature success!");
+  });
+});
+
+describe("createChatRouter — metrics", () => {
+  function fakeMetrics() {
+    return { recordTokenUsage: vi.fn(), recordRequestDuration: vi.fn() };
+  }
+
+  it("records token usage and request duration once the response finishes streaming", async () => {
+    const metrics = fakeMetrics();
+    const { url } = await startChatServer({ model: textModel("Bonjour!"), tools: {}, metrics });
+
+    const res = await postChat(url, oneUserMessage);
+    expect(res.status).toBe(200);
+
+    // Recording happens fire-and-forget after the stream fully settles, slightly after the
+    // last response byte reaches this test's `fetch` call — poll briefly rather than assuming
+    // it's already happened the instant `postChat` resolves.
+    await vi.waitFor(() => expect(metrics.recordTokenUsage).toHaveBeenCalled());
+
+    expect(metrics.recordTokenUsage).toHaveBeenCalledWith({
+      inputTokens: 1,
+      outputTokens: 1,
+      totalTokens: 2,
+    });
+    expect(metrics.recordRequestDuration).toHaveBeenCalledWith(expect.any(Number));
+  });
+
+  it("never throws when metrics is omitted (defaults to a no-op)", async () => {
+    const { url } = await startChatServer({ model: textModel("Bonjour!"), tools: {} });
+
+    const res = await postChat(url, oneUserMessage);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Bonjour!");
   });
 });

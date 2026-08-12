@@ -45,6 +45,18 @@ const result = await executors.flyTo(viewer, rawArgsFromTheModel);
 
 `createCesiumToolExecutors()` with no arguments returns `DEFAULT_CESIUM_TOOL_EXECUTORS` — one function per {@link CESIUM_TOOL_NAMES} entry, covering the entire catalogue with zero configuration.
 
+## Logging
+
+This package has no logging of its own by default — every executor just resolves a plain `{ success, error? }` result, so a caller that never reads `error` never finds out a tool call failed. Pass a `logger` as `createCesiumToolExecutors`'s second argument to have every executor's outcome (success, a resolved `{ error }`, or a thrown rejection) reported through it:
+
+```ts
+import { createCesiumToolExecutors, createConsoleToolsLogger } from "@cesium-ai/tools";
+
+const executors = createCesiumToolExecutors({}, createConsoleToolsLogger("warn"));
+```
+
+Implement your own `ToolsLogger` (e.g. backed by an OTEL-wired app logger — see this repo's `frontend/src/tools/cesium-tool-executors.ts` for the worked example) to route this package's logging through your own telemetry instead of `console`.
+
 ## Customizing a tool: two mechanisms
 
 ### 1. Full override — works for every tool
@@ -175,13 +187,14 @@ Executors are grouped by domain rather than one file per tool (unlike `@cesium-a
 - `src/utils/cesium-values.ts` — small conversions from schema-shaped plain data (a `{longitude, latitude, height?}` position, a CSS color string) into real Cesium types (`Cartesian3`, `Color`, ...).
 - `src/utils/animation-registry.ts`, `src/utils/imagery-registry.ts` — per-`Viewer` `WeakMap`-based bookkeeping the animation and imagery tools need (which entity ids/imagery layers this package itself created), so `animationListActive`/`imageryList`/etc. only ever report on state they created.
 - `src/utils/create-entity-add-executor.ts` — `createEntityAddExecutor`, the generic validate/build/add/error-handling plumbing every `entityAdd*` tool's own `createXExecutor` (in `entities.ts`) is built from.
+- `src/logger.ts` — `ToolsLogger`, `noopToolsLogger`, `createConsoleToolsLogger` — see "Logging" above.
 - `src/index.ts` — `DEFAULT_CESIUM_TOOL_EXECUTORS`, `createCesiumToolExecutors`.
 
 ## Exports
 
 | Export                                                                  | Description                                                                                                                                                      |
 | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createCesiumToolExecutors`                                             | Builds a `CesiumToolExecutors` registry, applying per-tool overrides over the defaults.                                                                          |
+| `createCesiumToolExecutors`                                             | Builds a `CesiumToolExecutors` registry, applying per-tool overrides over the defaults. Optional second `logger` argument reports every executor's outcome \u2014 see "Logging" above.        |
 | `DEFAULT_CESIUM_TOOL_EXECUTORS`                                         | The full default registry, one executor per `CesiumToolName`.                                                                                                    |
 | `ToolExecutor`                                                          | Type: `(viewer, rawArgs) => Promise<ToolExecutionResult>`.                                                                                                       |
 | `ToolExecutionResult`                                                   | Type: `{ success: boolean; error?: string; [key: string]: unknown }`.                                                                                            |
@@ -198,3 +211,7 @@ Executors are grouped by domain rather than one file per tool (unlike `@cesium-a
 | `createEntityAddExecutor`                                               | The lower-level generic every `createEntityAddXExecutor` above is built from — only needed if you're building a brand-new `entityAdd*`-shaped tool from scratch. |
 | `EntityAddExecutorConfig`                                               | Type: an `entityAdd*` factory's config (`shape`, `extendEntityOptions`).                                                                                         |
 | `flyTo`, `cameraSetView`, ...                                           | Every individual default executor, exported by name (one per tool).                                                                                              |
+| `ToolsLogger`                                                           | Type: the console-shaped logger interface (`debug`/`info`/`warn`/`error`) `createCesiumToolExecutors`'s `logger` argument accepts. See "Logging" above.          |
+| `ToolsLogLevel`                                                         | Type: `"debug" \| "info" \| "warn" \| "error" \| "silent"`, accepted by `createConsoleToolsLogger`.                                                              |
+| `createConsoleToolsLogger`                                              | Builds a `console`-backed `ToolsLogger`, prefixed `[cesium-tools]`, filtered by level (default `"warn"`).                                                        |
+| `noopToolsLogger`                                                       | A `ToolsLogger` whose methods are all no-ops — pass explicitly if you want `createCesiumToolExecutors`'s wrapping without any actual output.                     |

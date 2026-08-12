@@ -36,6 +36,15 @@ function resolveLogLevel(): LogLevel {
   );
 }
 
+function resolveBooleanEnv(raw: string | undefined, fallback: boolean): boolean {
+  if (!raw || raw.trim() === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
 function resolveSandboxAllowedNetworkOrigins(): string[] {
   return ((import.meta.env.VITE_SANDBOX_ALLOWED_NETWORK_ORIGINS as string | undefined) ?? "")
     .split(",")
@@ -63,4 +72,30 @@ export const config = {
   apiBase: apiBaseUrl,
   logLevel: resolveLogLevel(),
   sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
+  telemetryEnabled: resolveBooleanEnv(
+    import.meta.env.VITE_TELEMETRY_ENABLED as string | undefined,
+    false,
+  ),
+  otelExporterOtlpEndpoint: (() => {
+    const value = import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT as string | undefined;
+    return value && value.trim() !== "" ? trimTrailingSlash(value.trim()) : undefined;
+  })(),
+  otelExporterOtlpLogsEndpoint: (() => {
+    const value = import.meta.env.VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT as string | undefined;
+    return value && value.trim() !== "" ? value.trim() : undefined;
+  })(),
+  otelExporterOtlpHeaders:
+    (import.meta.env.VITE_OTEL_EXPORTER_OTLP_HEADERS as string | undefined) ?? "",
+  otelServiceName:
+    (import.meta.env.VITE_OTEL_SERVICE_NAME as string | undefined)?.trim() ||
+    "cesiumjs-ai-starter-app-frontend",
+  otelServiceNamespace:
+    (import.meta.env.VITE_OTEL_SERVICE_NAMESPACE as string | undefined)?.trim() || "cesium-ai",
+  otelResourceAttributes:
+    (import.meta.env.VITE_OTEL_RESOURCE_ATTRIBUTES as string | undefined) ?? "",
+  otelLogLevel: resolveEnvEnum(
+    import.meta.env.VITE_OTEL_LOG_LEVEL as string | undefined,
+    VALID_LOG_LEVELS,
+    resolveLogLevel(),
+  ),
 };

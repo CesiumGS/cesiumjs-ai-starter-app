@@ -15,6 +15,7 @@ import {
 } from "./protocol";
 import type {
   ChatClientOptions,
+  ChatLogger,
   EnsureAssistantMessage,
   Message,
   StreamToolCall,
@@ -50,6 +51,7 @@ export class ChatClient {
   private onServerToolResult: ChatClientOptions["onServerToolResult"];
   private onApprovalRequired: ChatClientOptions["onApprovalRequired"];
   private maxToolCallRounds: number;
+  private logger: ChatLogger | undefined;
   private abortController: AbortController | null = null;
   private nextId = 0;
   private toolCallRound = 0;
@@ -62,6 +64,7 @@ export class ChatClient {
     this.onServerToolResult = options.onServerToolResult;
     this.onApprovalRequired = options.onApprovalRequired;
     this.maxToolCallRounds = options.maxToolCallRounds ?? DEFAULT_MAX_TOOL_CALL_ROUNDS;
+    this.logger = options.logger;
   }
 
   setApi(api: string) {
@@ -456,6 +459,12 @@ export class ChatClient {
       try {
         outcome = await promise;
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger?.error("onServerToolResult handler threw", {
+          toolCallId: invocation.toolCallId,
+          toolName: invocation.toolName,
+          error: message,
+        });
         this.onError(err instanceof Error ? err : new Error(String(err)));
         continue;
       }
@@ -484,6 +493,11 @@ export class ChatClient {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         invocation.result = { error: message };
+        this.logger?.error("onToolCall handler threw", {
+          toolCallId: invocation.toolCallId,
+          toolName: invocation.toolName,
+          error: message,
+        });
         this.onError(new Error(message));
       }
 
@@ -517,6 +531,11 @@ export class ChatClient {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         decision = { approved: false, reason: message };
+        this.logger?.error("onApprovalRequired handler threw", {
+          toolCallId: invocation.toolCallId,
+          toolName: invocation.toolName,
+          error: message,
+        });
         this.onError(new Error(message));
       }
 
@@ -537,6 +556,7 @@ export class ChatClient {
 
   private emitError(error: ChatError | string) {
     const chatError: ChatError = typeof error === "string" ? { message: error } : error;
+    this.logger?.error(chatError.message, chatError.code ? { code: chatError.code } : undefined);
     this.messages.push({
       id: this.genId(),
       role: "assistant",

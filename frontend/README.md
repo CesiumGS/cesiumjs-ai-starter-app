@@ -19,6 +19,7 @@ src/
 ├── utils/
 │   ├── cesium-loader.ts          # Viewer initialization (terrain, imagery, defaults)
 │   ├── config.ts                 # Reads VITE_* env vars (Ion token, chat/tools API base URL)
+│   ├── telemetry.ts              # OTEL logger provider + frontend/package logger adapters
 │   └── fetch-registered-tools.ts # Fetches + validates the backend's GET /api/tools response
 └── main.tsx                     # React entry point
 ```
@@ -41,7 +42,13 @@ The frontend imports only schema-free pieces from `@cesium-ai/tools-schemas` dir
 
 ## Environment
 
-There is no `frontend/.env` — `vite.config.ts` sets `envDir` to the repo root, so both `npm run dev` and `docker compose up` read the single top-level `.env` (see [`../.env.example`](../.env.example) and [top-level README § Environment Variables](../README.md#environment-variables)). Copy `../.env.example` to `../.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` (get one free at [ion.cesium.com](https://ion.cesium.com)). It's baked into the client bundle at build time — intentionally client-visible, so scope it in the Ion console. Optionally set `VITE_API_BASE_URL` to point at a non-default backend, or `VITE_LOG_LEVEL` (`debug`/`info`/`warn`/`error`/`silent`) to control this app's console logging (currently just the codegen sandbox's logger) — defaults to `debug` in dev builds, `silent` in production (see `src/utils/config.ts`). Set `VITE_SANDBOX_ALLOWED_NETWORK_ORIGINS` to a comma-separated list of exact HTTP(S) origins when generated Cesium code must load external assets; leaving it empty denies guest-provided network URLs.
+There is no `frontend/.env` — `vite.config.ts` sets `envDir` to the repo root, so both `npm run dev` and `docker compose up` read the single top-level `.env` (see [`../.env.example`](../.env.example) and [top-level README § Environment Variables](../README.md#environment-variables)). Copy `../.env.example` to `../.env` and set `VITE_CESIUM_ION_ACCESS_TOKEN` (get one free at [ion.cesium.com](https://ion.cesium.com)). It's baked into the client bundle at build time — intentionally client-visible, so scope it in the Ion console. Optionally set `VITE_API_BASE_URL` to point at a non-default backend, or `VITE_LOG_LEVEL` (`debug`/`info`/`warn`/`error`/`silent`) to control this app's console logging — defaults to `debug` in dev builds, `silent` in production (see `src/utils/config.ts`).
+
+Browser-side logs can also be exported to any OTLP-compatible provider by setting `VITE_TELEMETRY_ENABLED=true` and either `VITE_OTEL_EXPORTER_OTLP_ENDPOINT` or `VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`. Optional headers/resource attributes/service identity fields are supported (`VITE_OTEL_EXPORTER_OTLP_HEADERS`, `VITE_OTEL_SERVICE_NAME`, `VITE_OTEL_SERVICE_NAMESPACE`, `VITE_OTEL_RESOURCE_ATTRIBUTES`, `VITE_OTEL_LOG_LEVEL`).
+
+`src/utils/telemetry.ts`'s `createFrontendLogger(scope)` is used to build one scoped logger per package, so a single `VITE_TELEMETRY_ENABLED=true` covers this app's own logs plus `@cesium-ai/codegen-sandbox` (sandbox runs), `@cesium-ai/tools` (client-side tool call outcomes, wrapped in `src/tools/cesium-tool-executors.ts`), and `@cesium-ai/chat-element` (stream/tool/approval errors, via `AiChatPanel`'s `logger` prop) — each log line carries a `log.scope` attribute identifying its package.
+
+Set `VITE_SANDBOX_ALLOWED_NETWORK_ORIGINS` to a comma-separated list of exact HTTP(S) origins when generated Cesium code must load external assets; leaving it empty denies guest-provided network URLs.
 
 ## Scripts
 

@@ -12,9 +12,11 @@
  * This module NEVER executes the generated code. `verifyCesiumCode` is parse-only static analysis.
  */
 import { generateText, type LanguageModel } from "ai";
-import { matchBestSkill } from "./domain-matcher.js";
+import { matchBestSkill, matchSkillsForIntent } from "./domain-matcher.js";
 import { buildCodegenPrompt } from "./prompt-builder.js";
 import { verifyCesiumCode } from "./ast-verifier.js";
+import { noopCodegenLogger, type CodegenLogger } from "../logger.js";
+import { noopCodegenMetrics, type CodegenMetrics } from "../metrics.js";
 
 export interface GenerateVerifiedCesiumCodeOptions {
   /** The user's natural-language intent, e.g. "fly the camera to Paris". */
@@ -40,6 +42,10 @@ export interface GenerateVerifiedCesiumCodeOptions {
   extraInstructions?: string;
   /** Previous generated source and its browser-sandbox failure, used to correct a runtime retry. */
   runtimeFeedback?: RuntimeCodegenFeedback;
+  /** Structured logger for generation attempts/failures. Defaults to a no-op (silent) logger. */
+  logger?: CodegenLogger;
+  /** Metrics sink for token usage, skill-match scores, and generation duration. Defaults to a no-op. */
+  metrics?: CodegenMetrics;
 }
 
 export interface RuntimeCodegenFeedback {
@@ -79,9 +85,36 @@ export async function generateVerifiedCesiumCode(
     runtimeFeedback,
   } = options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const logger = options.logger ?? noopCodegenLogger;
+  const metrics = options.metrics ?? noopCodegenMetrics;
 
-  // Retrieve top candidate skills to provide grounding context for code generation.
+  logger.debug("Generating CesiumJS code", {
+    intent,
+    maxAttempts,
+    hasRuntimeFeedback: Boolean(runtimeFeedback),
+  });
+
+  // Retrieve top candidate skills to provide grounding context for code generation. Scored
+  // separately (rather than changing matchBestSkill's return shape) purely to report each
+  // matched skill's BM25 score via logging/metrics below.
   const skills = matchBestSkill(intent);
+  const scoredMatches = matchSkillsForIntent(intent);
+  if (skills.length === 0) {
+    logger.warn("No skill matched intent; generating with no grounding context", { intent });
+  } else {
+    const matchedWithScores = skills.map((skill) => ({
+      name: skill.name,
+      score: scoredMatches.find((match) => match.skill.name === skill.name)?.score ?? 0,
+    }));
+    logger.debug("Matched skills for intent", {
+      intent,
+      skillNames: skills.map((s) => s.name),
+      skills: matchedWithScores,
+    });
+    for (const { name, score } of matchedWithScores) {
+      metrics.recordSkillMatchScore(score, { skill: name });
+    }
+  }
 
   const initialPrompt = buildCodegenPrompt({ intent, skills, maxSkills, extraInstructions });
   const basePrompt = runtimeFeedback
@@ -104,15 +137,27 @@ Generate a corrected code snippet that avoids all of the above issues, still fol
   let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const prompt =
-      attempt === 1 || !lastViolations ? basePrompt : correctionPrompt(basePrompt, lastViolations);
+    const prompt = lastViolations ? correctionPrompt(basePrompt, lastViolations) : basePrompt;
+    const attemptStart = Date.now();
 
     let rawCode: string;
     try {
       const result = await generateText({ model, prompt });
       rawCode = result.text;
+      if (result.usage) {
+        metrics.recordTokenUsage(
+          {
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+          },
+          { attempt },
+        );
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
+      logger.warn("Model call failed during code generation", { attempt, error: lastError });
+      metrics.recordGenerationDuration(Date.now() - attemptStart, { attempt, outcome: "model_error" });
       continue;
     }
 
@@ -120,11 +165,25 @@ Generate a corrected code snippet that avoids all of the above issues, still fol
     const verifyResult = verifyCesiumCode(code, { maxLength, maxLines, allowedSymbols });
 
     if (verifyResult.verified) {
+      logger.info("Generated and verified CesiumJS code", { attempt });
+      metrics.recordGenerationDuration(Date.now() - attemptStart, { attempt, outcome: "verified" });
       return { verified: true, code };
     }
 
+    logger.warn("Generated code failed static verification", {
+      attempt,
+      violationCount: verifyResult.violations?.length ?? 0,
+      violations: verifyResult.violations,
+    });
+    metrics.recordGenerationDuration(Date.now() - attemptStart, { attempt, outcome: "rejected" });
     lastViolations = verifyResult.violations;
   }
+
+  logger.error("Code generation failed after all attempts", {
+    maxAttempts,
+    error: lastError,
+    violations: lastViolations,
+  });
 
   return {
     verified: false,

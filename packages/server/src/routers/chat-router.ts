@@ -10,6 +10,8 @@ import {
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { runAgent } from "../agent.js";
+import { noopServerLogger, type ServerLogger } from "../logger.js";
+import { noopServerMetrics, type ServerMetrics } from "../metrics.js";
 
 /** Default cap on the number of messages accepted in a single request. */
 const DEFAULT_MAX_MESSAGES = 100;
@@ -122,6 +124,10 @@ export interface ChatRouterOptions {
   resolveToolApproval?: (tools: ToolSet) => ToolApprovalConfiguration<ToolSet, never>;
   /** Tool names to stop the loop after — see {@link RunAgentOptions.stopAfterTools}. */
   stopAfterTools?: readonly string[];
+  /** Structured logger for agent-loop failures. Defaults to a no-op (silent) logger. */
+  logger?: ServerLogger;
+  /** Metrics sink for `/api/chat`'s token usage and request duration. Defaults to a no-op. */
+  metrics?: ServerMetrics;
 }
 
 /**
@@ -144,6 +150,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     toolApproval,
     resolveToolApproval,
     stopAfterTools,
+    logger = noopServerLogger,
+    metrics = noopServerMetrics,
   } = options;
 
   const router = Router();
@@ -177,6 +185,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     }
 
     try {
+      const requestStart = Date.now();
       const resolvedTools = typeof tools === "function" ? await tools(req) : tools;
       const resolvedToolApproval = resolveToolApproval
         ? resolveToolApproval(resolvedTools)
@@ -191,6 +200,19 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         toolApproval: resolvedToolApproval,
         stopAfterTools,
       });
+
+      // Fire-and-forget: `usage` only resolves once the full response has streamed, and
+      // recording it must never delay (or fail) the response actually being piped below.
+      void Promise.resolve(result.usage)
+        .then((usage) => {
+          metrics.recordTokenUsage({
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+          });
+          metrics.recordRequestDuration(Date.now() - requestStart);
+        })
+        .catch(() => {});
 
       // If this request is resolving a `stopAfterTools` tool's approval, the
       // model's unavoidable first reply this turn can only be based on that
@@ -208,6 +230,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      logger.error("Agent loop failed", { error: message });
       if (!res.headersSent) {
         res.status(500).json({ error: "AGENT_ERROR", message });
       } else {

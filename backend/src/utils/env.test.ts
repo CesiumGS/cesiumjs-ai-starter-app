@@ -61,6 +61,12 @@ describe("env parsing", () => {
       CODEGEN_ALLOWED_SYMBOLS: undefined,
       CODEGEN_EXTRA_INSTRUCTIONS: undefined,
       TELEMETRY_ENABLED: undefined,
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: undefined,
+      OTEL_EXPORTER_OTLP_HEADERS: undefined,
+      OTEL_SERVICE_NAME: undefined,
+      OTEL_SERVICE_NAMESPACE: undefined,
+      OTEL_RESOURCE_ATTRIBUTES: undefined,
+      OTEL_LOG_LEVEL: undefined,
     });
 
     expect(env.PUBLIC_URL).toBe("http://localhost:3001");
@@ -74,6 +80,12 @@ describe("env parsing", () => {
     expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
     expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
     expect(env.TELEMETRY_ENABLED).toBe(false);
+    expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBeUndefined();
+    expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBeUndefined();
+    expect(env.OTEL_SERVICE_NAME).toBe("cesiumjs-ai-starter-app-backend");
+    expect(env.OTEL_SERVICE_NAMESPACE).toBe("cesium-ai");
+    expect(env.OTEL_RESOURCE_ATTRIBUTES).toBeUndefined();
+    expect(env.OTEL_LOG_LEVEL).toBe("info");
   });
 
   it("rejects an invalid AI_PROVIDER value", async () => {
@@ -230,6 +242,18 @@ describe("env parsing", () => {
 
   it("rejects a malformed OTEL_EXPORTER_OTLP_ENDPOINT", async () => {
     await expect(loadEnv({ OTEL_EXPORTER_OTLP_ENDPOINT: "not-a-url" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects a malformed OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", async () => {
+    await expect(loadEnv({ OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "not-a-url" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects an invalid OTEL_LOG_LEVEL", async () => {
+    await expect(loadEnv({ OTEL_LOG_LEVEL: "trace" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
   });

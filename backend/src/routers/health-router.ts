@@ -19,6 +19,13 @@ export function createHealthRouter({ env, modelConfigured, mcp }: HealthRouterOp
       status: "ok",
       provider: env.AI_PROVIDER,
       providerConfigured: modelConfigured,
+      telemetry: {
+        enabled: env.TELEMETRY_ENABLED,
+        serviceName: env.OTEL_SERVICE_NAME,
+        endpointConfigured: Boolean(
+          env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ?? env.OTEL_EXPORTER_OTLP_ENDPOINT,
+        ),
+      },
       ...(mcp ? { mcpServers: mcp.servers } : {}),
     });
   });

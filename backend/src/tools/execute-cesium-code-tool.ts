@@ -4,6 +4,8 @@ import {
   defaultExecuteCesiumCodeInputSchema,
   CODEGEN_CESIUM_TOOL_NAMES,
   type RuntimeCodegenFeedback,
+  type CodegenLogger,
+  type CodegenMetrics,
 } from "@cesium-ai/codegen-cesium";
 import { tool, type LanguageModel, type ModelMessage, type Tool } from "ai";
 
@@ -30,6 +32,10 @@ export interface CreateExecuteCesiumCodeToolOptions {
   allowedSymbols?: readonly string[];
   /** Extra instructions appended to the generation prompt. Passed through to `generateVerifiedCesiumCode`. */
   extraInstructions?: string;
+  /** Structured logger for generation attempts/failures. Passed through to `generateVerifiedCesiumCode`. */
+  logger?: CodegenLogger;
+  /** Metrics sink for token usage, skill-match scores, and generation duration. Passed through to `generateVerifiedCesiumCode`. */
+  metrics?: CodegenMetrics;
 }
 
 /** Finds the latest browser-sandbox failure returned for an earlier executeCesiumCode call. */
@@ -96,6 +102,8 @@ export function createExecuteCesiumCodeTool({
   maxLines,
   allowedSymbols,
   extraInstructions,
+  logger,
+  metrics,
 }: CreateExecuteCesiumCodeToolOptions): Tool {
   return tool({
     description: DEFAULT_EXECUTE_CESIUM_CODE_DESCRIPTION,
@@ -115,13 +123,15 @@ export function createExecuteCesiumCodeTool({
           maxLines,
           allowedSymbols,
           extraInstructions,
+          logger,
+          metrics,
           ...(runtimeFeedback ? { runtimeFeedback } : {}),
         });
         return result.verified ? { code: result.code } : { error: result.error };
       } catch (err) {
-        return {
-          error: err instanceof Error ? err.message : String(err),
-        };
+        const message = err instanceof Error ? err.message : String(err);
+        logger?.error("executeCesiumCode tool threw unexpectedly", { error: message });
+        return { error: message };
       }
     },
   });
