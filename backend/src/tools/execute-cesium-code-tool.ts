@@ -22,6 +22,8 @@ export interface CreateExecuteCesiumCodeToolOptions {
   model: LanguageModel;
   /** Max number of matched skills to inline as grounding context. Passed through to `generateVerifiedCesiumCode`. */
   maxSkills?: number;
+  /** Minimum BM25 score a skill must reach to be considered a match. Passed through to `generateVerifiedCesiumCode`. */
+  threshold?: number;
   /** Max regeneration attempts if a generation fails verification. Passed through to `generateVerifiedCesiumCode`. */
   maxAttempts?: number;
   /** Hard cap on generated source size in characters. Passed through to `generateVerifiedCesiumCode`. */
@@ -97,6 +99,7 @@ export function findLatestRuntimeCodegenFeedback(
 export function createExecuteCesiumCodeTool({
   model,
   maxSkills,
+  threshold,
   maxAttempts,
   maxLength,
   maxLines,
@@ -118,6 +121,7 @@ export function createExecuteCesiumCodeTool({
           intent,
           model,
           maxSkills,
+          threshold,
           maxAttempts,
           maxLength,
           maxLines,

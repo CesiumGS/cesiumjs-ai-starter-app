@@ -6,6 +6,7 @@ describe("noopServerMetrics", () => {
     expect(() => {
       noopServerMetrics.recordTokenUsage({ inputTokens: 1, outputTokens: 2, totalTokens: 3 });
       noopServerMetrics.recordRequestDuration(100);
+      noopServerMetrics.recordToolApproval("executeCesiumCode", true);
     }).not.toThrow();
   });
 });

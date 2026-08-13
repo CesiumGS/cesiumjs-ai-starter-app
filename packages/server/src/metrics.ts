@@ -24,10 +24,17 @@ export interface ServerMetrics {
     durationMs: number,
     attributes?: Record<string, string | number | boolean>,
   ): void;
+  /** Records a human-in-the-loop decision on a `needsApproval`-gated tool call. */
+  recordToolApproval(
+    toolName: string,
+    approved: boolean,
+    attributes?: Record<string, string | number | boolean>,
+  ): void;
 }
 
 /** A {@link ServerMetrics} whose methods are all no-ops. Used whenever metrics aren't configured. */
 export const noopServerMetrics: ServerMetrics = {
   recordTokenUsage: () => {},
   recordRequestDuration: () => {},
+  recordToolApproval: () => {},
 };

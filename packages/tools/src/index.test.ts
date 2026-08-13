@@ -77,10 +77,7 @@ describe("createCesiumToolExecutors's logger option", () => {
   test("reports a successful call via logger.debug", async () => {
     const logger = fakeLogger();
 
-    const executors = createCesiumToolExecutors(
-      { flyTo: async () => ({ success: true }) },
-      logger,
-    );
+    const executors = createCesiumToolExecutors({ flyTo: async () => ({ success: true }) }, logger);
     await executors.flyTo({} as Viewer, {});
 
     expect(logger.debug).toHaveBeenCalledWith("Tool call succeeded: flyTo");

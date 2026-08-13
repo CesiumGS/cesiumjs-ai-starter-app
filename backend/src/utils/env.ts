@@ -61,6 +61,11 @@ const EnvSchema = z.object({
   // Max number of matched skills inlined as grounding context in the executeCesiumCode prompt.
   CODEGEN_MAX_SKILLS: z.coerce.number().int().positive().default(1),
 
+  // Minimum BM25 score a skill must reach to be considered a match for the executeCesiumCode
+  // prompt (`matchBestSkill`'s `threshold`). Matches that function's own default of 1.0. Set to
+  // 0 to disable filtering entirely.
+  CODEGEN_SKILL_THRESHOLD: z.coerce.number().nonnegative().default(1.0),
+
   // Max regeneration attempts if a generated executeCesiumCode snippet fails verification.
   CODEGEN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
 

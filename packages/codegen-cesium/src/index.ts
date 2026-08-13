@@ -12,7 +12,9 @@ export { noopCodegenMetrics, type CodegenMetrics, type CodegenTokenUsage } from 
 export { loadCesiumSkills, type CesiumSkill } from "./pipeline/skills-loader.js";
 export {
   matchSkillsForIntent,
-  matchBestSkill,
+  matchBestSkills,
+  DEFAULT_SKILL_MATCH_LIMIT,
+  DEFAULT_SKILL_MATCH_THRESHOLD,
   type DomainMatch,
 } from "./pipeline/domain-matcher.js";
 export { buildCodegenPrompt, type BuildPromptOptions } from "./pipeline/prompt-builder.js";

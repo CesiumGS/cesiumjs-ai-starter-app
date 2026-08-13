@@ -181,6 +181,22 @@ describe("env parsing", () => {
     );
   });
 
+  it("coerces CODEGEN_SKILL_THRESHOLD to a number", async () => {
+    const { env } = await loadEnv({ CODEGEN_SKILL_THRESHOLD: "2.5" });
+    expect(env.CODEGEN_SKILL_THRESHOLD).toBe(2.5);
+  });
+
+  it("allows CODEGEN_SKILL_THRESHOLD=0 to disable threshold filtering", async () => {
+    const { env } = await loadEnv({ CODEGEN_SKILL_THRESHOLD: "0" });
+    expect(env.CODEGEN_SKILL_THRESHOLD).toBe(0);
+  });
+
+  it("rejects a negative CODEGEN_SKILL_THRESHOLD", async () => {
+    await expect(loadEnv({ CODEGEN_SKILL_THRESHOLD: "-1" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
   it("coerces CODEGEN_MAX_ATTEMPTS to a positive integer", async () => {
     const { env } = await loadEnv({ CODEGEN_MAX_ATTEMPTS: "5" });
     expect(env.CODEGEN_MAX_ATTEMPTS).toBe(5);

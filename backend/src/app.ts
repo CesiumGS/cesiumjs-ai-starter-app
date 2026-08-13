@@ -151,6 +151,7 @@ export function createBackendApp({
           [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
             model,
             maxSkills: env.CODEGEN_MAX_SKILLS,
+            threshold: env.CODEGEN_SKILL_THRESHOLD,
             maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
             maxLength: env.CODEGEN_MAX_CODE_LENGTH,
             maxLines: env.CODEGEN_MAX_CODE_LINES,

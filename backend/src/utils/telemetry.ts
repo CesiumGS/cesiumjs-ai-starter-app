@@ -2,12 +2,7 @@ import type { McpToolsLogger } from "@cesium-ai/mcp-tools";
 import type { ServerMetrics } from "@cesium-ai/server";
 import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
-import {
-  logs,
-  SeverityNumber,
-  type LogAttributes,
-  type Logger as OtelLogger,
-} from "@opentelemetry/api-logs";
+import { logs } from "@opentelemetry/api-logs";
 import { trace, metrics as otelMetrics, type Tracer, type Meter } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
@@ -18,15 +13,20 @@ import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk
 import { OpenTelemetry } from "@ai-sdk/otel";
 import { registerTelemetry } from "ai";
 import type { Env } from "./env.js";
+import {
+  type AppLogLevel,
+  type AppLogger,
+  createConsoleAndOtelLogger,
+} from "./telemetry-logger.js";
+import {
+  METRIC_VIEWS,
+  createServerMetricsFromMeter,
+  createCodegenMetricsFromMeter,
+} from "./telemetry-metrics.js";
 
-export type AppLogLevel = "debug" | "info" | "warn" | "error" | "silent";
-
-export interface AppLogger {
-  debug(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-}
+// Re-exported so existing consumers (e.g. `app.ts`) can keep importing these from telemetry.js,
+// their original home, even though the implementation now lives in telemetry-logger.ts.
+export type { AppLogLevel, AppLogger };
 
 export interface BackendTelemetry {
   enabled: boolean;
@@ -52,47 +52,6 @@ export interface BackendTelemetry {
   shutdown(): Promise<void>;
 }
 
-const LEVEL_ORDER: Record<Exclude<AppLogLevel, "silent">, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
-
-const SEVERITY_MAP: Record<Exclude<AppLogLevel, "silent">, SeverityNumber> = {
-  debug: SeverityNumber.DEBUG,
-  info: SeverityNumber.INFO,
-  warn: SeverityNumber.WARN,
-  error: SeverityNumber.ERROR,
-};
-
-function toOtelAttributes(meta?: Record<string, unknown>): LogAttributes {
-  if (!meta) return {};
-
-  const attributes: LogAttributes = {};
-  for (const [key, value] of Object.entries(meta)) {
-    if (value === undefined || value === null) continue;
-
-    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      attributes[key] = value;
-      continue;
-    }
-
-    if (value instanceof Error) {
-      attributes[key] = value.message;
-      continue;
-    }
-
-    try {
-      attributes[key] = JSON.stringify(value);
-    } catch {
-      attributes[key] = String(value);
-    }
-  }
-
-  return attributes;
-}
-
 function parseKeyValueList(raw: string | undefined): Record<string, string> {
   if (!raw || raw.trim() === "") return {};
 
@@ -114,115 +73,6 @@ function parseKeyValueList(raw: string | undefined): Record<string, string> {
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
-}
-
-/** Builds a `@cesium-ai/server`-shaped `ServerMetrics` backed by real OTel histograms on `meter`. */
-function createServerMetricsFromMeter(meter: Meter): ServerMetrics {
-  const tokenUsage = meter.createHistogram("cesium_ai.chat.tokens", {
-    description: "Token usage per /api/chat request",
-    unit: "{token}",
-  });
-  const requestDuration = meter.createHistogram("cesium_ai.chat.request.duration", {
-    description: "Duration of a /api/chat request, from receipt to the model finishing",
-    unit: "ms",
-  });
-
-  return {
-    recordTokenUsage: (usage, attributes = {}) => {
-      if (usage.inputTokens !== undefined) {
-        tokenUsage.record(usage.inputTokens, { ...attributes, "token.type": "input" });
-      }
-      if (usage.outputTokens !== undefined) {
-        tokenUsage.record(usage.outputTokens, { ...attributes, "token.type": "output" });
-      }
-      if (usage.totalTokens !== undefined) {
-        tokenUsage.record(usage.totalTokens, { ...attributes, "token.type": "total" });
-      }
-    },
-    recordRequestDuration: (durationMs, attributes = {}) => {
-      requestDuration.record(durationMs, attributes);
-    },
-  };
-}
-
-/** Builds a `@cesium-ai/codegen-cesium`-shaped `CodegenMetrics` backed by real OTel histograms on `meter`. */
-function createCodegenMetricsFromMeter(meter: Meter): CodegenMetrics {
-  const tokenUsage = meter.createHistogram("cesium_ai.codegen.tokens", {
-    description: "Token usage per executeCesiumCode generation attempt",
-    unit: "{token}",
-  });
-  const skillMatchScore = meter.createHistogram("cesium_ai.codegen.skill_match.score", {
-    description: "BM25 score of a CesiumJS skill matched against a user's intent",
-  });
-  const generationDuration = meter.createHistogram("cesium_ai.codegen.generation.duration", {
-    description:
-      "Duration of one executeCesiumCode generation attempt (model call + static verification)",
-    unit: "ms",
-  });
-
-  return {
-    recordTokenUsage: (usage, attributes = {}) => {
-      if (usage.inputTokens !== undefined) {
-        tokenUsage.record(usage.inputTokens, { ...attributes, "token.type": "input" });
-      }
-      if (usage.outputTokens !== undefined) {
-        tokenUsage.record(usage.outputTokens, { ...attributes, "token.type": "output" });
-      }
-      if (usage.totalTokens !== undefined) {
-        tokenUsage.record(usage.totalTokens, { ...attributes, "token.type": "total" });
-      }
-    },
-    recordSkillMatchScore: (score, attributes = {}) => {
-      skillMatchScore.record(score, attributes);
-    },
-    recordGenerationDuration: (durationMs, attributes = {}) => {
-      generationDuration.record(durationMs, attributes);
-    },
-  };
-}
-
-function createConsoleAndOtelLogger(
-  scope: string,
-  level: AppLogLevel,
-  otelLogger: OtelLogger | undefined,
-): AppLogger {
-  const enabled = (candidate: Exclude<AppLogLevel, "silent">): boolean => {
-    if (level === "silent") return false;
-    return LEVEL_ORDER[candidate] >= LEVEL_ORDER[level];
-  };
-
-  const emit = (
-    methodLevel: Exclude<AppLogLevel, "silent">,
-    consoleMethod: (...args: unknown[]) => void,
-    message: string,
-    meta?: Record<string, unknown>,
-  ): void => {
-    if (!enabled(methodLevel)) return;
-
-    const prefixedMessage = `[${scope}] ${message}`;
-    if (meta && Object.keys(meta).length > 0) {
-      consoleMethod(prefixedMessage, meta);
-    } else {
-      consoleMethod(prefixedMessage);
-    }
-
-    otelLogger?.emit({
-      severityText: methodLevel.toUpperCase(),
-      severityNumber: SEVERITY_MAP[methodLevel],
-      body: prefixedMessage,
-      attributes: {
-        "log.scope": scope,
-        ...toOtelAttributes(meta),
-      },
-    });
-  };
-
-  return {
-    debug: (message, meta) => emit("debug", console.debug, message, meta),
-    info: (message, meta) => emit("info", console.info, message, meta),
-    warn: (message, meta) => emit("warn", console.warn, message, meta),
-    error: (message, meta) => emit("error", console.error, message, meta),
-  };
 }
 
 export function initializeBackendTelemetry(env: Env): BackendTelemetry {
@@ -305,6 +155,7 @@ export function initializeBackendTelemetry(env: Env): BackendTelemetry {
     meterProvider = new MeterProvider({
       resource,
       readers: [new PeriodicExportingMetricReader({ exporter: metricExporter })],
+      views: METRIC_VIEWS,
     });
 
     otelMetrics.setGlobalMeterProvider(meterProvider);

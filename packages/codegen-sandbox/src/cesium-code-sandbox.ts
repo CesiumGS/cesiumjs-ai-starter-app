@@ -263,7 +263,7 @@ export async function runCesiumCodeInSandbox({
   let vm: QuickJSAsyncContext | undefined;
   let codeStartLine = 1;
 
-  logger.debug(
+  logger.info(
     `Starting sandbox run (codeLength=${code.length}, timeoutMs=${timeoutMs}, memoryLimitBytes=${memoryLimitBytes})`,
   );
 

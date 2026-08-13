@@ -57,6 +57,41 @@ function hasPendingApprovedToolCall(
 }
 
 /**
+ * Extracts every human-in-the-loop approval decision (any tool name) present in this request's
+ * messages, so they can be recorded exactly once via `ServerMetrics.recordToolApproval`. Safe to
+ * scan the *entire* message history on every request: a client only ever sends a given
+ * `toolCallId`'s part in `state: "approval-responded"` for the one request immediately following
+ * the human's decision — by the next turn `ChatClient` has already resolved it to `"result"`
+ * (see `packages/chat-element/src/chat-client/chat-client.ts`'s `resolveApprovals`/
+ * `applyToolResult`), so re-scanning older messages on later requests can't double-count.
+ */
+function findApprovalDecisions(
+  messages: ReadonlyArray<Record<string, unknown>>,
+): Array<{ toolName: string; approved: boolean }> {
+  const decisions: Array<{ toolName: string; approved: boolean }> = [];
+
+  for (const message of messages) {
+    const parts = message.parts;
+    if (!Array.isArray(parts)) continue;
+
+    for (const part of parts) {
+      if (typeof part !== "object" || part === null) continue;
+      const p = part as Record<string, unknown>;
+
+      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) continue;
+      if (p.state !== "approval-responded") continue;
+
+      const approval = p.approval as { approved?: unknown } | undefined;
+      if (typeof approval?.approved !== "boolean") continue;
+
+      decisions.push({ toolName: p.type.slice("tool-".length), approved: approval.approved });
+    }
+  }
+
+  return decisions;
+}
+
+/**
  * Drops assistant text chunks from a UI message stream. Used when this
  * request resolves a `stopAfterTools`-gated tool's approval: the AI SDK still
  * has to invoke the model once for this request (there's no hook to skip that
@@ -190,6 +225,12 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       const resolvedToolApproval = resolveToolApproval
         ? resolveToolApproval(resolvedTools)
         : toolApproval;
+
+      // Recorded synchronously, independent of the agent run below — a human already made this
+      // decision, so it's tracked regardless of what the agent loop does with it afterwards.
+      for (const decision of findApprovalDecisions(parsed.data.messages)) {
+        metrics.recordToolApproval(decision.toolName, decision.approved);
+      }
 
       const result = await runAgent({
         messages: parsed.data.messages as unknown as UIMessage[],

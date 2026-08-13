@@ -11,8 +11,6 @@ export interface BuildPromptOptions {
   intent: string;
   /** Matched skills, most relevant first (see {@link matchSkillsForIntent}). */
   skills: CesiumSkill[];
-  /** Max number of skills to inline as grounding context. Defaults to 1. */
-  maxSkills?: number;
   /**
    * Optional extra instructions appended to the end of the prompt's output rules, e.g. app-specific
    * constraints ("this app's Viewer has no timeline/animation widgets") or house style preferences.
@@ -22,9 +20,6 @@ export interface BuildPromptOptions {
    */
   extraInstructions?: string;
 }
-
-const DEFAULT_MAX_SKILLS = 1;
-
 /**
  * Builds a prompt that states the intent, includes the top-matched skill(s)' body content as
  * grounding, and instructs the model to output only a bare JavaScript code snippet using only the
@@ -33,12 +28,9 @@ const DEFAULT_MAX_SKILLS = 1;
 export function buildCodegenPrompt({
   intent,
   skills,
-  maxSkills = DEFAULT_MAX_SKILLS,
   extraInstructions,
 }: BuildPromptOptions): string {
-  const groundingSkills = skills.slice(0, maxSkills);
-
-  const groundingSections = groundingSkills
+  const groundingSections = skills
     .map((skill) => `### Reference: ${skill.name}\n\n${skill.body.trim()}`)
     .join("\n\n---\n\n");
 

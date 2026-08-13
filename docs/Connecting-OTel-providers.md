@@ -14,33 +14,39 @@ This app exports **logs from both sides, plus backend traces, metrics**, via sta
     registered against it via `registerTelemetry()` — this makes every `streamText` call in
     `@cesium-ai/server`'s agent loop (`runAgent`) emit GenAI-semantic-convention spans
     (`invoke_agent` → `chat` → `execute_tool`, one per model round-trip and tool call) to
-    `/v1/traces`, with no per-call opt-in needed.  - **Metrics**: a `MeterProvider` is registered globally with a `PeriodicExportingMetricReader`
+    `/v1/traces`, with no per-call opt-in needed. - **Metrics**: a `MeterProvider` is registered globally with a `PeriodicExportingMetricReader`
     (default 60s export interval), exporting to `/v1/metrics`. `@cesium-ai/server`'s agent loop and
     `@cesium-ai/codegen-cesium`'s generation pipeline each get a `Meter`-backed metrics object
-    (`createServerMetrics` / `createCodegenMetrics`) recording histograms: `cesium_ai.chat.tokens`
-    and `cesium_ai.chat.request.duration` for the agent loop, `cesium_ai.codegen.tokens`,
-    `cesium_ai.codegen.skill_match.score`, and `cesium_ai.codegen.generation.duration` for codegen.- **Frontend** — build-time Vite env vars (`VITE_TELEMETRY_ENABLED`, `VITE_OTEL_*`), read via
-  [`frontend/src/utils/config.ts`](../frontend/src/utils/config.ts) and baked into the client
-  bundle at build time (see `frontend/Dockerfile` build args / `compose.yaml`). Emits **logs only**
-  (no tracer is registered client-side) from the chat panel and the codegen sandbox logger adapter.
+    (`createServerMetrics` / `createCodegenMetrics`) recording histograms: `cesium_ai.chat.tokens.input`,
+    `cesium_ai.chat.tokens.output`, `cesium_ai.chat.tokens.total`, and `cesium_ai.chat.request.duration`
+    for the agent loop; `cesium_ai.codegen.tokens.input`, `cesium_ai.codegen.tokens.output`,
+    `cesium_ai.codegen.tokens.total`, `cesium_ai.codegen.skill_match.score`, and
+    `cesium_ai.codegen.generation.duration` for codegen. Token usage is split into a separate,
+    explicitly-named histogram per type (rather than one histogram distinguished only by an
+    attribute) so a dashboard's default per-metric graph is unambiguous without any manual
+    grouping — see [Reading the token/duration histograms](#reading-the-tokenduration-histograms)
+    below for what the bucket boundaries and P50/P90/P99 lines on these specific graphs mean.- **Frontend** — build-time Vite env vars (`VITE_TELEMETRY_ENABLED`, `VITE_OTEL_*`), read via
+    [`frontend/src/utils/config.ts`](../frontend/src/utils/config.ts) and baked into the client
+    bundle at build time (see `frontend/Dockerfile` build args / `compose.yaml`). Emits **logs only**
+    (no tracer is registered client-side) from the chat panel and the codegen sandbox logger adapter.
 
 Because both exporters speak plain OTLP/HTTP, any OTLP-compatible backend works — point the
 endpoint (and, if required, auth headers) at your provider.
 
 ## Common configuration shape
 
-| Concern                | Backend var                          | Frontend var                              |
-| ----------------------- | ------------------------------------- | ------------------------------------------ |
-| Enable export           | `TELEMETRY_ENABLED`                   | `VITE_TELEMETRY_ENABLED`                   |
-| Base OTLP endpoint      | `OTEL_EXPORTER_OTLP_ENDPOINT`         | `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`         |
-| Explicit logs endpoint  | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`    | `VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`    |
-| Explicit traces endpoint | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | — (frontend emits no traces)               |
-| Explicit metrics endpoint | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | — (frontend emits no metrics)            |
-| Auth/routing headers    | `OTEL_EXPORTER_OTLP_HEADERS`          | `VITE_OTEL_EXPORTER_OTLP_HEADERS`          |
-| `service.name`          | `OTEL_SERVICE_NAME`                   | `VITE_OTEL_SERVICE_NAME`                   |
-| `service.namespace`     | `OTEL_SERVICE_NAMESPACE`              | `VITE_OTEL_SERVICE_NAMESPACE`              |
-| Extra resource attrs    | `OTEL_RESOURCE_ATTRIBUTES`            | `VITE_OTEL_RESOURCE_ATTRIBUTES`            |
-| Log severity threshold  | `OTEL_LOG_LEVEL` (default `info`)     | `VITE_OTEL_LOG_LEVEL` (falls back to `VITE_LOG_LEVEL`) |
+| Concern                   | Backend var                           | Frontend var                                           |
+| ------------------------- | ------------------------------------- | ------------------------------------------------------ |
+| Enable export             | `TELEMETRY_ENABLED`                   | `VITE_TELEMETRY_ENABLED`                               |
+| Base OTLP endpoint        | `OTEL_EXPORTER_OTLP_ENDPOINT`         | `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`                     |
+| Explicit logs endpoint    | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`    | `VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`                |
+| Explicit traces endpoint  | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`  | — (frontend emits no traces)                           |
+| Explicit metrics endpoint | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | — (frontend emits no metrics)                          |
+| Auth/routing headers      | `OTEL_EXPORTER_OTLP_HEADERS`          | `VITE_OTEL_EXPORTER_OTLP_HEADERS`                      |
+| `service.name`            | `OTEL_SERVICE_NAME`                   | `VITE_OTEL_SERVICE_NAME`                               |
+| `service.namespace`       | `OTEL_SERVICE_NAMESPACE`              | `VITE_OTEL_SERVICE_NAMESPACE`                          |
+| Extra resource attrs      | `OTEL_RESOURCE_ATTRIBUTES`            | `VITE_OTEL_RESOURCE_ATTRIBUTES`                        |
+| Log severity threshold    | `OTEL_LOG_LEVEL` (default `info`)     | `VITE_OTEL_LOG_LEVEL` (falls back to `VITE_LOG_LEVEL`) |
 
 Headers use the same comma-separated `key=value,key2=value2` format for both sides and are shared
 by logs, traces, and metrics on the backend (`OTLPLogExporter`, `OTLPTraceExporter`, and
@@ -80,9 +86,9 @@ setting alone being wrong — check the preflight `OPTIONS` response's `Access-C
 value in DevTools, not just `-Allow-Origin`):
 
 ```bash
-docker run --rm -d -p 18888:18888 -p 4318:18890 --name aspire-dashboard \
-  -e DASHBOARD__OTLP__CORS__ALLOWEDORIGINS=http://localhost:5173 \
-  -e DASHBOARD__OTLP__CORS__ALLOWEDHEADERS="*" \
+docker run --rm -d -p 18888:18888 -p 4318:18890 --name aspire-dashboard `
+  -e DASHBOARD__OTLP__CORS__ALLOWEDORIGINS=http://localhost:5173 `
+  -e DASHBOARD__OTLP__CORS__ALLOWEDHEADERS="*" `
   mcr.microsoft.com/dotnet/aspire-dashboard:latest
 ```
 
@@ -107,8 +113,27 @@ VITE_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 
 Open `http://localhost:18888`, send a chat message that triggers a tool call, then check **Traces**
 for the `invoke_agent` span tree, **Structured logs** for the corresponding `AppLogger` output, and
-**Metrics** for the `cesium_ai.chat.tokens`/`cesium_ai.chat.request.duration` histograms (metrics
+**Metrics** for the `cesium_ai.chat.tokens.*`/`cesium_ai.chat.request.duration` histograms (metrics
 export on the default 60s interval, so allow a minute for the first data point to appear).
+
+### Reading the token/duration histograms
+
+The Aspire Dashboard's Metrics tab renders one graph per **instrument name**, so each of
+`cesium_ai.chat.tokens.input`, `cesium_ai.chat.tokens.output`, and `cesium_ai.chat.tokens.total`
+shows up as its own separate graph — pick the `.input` and `.output` graphs side by side (or add
+both to the same view, if your dashboard supports it) to compare them directly.
+
+Each line on a histogram graph (P50/P90/P99, or "p50"/"p90"/"p99") is a **percentile**: P50 is the
+median request (half of requests used fewer tokens / took less time than this), P90 means 90% of
+requests were at or below this value, and P99 means 99% were. These are computed from the
+histogram's fixed bucket boundaries, not the exact recorded values — with OTel's _default_ bucket
+boundaries (`0, 5, 10, ..., 10000`, tuned for millisecond latencies) nearly every real token count
+falls into the same last bucket or overflows past it, making P50/P90/P99 collapse toward the same
+number regardless of actual usage. `backend/src/utils/telemetry.ts`'s `METRIC_VIEWS` overrides the
+bucket boundaries for every `cesium_ai.*.tokens.*` and `cesium_ai.*.duration` instrument with ranges
+sized for this app's actual token counts and multi-step-agent-loop request durations, so the
+percentile lines spread out meaningfully — if you add a new token- or duration-shaped histogram,
+add (or extend) a matching entry in `METRIC_VIEWS` rather than relying on the OTel SDK's defaults.
 
 ## OTel Collector (local, any backend)
 
@@ -170,8 +195,9 @@ VITE_OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
    - Log records with `service.name` matching `OTEL_SERVICE_NAME` / `VITE_OTEL_SERVICE_NAME`.
    - A trace with a root `invoke_agent {modelId}` span, nested `chat {modelId}` spans (one per
      model round-trip) and `execute_tool {toolName}` spans (one per tool call) — backend only.
-   - Metric data points for `cesium_ai.chat.tokens` and `cesium_ai.chat.request.duration` (and, for
-     `executeCesiumCode` calls, `cesium_ai.codegen.*`) — backend only; these export on a 60s
+   - Metric data points for `cesium_ai.chat.tokens.input`/`.output`/`.total` and
+     `cesium_ai.chat.request.duration` (and, for `executeCesiumCode` calls, `cesium_ai.codegen.*`)
+     — backend only; these export on a 60s
      interval, so allow a minute after the request before checking.
 4. See the [`README.md`](../README.md#environment-variables) environment variable table and
    [`.env.example`](../.env.example) for the full, authoritative list of telemetry vars.

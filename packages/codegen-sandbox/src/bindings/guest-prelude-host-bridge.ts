@@ -175,7 +175,9 @@ function guestHostBridgeBody(): void {
     if (value !== null && typeof value === "object") {
       if (__handleMark__ in value) return __remoteProxy__(value[__handleMark__]);
       if (__valueTypeMark__ in value) {
-        const definition = __valueTypeDefinitions__.find((d) => d.name === value[__valueTypeMark__]);
+        const definition = __valueTypeDefinitions__.find(
+          (d) => d.name === value[__valueTypeMark__],
+        );
         if (!definition) return value;
         const Ctor = __CesiumCoreBundle__[definition.name];
         return Reflect.construct(

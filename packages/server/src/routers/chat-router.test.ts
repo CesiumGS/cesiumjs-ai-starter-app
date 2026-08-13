@@ -396,7 +396,11 @@ describe("createChatRouter — streaming the agent loop", () => {
 
 describe("createChatRouter — metrics", () => {
   function fakeMetrics() {
-    return { recordTokenUsage: vi.fn(), recordRequestDuration: vi.fn() };
+    return {
+      recordTokenUsage: vi.fn(),
+      recordRequestDuration: vi.fn(),
+      recordToolApproval: vi.fn(),
+    };
   }
 
   it("records token usage and request duration once the response finishes streaming", async () => {
@@ -426,5 +430,39 @@ describe("createChatRouter — metrics", () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toContain("Bonjour!");
+  });
+
+  it("records a tool approval decision found in the request's messages", async () => {
+    const metrics = fakeMetrics();
+    const { url } = await startChatServer({
+      model: textModel("Premature success!"),
+      tools: { codegenTool },
+      toolApproval: { codegenTool: "user-approval" },
+      stopAfterTools: ["codegenTool"],
+      metrics,
+    });
+
+    const resumingApproval = {
+      messages: [
+        { role: "user", parts: [{ type: "text", text: "do the thing" }] },
+        {
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-codegenTool",
+              toolCallId: "call-1",
+              state: "approval-responded",
+              input: {},
+              approval: { id: "approval-1", approved: true },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await postChat(url, resumingApproval);
+
+    expect(res.status).toBe(200);
+    expect(metrics.recordToolApproval).toHaveBeenCalledWith("codegenTool", true);
   });
 });
