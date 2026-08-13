@@ -132,7 +132,7 @@ for the `invoke_agent` span tree, **Structured logs** for the corresponding `App
 **Metrics** for the `cesium_ai.chat.tokens.*`/`cesium_ai.chat.request.duration` histograms (metrics
 export on the default 60s interval, so allow a minute for the first data point to appear).
 
-![Aspire Dashboard trace detail for an LLM chat span, showing input/output, tools, and token/duration details](../assets/llm_traces.png)
+![Aspire Dashboard trace detail for an LLM chat span, showing input/output, tools, and token/duration details](assets/llm_traces.png)
 
 #### Reading the token/duration histograms
 
