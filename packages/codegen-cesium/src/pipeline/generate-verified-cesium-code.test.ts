@@ -315,6 +315,8 @@ describe("generateVerifiedCesiumCode", () => {
         skill: "cesiumjs-camera",
         rank: 0,
         passedThreshold: true,
+        score: expect.any(Number),
+        includedInBestSkills: true,
       });
     });
 

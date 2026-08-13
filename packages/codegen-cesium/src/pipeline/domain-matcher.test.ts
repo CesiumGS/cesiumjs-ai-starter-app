@@ -55,7 +55,8 @@ describe("matchSkillsForIntent", () => {
 
   it("scores zero everywhere for an intent that matches nothing", () => {
     const matches = matchSkillsForIntent("compute the fibonacci sequence in python", testSkills);
-    expect(matches).toEqual([]);
+    expect(matches).toHaveLength(testSkills.length);
+    expect(matches.every((m) => m.score === 0)).toBe(true);
   });
 
   it("doesn't crash on intent words that collide with Object.prototype property names (regression: 'constructor' resolved COMPOUND_TERM_ALIASES['constructor'] to the inherited Object constructor function instead of undefined, and calling .includes on it threw)", () => {

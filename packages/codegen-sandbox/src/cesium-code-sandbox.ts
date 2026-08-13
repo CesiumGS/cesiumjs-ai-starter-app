@@ -276,6 +276,7 @@ export async function runCesiumCodeInSandbox({
     ctx.runtime.setMemoryLimit(memoryLimitBytes);
 
     const pendingWork: PendingHostWorkTracker = { count: 0 };
+
     registerHostBindings(ctx, handles, {
       logger,
       pendingWork,
@@ -290,7 +291,7 @@ export async function runCesiumCodeInSandbox({
     const result = await evaluateWrappedCode(ctx, wrappedCode.wrapped, deadline);
     await drainPendingHostWork(ctx, pendingWork, Date.now() + postRunDrainMs);
 
-    logger.debug("Sandbox run completed successfully");
+    logger.info("Sandbox run completed successfully");
     return { success: true, result };
   } catch (err) {
     const message =

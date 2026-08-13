@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * `env.ts` parses `process.env` at module-load time (top-level `parsed`), so
  * each test resets the module registry and re-imports with a controlled
- * environment. `dotenv.config` is a no-op here since no `.env` file exists
- * relative to the test's `process.cwd()`.
+ * environment.
  *
  * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP config typing),
  * a heavier dependency chain than before. `vi.resetModules()` forces every
@@ -17,17 +16,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * `existsSync` is mocked to always report "not found": this repo's own
  * repo-root `mcp.config.json` is a REAL file that otherwise gets picked up
- * by `mcp-servers-config.ts`. Forcing `existsSync` to `false` isolates these
- * environment tests from that file and also reinforces the pre-existing
- * "no .env file" assumption above, since `dotenv.config` calls the same
- * `existsSync` before its own `readFileSync`. `readFileSync` itself is left
- * real/unmocked — nothing in this file's tests should ever reach it once
- * `existsSync` always says "no file here".
+ * by `mcp-servers-config.ts`. `dotenv` itself is ALSO mocked to a no-op —
+ * `dotenv`'s internals call CJS `require("fs")` directly rather than the
+ * `node:fs` specifier this file mocks, so `vi.mock("node:fs")` alone does
+ * NOT stop `dotenv.config` from reading this repo's real root `.env` file
+ * (confirmed: real API keys/URLs from that file were leaking into "no
+ * override" test cases). Mocking `dotenv` directly is what actually
+ * guarantees the "no .env file" assumption below. `readFileSync` itself is
+ * left real/unmocked — nothing in this file's tests should ever reach it
+ * once `existsSync` always says "no file here" and `dotenv` never reads
+ * anything.
  */
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, existsSync: () => false };
 });
+
+vi.mock("dotenv", () => ({ default: { config: vi.fn() } }));
 
 vi.setConfig({ testTimeout: 15_000 });
 

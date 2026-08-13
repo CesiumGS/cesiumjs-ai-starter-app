@@ -2858,8 +2858,8 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
       expect(outcome).toEqual({ success: true, result: "done" });
       expect(logger.error).not.toHaveBeenCalled();
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^Starting sandbox run/));
-      expect(logger.debug).toHaveBeenCalledWith("Sandbox run completed successfully");
+      expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/^Starting sandbox run/));
+      expect(logger.info).toHaveBeenCalledWith("Sandbox run completed successfully");
       // At least one `get`/`apply`/`construct`/`set` host-bridge call must have been logged too.
       expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^get "/));
       expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^apply on handle/));
