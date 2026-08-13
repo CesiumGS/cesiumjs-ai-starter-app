@@ -50,17 +50,17 @@ Server-side env vars (`TELEMETRY_ENABLED`, `OTEL_*`), read via
 
 ## Step 1 — Learn the common configuration shape
 
-| Concern                   | Backend var                           | Frontend var                                           |
-| ------------------------- | ------------------------------------- | ------------------------------------------------------ |
-| Enable export             | `TELEMETRY_ENABLED`                   | `VITE_TELEMETRY_ENABLED`                               |
-| Base OTLP endpoint        | `OTEL_EXPORTER_OTLP_ENDPOINT`         | `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`                     |
-| Explicit logs endpoint    | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`    | `VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`                |
-| Explicit traces endpoint  | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`  | — (frontend emits no traces)                           |
-| Explicit metrics endpoint | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | — (frontend emits no metrics)                          |
-| Auth/routing headers      | `OTEL_EXPORTER_OTLP_HEADERS`          | `VITE_OTEL_EXPORTER_OTLP_HEADERS`                      |
-| `service.name`            | `OTEL_SERVICE_NAME`                   | `VITE_OTEL_SERVICE_NAME`                               |
-| `service.namespace`       | `OTEL_SERVICE_NAMESPACE`              | `VITE_OTEL_SERVICE_NAMESPACE`                          |
-| Extra resource attrs      | `OTEL_RESOURCE_ATTRIBUTES`            | `VITE_OTEL_RESOURCE_ATTRIBUTES`                        |
+| Concern                   | Backend var                           | Frontend var                                                     |
+| ------------------------- | ------------------------------------- | ---------------------------------------------------------------- |
+| Enable export             | `TELEMETRY_ENABLED`                   | `VITE_TELEMETRY_ENABLED`                                         |
+| Base OTLP endpoint        | `OTEL_EXPORTER_OTLP_ENDPOINT`         | `VITE_OTEL_EXPORTER_OTLP_ENDPOINT`                               |
+| Explicit logs endpoint    | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`    | `VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`                          |
+| Explicit traces endpoint  | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`  | — (frontend emits no traces)                                     |
+| Explicit metrics endpoint | `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | — (frontend emits no metrics)                                    |
+| Auth/routing headers      | `OTEL_EXPORTER_OTLP_HEADERS`          | `VITE_OTEL_EXPORTER_OTLP_HEADERS`                                |
+| `service.name`            | `OTEL_SERVICE_NAME`                   | `VITE_OTEL_SERVICE_NAME`                                         |
+| `service.namespace`       | `OTEL_SERVICE_NAMESPACE`              | `VITE_OTEL_SERVICE_NAMESPACE`                                    |
+| Extra resource attrs      | `OTEL_RESOURCE_ATTRIBUTES`            | `VITE_OTEL_RESOURCE_ATTRIBUTES`                                  |
 | Log severity threshold    | `OTEL_LOG_LEVEL` (default `info`)     | `VITE_OTEL_LOG_LEVEL` (default `debug` in dev, `silent` in prod) |
 
 - Headers use the same comma-separated `key=value,key2=value2` format for both sides, shared by
