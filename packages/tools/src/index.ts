@@ -144,7 +144,13 @@ function withLogging(toolName: string, executor: ToolExecutor, logger: ToolsLogg
       if (result.error) {
         logger.warn(`Tool call failed: ${toolName}`, { error: result.error });
       } else {
-        logger.debug(`Tool call succeeded: ${toolName}`);
+        // include the result payload (e.g. animationId, entities) so success logs are distinguishable per call
+        const { success: _success, error: _error, ...data } = result;
+        if (Object.keys(data).length > 0) {
+          logger.debug(`Tool call succeeded: ${toolName}`, data);
+        } else {
+          logger.debug(`Tool call succeeded: ${toolName}`);
+        }
       }
       return result;
     } catch (err) {

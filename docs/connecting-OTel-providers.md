@@ -61,7 +61,7 @@ Server-side env vars (`TELEMETRY_ENABLED`, `OTEL_*`), read via
 | `service.name`            | `OTEL_SERVICE_NAME`                   | `VITE_OTEL_SERVICE_NAME`                               |
 | `service.namespace`       | `OTEL_SERVICE_NAMESPACE`              | `VITE_OTEL_SERVICE_NAMESPACE`                          |
 | Extra resource attrs      | `OTEL_RESOURCE_ATTRIBUTES`            | `VITE_OTEL_RESOURCE_ATTRIBUTES`                        |
-| Log severity threshold    | `OTEL_LOG_LEVEL` (default `info`)     | `VITE_OTEL_LOG_LEVEL` (falls back to `VITE_LOG_LEVEL`) |
+| Log severity threshold    | `OTEL_LOG_LEVEL` (default `info`)     | `VITE_OTEL_LOG_LEVEL` (default `debug` in dev, `silent` in prod) |
 
 - Headers use the same comma-separated `key=value,key2=value2` format for both sides, shared by
   logs, traces, and metrics on the backend (`OTLPLogExporter`, `OTLPTraceExporter`, and

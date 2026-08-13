@@ -14,8 +14,8 @@ const VALID_LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error",
 /**
  * Resolves an env var to one of a fixed set of allowed string values, falling back when the env
  * var is unset or holds something outside `validValues`. Generic so any future `VITE_*` enum
- * setting (not just `VITE_LOG_LEVEL`) can reuse the same validated-with-fallback pattern instead
- * of duplicating this "check membership, else default" logic per setting.
+ * setting (not just `VITE_OTEL_LOG_LEVEL`) can reuse the same validated-with-fallback pattern
+ * instead of duplicating this "check membership, else default" logic per setting.
  */
 function resolveEnvEnum<T extends string>(
   raw: string | undefined,
@@ -26,14 +26,6 @@ function resolveEnvEnum<T extends string>(
     return raw as T;
   }
   return fallback;
-}
-
-function resolveLogLevel(): LogLevel {
-  return resolveEnvEnum(
-    import.meta.env.VITE_LOG_LEVEL as string | undefined,
-    VALID_LOG_LEVELS,
-    import.meta.env.DEV ? "debug" : "silent",
-  );
 }
 
 function resolveBooleanEnv(raw: string | undefined, fallback: boolean): boolean {
@@ -70,7 +62,6 @@ export const config = {
    * `@cesium-ai/chat-element`'s `AiChatPanelProps.apiBase`.
    */
   apiBase: apiBaseUrl,
-  logLevel: resolveLogLevel(),
   sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
   telemetryEnabled: resolveBooleanEnv(
     import.meta.env.VITE_TELEMETRY_ENABLED as string | undefined,
@@ -96,6 +87,6 @@ export const config = {
   otelLogLevel: resolveEnvEnum(
     import.meta.env.VITE_OTEL_LOG_LEVEL as string | undefined,
     VALID_LOG_LEVELS,
-    resolveLogLevel(),
+    import.meta.env.DEV ? "debug" : "silent",
   ),
 };
