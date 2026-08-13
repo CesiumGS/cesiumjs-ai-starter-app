@@ -79,7 +79,7 @@ export function findLatestRuntimeCodegenFeedback(
 
 /**
  * This app's server-executed `executeCesiumCode` tool: unlike the viewer
- * tools in `@cesium-ai/tools-cesium` (schema-only, client executed against a
+ * tools in `@cesium-ai/tools-schemas` (schema-only, client executed against a
  * live `Viewer`), this tool's intent must be turned into verified CesiumJS
  * code before it can run anywhere — that's `@cesium-ai/codegen-cesium`'s job,
  * which is also where this tool's schema-only library definition lives (see

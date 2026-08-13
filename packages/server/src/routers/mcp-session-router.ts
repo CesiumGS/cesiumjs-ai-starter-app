@@ -81,6 +81,13 @@ function renderMcpCallbackHtml(message: McpOAuthResultMessage): string {
  * dynamic counterpart to operator-configured, always-on servers. Requires
  * the host app to mount `express-session` (or equivalent) middleware
  * earlier in the pipeline, since every route keys off `req.sessionID`.
+ *
+ * Routes mounted:
+ * - `GET  /api/mcp/session/servers`     — list session-connectable server names
+ * - `POST /api/mcp/:server/connect`     — begin OAuth flow; returns `{ authorizationUrl }`
+ * - `GET  /api/mcp/callback`            — shared OAuth callback; renders popup HTML
+ * - `GET  /api/mcp/:server/status`      — connection status + last error if disconnected
+ * - `POST /api/mcp/:server/disconnect`  — close and discard the session connection
  */
 export function createMcpSessionRouter(sessionMcp: SessionMcpManager): Router {
   const router = Router();

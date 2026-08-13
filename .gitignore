@@ -1,5 +1,5 @@
 # GitHub
-.github/
+.github/*
 !.github/workflows
 !.github/ISSUE_TEMPLATE
 
@@ -21,6 +21,7 @@ node_modules/
 dist/
 dist-ssr/
 build/
+site/
 
 # Playwright output
 playwright-report/
@@ -52,3 +53,5 @@ Thumbs.db
 
 site/
 CesiumJS AI Starter App Tutorials/
+
+mcp.config.json

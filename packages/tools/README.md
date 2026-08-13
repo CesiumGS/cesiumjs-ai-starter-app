@@ -8,29 +8,7 @@ This package is the missing "other half" of `@cesium-ai/tools-schemas`: that pac
 
 ### Default model-facing executors
 
-These are the executors included in `DEFAULT_CESIUM_TOOL_EXECUTORS` and keyed by `CESIUM_TOOL_NAMES`:
-
-| Domain    | Tool                         | Default executor             |
-| --------- | ---------------------------- | ---------------------------- |
-| Camera    | `flyTo`                      | `flyTo`                      |
-| Camera    | `cameraSetView`              | `cameraSetView`              |
-| Camera    | `cameraLookAtTransform`      | `cameraLookAtTransform`      |
-| Camera    | `cameraOrbit`                | `cameraOrbit`                |
-| Camera    | `cameraGetPosition`          | `cameraGetPosition`          |
-| Camera    | `cameraSetControllerOptions` | `cameraSetControllerOptions` |
-| Entity    | `entityAdd`                  | `entityAdd`                  |
-| Entity    | `entityList`                 | `entityList`                 |
-| Entity    | `entityRemove`               | `entityRemove`               |
-| Animation | `animationCreate`            | `animationCreate`            |
-| Animation | `animationRemove`            | `animationRemove`            |
-| Animation | `animationListActive`        | `animationListActive`        |
-| Animation | `animationUpdatePath`        | `animationUpdatePath`        |
-| Animation | `animationCameraTracking`    | `animationCameraTracking`    |
-| Animation | `clockControl`               | `clockControl`               |
-| Animation | `globeSetLighting`           | `globeSetLighting`           |
-| Imagery   | `imageryAdd`                 | `imageryAdd`                 |
-| Imagery   | `imageryRemove`              | `imageryRemove`              |
-| Imagery   | `imageryList`                | `imageryList`                |
+`DEFAULT_CESIUM_TOOL_EXECUTORS` provides one executor per `CESIUM_TOOL_NAMES` entry — every tool in the [Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) (camera, entity, animation, and imagery tools) has a matching, identically-named executor here out of the box.
 
 ## Usage
 
@@ -179,16 +157,16 @@ A few tools' defaults are intentionally simple starting points rather than exhau
 
 ## File layout
 
-Executors are grouped by domain rather than one file per tool (unlike `@cesium-ai/tools-schemas`) — `src/tools/camera.ts`, `entities.ts`, `animation.ts`, `imagery.ts` — since there's no per-tool description/schema pair to keep isolated here, just a plain function per tool. Each function is still exported individually by name, so overriding or reading one doesn't require importing the whole registry.
+Executors are grouped by domain rather than one file per tool (unlike `@cesium-ai/tools-schemas`) — [`src/tools/camera.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/tools/camera.ts), [`entities.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/tools/entities.ts), [`animation.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/tools/animation.ts), [`imagery.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/tools/imagery.ts) — since there's no per-tool description/schema pair to keep isolated here, just a plain function per tool. Each function is still exported individually by name, so overriding or reading one doesn't require importing the whole registry.
 
-- `src/types.ts` — `ToolExecutor`, `ToolExecutionResult`, `CesiumToolExecutors`, `CesiumToolExecutorOverrides`.
-- `src/utils/validate.ts` — `parseArgs`, the shared "validate against a zod shape, never throw" helper every executor calls first.
-- `src/utils/result.ts` — `ok`/`fail` result-builder helpers.
-- `src/utils/cesium-values.ts` — small conversions from schema-shaped plain data (a `{longitude, latitude, height?}` position, a CSS color string) into real Cesium types (`Cartesian3`, `Color`, ...).
-- `src/utils/animation-registry.ts`, `src/utils/imagery-registry.ts` — per-`Viewer` `WeakMap`-based bookkeeping the animation and imagery tools need (which entity ids/imagery layers this package itself created), so `animationListActive`/`imageryList`/etc. only ever report on state they created.
-- `src/utils/create-entity-add-executor.ts` — `createEntityAddExecutor`, the generic validate/build/add/error-handling plumbing every `entityAdd*` tool's own `createXExecutor` (in `entities.ts`) is built from.
-- `src/logger.ts` — `ToolsLogger`, `noopToolsLogger`, `createConsoleToolsLogger` — see "Logging" above.
-- `src/index.ts` — `DEFAULT_CESIUM_TOOL_EXECUTORS`, `createCesiumToolExecutors`.
+- [`src/types.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/types.ts) — `ToolExecutor`, `ToolExecutionResult`, `CesiumToolExecutors`, `CesiumToolExecutorOverrides`.
+- [`src/utils/validate.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/validate.ts) — `parseArgs`, the shared "validate against a zod shape, never throw" helper every executor calls first.
+- [`src/utils/result.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/result.ts) — `ok`/`fail` result-builder helpers.
+- [`src/utils/cesium-values.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/cesium-values.ts) — small conversions from schema-shaped plain data (a `{longitude, latitude, height?}` position, a CSS color string) into real Cesium types (`Cartesian3`, `Color`, ...).
+- [`src/utils/animation-registry.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/animation-registry.ts), [`src/utils/imagery-registry.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/imagery-registry.ts) — per-`Viewer` `WeakMap`-based bookkeeping the animation and imagery tools need (which entity ids/imagery layers this package itself created), so `animationListActive`/`imageryList`/etc. only ever report on state they created.
+- [`src/utils/create-entity-add-executor.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/create-entity-add-executor.ts) — `createEntityAddExecutor`, the generic validate/build/add/error-handling plumbing every `entityAdd*` tool's own `createXExecutor` (in `entities.ts`) is built from.
+- [`src/logger.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/logger.ts) — `ToolsLogger`, `noopToolsLogger`, `createConsoleToolsLogger` — see "Logging" above.
+- [`src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/index.ts) — `DEFAULT_CESIUM_TOOL_EXECUTORS`, `createCesiumToolExecutors`.
 
 ## Exports
 

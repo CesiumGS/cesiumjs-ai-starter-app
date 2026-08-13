@@ -1,0 +1,67 @@
+{#- Custom override of Material's partials/header.html. Upstream renders the nav tabs (Getting
+Started / Architecture / Tutorials / Packages) as a SEPARATE `
+<nav class="md-tabs">
+  ` row below the header row (title/search/repo). This override instead renders the same tabs list
+  inline, inside the header's own flex row, so the site title and the tabs sit on one line together
+  — matching this project's requested layout. Keep in sync with the upstream template if
+  mkdocs-material is upgraded: C:\Users\<you
+    >\...\site-packages\material\templates\partials\header.html -#} {% set class = "md-header" %} {%
+    if "navigation.tabs.sticky" in features %} {% set class = class ~ " md-header--shadow
+    md-header--lifted" %} {% elif "navigation.tabs" not in features %} {% set class = class ~ "
+    md-header--shadow" %} {% endif %}
+    <header class="{{ class }}" data-md-component="header">
+      <nav class="md-header__inner md-grid" aria-label="{{ lang.t('header') }}">
+        <a
+          href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}"
+          title="{{ config.site_name | e }}"
+          class="md-header__button md-logo"
+          aria-label="{{ config.site_name }}"
+          data-md-component="logo"
+        >
+          {% include "partials/logo.html" %}
+        </a>
+        <label class="md-header__button md-icon" for="__drawer">
+          {% set icon = config.theme.icon.menu or "material/menu" %} {% include ".icons/" ~ icon ~
+          ".svg" %}
+        </label>
+        <div class="md-header__title" data-md-component="header-title">
+          <a
+            href="{{ config.extra.homepage | d(nav.homepage.url, true) | url }}"
+            title="{{ config.site_name | e }}"
+            class="md-header__title-link"
+          >
+            <div class="md-header__ellipsis">
+              <div class="md-header__topic">
+                <span class="md-ellipsis"> {{ config.site_name }} </span>
+              </div>
+              <div class="md-header__topic" data-md-component="header-topic">
+                <span class="md-ellipsis">
+                  {% if page.meta and page.meta.title %} {{ page.meta.title }} {% else %} {{
+                  page.title }} {% endif %}
+                </span>
+              </div>
+            </div>
+          </a>
+        </div>
+        {% if "navigation.tabs" in features %} {% import "partials/tabs-item.html" as item with
+        context %}
+        <ul class="md-tabs__list md-tabs__list--inline">
+          {% for nav_item in nav.items %} {{ item.render(nav_item) }} {% endfor %}
+        </ul>
+        {% endif %} {% if config.theme.palette %} {% if not config.theme.palette is mapping %} {%
+        include "partials/palette.html" %} {% endif %} {% endif %} {% if not config.theme.palette is
+        mapping %} {% include "partials/javascripts/palette.html" %} {% endif %} {% if
+        config.extra.alternate %} {% include "partials/alternate.html" %} {% endif %} {% if
+        "material/search" in config.plugins %} {% set search = config.plugins["material/search"] |
+        attr("config") %} {% if search.enabled %}
+        <label class="md-header__button md-icon" for="__search">
+          {% set icon = config.theme.icon.search or "material/magnify" %} {% include ".icons/" ~
+          icon ~ ".svg" %}
+        </label>
+        {% include "partials/search.html" %} {% endif %} {% endif %} {% if config.repo_url %}
+        <div class="md-header__source">{% include "partials/source.html" %}</div>
+        {% endif %}
+      </nav>
+    </header>
+  </you>
+</nav>

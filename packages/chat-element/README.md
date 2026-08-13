@@ -1,8 +1,8 @@
 # @cesium-ai/chat-element
 
-AI chat panel React component backed by the Vercel AI SDK streaming protocol, styled with [StrataKit](https://stratakit.bentley.com/docs/) MUI components.
+AI chat panel [React](https://react.dev) component backed by the [Vercel AI SDK](https://sdk.vercel.ai/docs) streaming protocol, styled with [StrataKit](https://stratakit.bentley.com/docs/) [MUI](https://mui.com) components.
 
-## Basic usage
+## Usage
 
 ```tsx
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
@@ -12,9 +12,9 @@ export default function App() {
 }
 ```
 
-The component connects to `/api/chat` by default and renders a resizable panel with a message list and input form. It works out of the box with any StrataKit theme — wrap it in `<Root>` to provide one.
+Connects to `/api/chat` by default and renders a resizable panel with a message list and input form. Wrap it in `<Root>` to provide a StrataKit theme.
 
-### Props
+## Props
 
 | Prop                 | Type                                                                                            | Default               | Description                                                                                                                                                                                                                                                                            |
 | -------------------- | ----------------------------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -38,3 +38,5 @@ The component connects to `/api/chat` by default and renders a resizable panel w
 | `@cesium-ai/chat-element`        | `AiChatPanel` (React component, re-exported), `ChatClient`, and the `Message`/`ToolExecutionOutcome`/`ToolInvocation`/`ChatLogger` types |
 | `@cesium-ai/chat-element/react`  | `AiChatPanel` React component and its `AiChatPanelProps` type                                                                            |
 | `@cesium-ai/chat-element/client` | The framework-agnostic `ChatClient` (implements the AI SDK v5 UI message stream protocol) and its supporting types                       |
+
+See [`frontend/src/components/ChatPanel.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/src/components/ChatPanel.tsx) for the full wiring pattern, and the [Cesium Viewer Tools Tutorial](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/cesium-viewer-tools-tutorial/) for a step-by-step guide.

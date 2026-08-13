@@ -1,6 +1,6 @@
 # @cesium-ai/server
 
-An Express router that mounts the AI SDK chat key-layer (`POST /api/chat`). It runs the `streamText` agent loop server-side against a host-supplied tool registry and language model, so the LLM API key never reaches the browser. This package is **model-agnostic** — it reads no environment of its own; the host app owns provider selection, SDK instantiation, and API keys.
+[Express](https://expressjs.com) router that mounts the [AI SDK](https://sdk.vercel.ai/docs) chat endpoint (`POST /api/chat`). Runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop server-side — the LLM API key never reaches the browser. Model-agnostic: the host app owns provider selection, SDK instantiation, and API keys.
 
 ## Usage
 
@@ -8,21 +8,21 @@ An Express router that mounts the AI SDK chat key-layer (`POST /api/chat`). It r
 import express from "express";
 import { createChatRouter } from "@cesium-ai/server";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
-import { createModel } from "./providers.js"; // host-owned provider factory
+import { createModel } from "./providers.js";
 
 const app = express();
 app.use(express.json());
 app.use(
   createChatRouter({
-    model: createModel(/* ... */), // undefined if no provider is configured
+    model: createModel(),
     tools: createCesiumTools(),
   }),
 );
 ```
 
-When `model` is `undefined` (no provider key configured), `/api/chat` responds `400 { error: "NOT_CONFIGURED" }` instead of throwing, so a host can run as a plain viewer without a key.
+When `model` is `undefined`, `/api/chat` responds `400 { error: "NOT_CONFIGURED" }` instead of throwing.
 
-## Configuring or overriding defaults
+## Options
 
 `createChatRouter` accepts a `ChatRouterOptions` object:
 
@@ -41,15 +41,7 @@ When `model` is `undefined` (no provider key configured), `/api/chat` responds `
 
 ### Overriding the system prompt
 
-```ts
-createChatRouter({
-  model,
-  tools: createCesiumTools(),
-  system: "You are a museum-tour guide embedded in a 3D globe. ...",
-});
-```
-
-The package exports its default so a host can extend rather than replace it:
+The package exports its default so you can extend rather than replace it:
 
 ```ts
 import { DEFAULT_SYSTEM_PROMPT } from "@cesium-ai/server";
@@ -61,7 +53,7 @@ createChatRouter({
 });
 ```
 
-### Overriding step and message limits
+## Using `runAgent` directly
 
 ```ts
 createChatRouter({
@@ -94,6 +86,7 @@ Without `stopAfterTools`, the same-turn loop replies immediately after the tool 
 the real outcome is known:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "sequence": {"actorFontSize": 17, "messageFontSize": 16, "noteFontSize": 15, "actorMargin": 70, "boxMargin": 12, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     participant U as User
     participant M as Model
@@ -109,6 +102,7 @@ With `stopAfterTools: ["executeCesiumCode"]`, `stopWhen` ends the loop right aft
 result, so the model waits for a follow-up request carrying the real outcome before commenting:
 
 ```mermaid
+%%{init: {"themeVariables": {"fontSize": "18px"}, "sequence": {"actorFontSize": 17, "messageFontSize": 16, "noteFontSize": 15, "actorMargin": 70, "boxMargin": 12, "diagramMarginX": 30, "diagramMarginY": 15}}}%%
 sequenceDiagram
     participant U as User
     participant M as Model
@@ -134,11 +128,11 @@ sequenceDiagram
 import { runAgent, DEFAULT_MAX_STEPS, DEFAULT_SYSTEM_PROMPT } from "@cesium-ai/server";
 
 const result = await runAgent({
-  messages, // UIMessage[] from the client
+  messages,
   model,
   tools,
-  system: DEFAULT_SYSTEM_PROMPT, // optional, this is the default
-  maxSteps: DEFAULT_MAX_STEPS, // optional, this is the default
+  system: DEFAULT_SYSTEM_PROMPT,
+  maxSteps: DEFAULT_MAX_STEPS,
 });
 ```
 
@@ -191,7 +185,7 @@ Requires `express-session` (or equivalent) middleware mounted earlier in the pip
 
 ### Session middleware
 
-`createMcpSessionRouter` requires that session middleware, but doesn't provide one itself — a host supplies its own `express-session`-compatible middleware. This repo's own backend wraps `express-session` in `backend/src/utils/session.ts`'s `createSessionMiddleware`: it defaults to `express-session`'s in-memory `MemoryStore` — fine for local dev / a single instance, but sessions (and any MCP connections tied to them) are lost on restart and aren't shared across replicas. Its `store` option accepts any real `express-session`-compatible `Store` (e.g. `connect-redis`) for production. Note this only replaces the session-ID/cookie layer — `@cesium-ai/mcp-tools`'s `SessionMcpManager` keeps its own in-memory state (live MCP client connections), so a multi-instance deployment still needs sticky sessions / instance affinity for the "Connect" flow to keep working; see that package's README's "Multi-instance deployment" section for how its own pluggable descriptor-repository options can similarly be swapped for an external store.
+`createMcpSessionRouter` requires that session middleware, but doesn't provide one itself — a host supplies its own `express-session`-compatible middleware. This repo's own backend wraps `express-session` in [`backend/src/utils/session.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/session.ts)'s `createSessionMiddleware`: it defaults to `express-session`'s in-memory `MemoryStore` — fine for local dev / a single instance, but sessions (and any MCP connections tied to them) are lost on restart and aren't shared across replicas. Its `store` option accepts any real `express-session`-compatible `Store` (e.g. `connect-redis`) for production. Note this only replaces the session-ID/cookie layer — `@cesium-ai/mcp-tools`'s `SessionMcpManager` keeps its own in-memory state (live MCP client connections), so a multi-instance deployment still needs sticky sessions / instance affinity for the "Connect" flow to keep working; see that package's README's "Multi-instance deployment" section for how its own pluggable descriptor-repository options can similarly be swapped for an external store.
 
 ### Why this is a Backend-for-Frontend (BFF), not a browser-side PKCE client
 
@@ -239,11 +233,11 @@ This is a different (and, for a public client talking to third-party OAuth provi
 | Third-party client secret       | Can be configured and used safely (never shipped to the browser)                                                                     | Never safe to embed — must stay a public/PKCE-only client                                        |
 | Persistence across tabs/reloads | Survives via the session cookie; MCP connection itself is still in-memory per backend instance (see the multi-instance caveat above) | Tied to one tab's `sessionStorage` (cleared on tab close, not shared across tabs)                |
 
-`sessionStorage` is a reasonable choice for genuinely client-only state that never needs to be secret (e.g. this repo's own codegen sandbox keeps its own API keys in `sessionStorage`, isolated from the sandboxed iframe — see [`docs/Codegen-tool-security-attacks-vectors.md`](../../docs/Codegen-tool-security-attacks-vectors.md)), but it is the wrong place for OAuth tokens or PKCE material precisely because any script with page access can read it. Keeping the whole PKCE exchange and the resulting tokens server-side (this BFF pattern) removes that entire class of exposure, at the cost of the backend needing to track per-session state itself (see `@cesium-ai/mcp-tools`'s README for the full sequence diagram and in-memory-state caveats).
+`sessionStorage` is a reasonable choice for genuinely client-only state that never needs to be secret (e.g. this repo's own codegen sandbox keeps its own API keys in `sessionStorage`, isolated from the sandboxed iframe — see [`docs/Codegen-tool-security-attacks-vectors.md`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/codegen-tool-security-attacks-vectors/)), but it is the wrong place for OAuth tokens or PKCE material precisely because any script with page access can read it. Keeping the whole PKCE exchange and the resulting tokens server-side (this BFF pattern) removes that entire class of exposure, at the cost of the backend needing to track per-session state itself (see `@cesium-ai/mcp-tools`'s README for the full sequence diagram and in-memory-state caveats).
 
 ## Subpath exports: `@cesium-ai/server/mcp`
 
-The MCP-related routers (`createMcpAppRouter`, `createMcpSessionRouter`) live behind a separate `@cesium-ai/server/mcp` entry point, deliberately **not** re-exported from the package's main `.` entry. ES module imports are eager — re-exporting them from `index.ts` would force `@cesium-ai/mcp-tools` to resolve at load time for every consumer of `@cesium-ai/server`, even one that only ever calls `createChatRouter` and has no interest in MCP at all. Keeping them behind their own subpath means:
+The MCP-related routers (`createMcpAppRouter`, `createMcpSessionRouter`) live behind a separate `@cesium-ai/server/mcp` entry point, deliberately **not** re-exported from the package's main `.` entry. ES module imports are eager — re-exporting them from [`index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/index.ts) would force `@cesium-ai/mcp-tools` to resolve at load time for every consumer of `@cesium-ai/server`, even one that only ever calls `createChatRouter` and has no interest in MCP at all. Keeping them behind their own subpath means:
 
 - A chat-only host never needs `@cesium-ai/mcp-tools` installed — importing `@cesium-ai/server`'s main entry never touches it.
 - A host that DOES want MCP support explicitly opts in via `import { ... } from "@cesium-ai/server/mcp"`, and must have `@cesium-ai/mcp-tools` installed itself — it's declared as an **optional peer dependency** (`peerDependenciesMeta`), not a hard `dependency`, of this package.

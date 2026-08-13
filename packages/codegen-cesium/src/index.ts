@@ -5,7 +5,7 @@
  * never executes generated code) live here, alongside the schema-only `executeCesiumCode` tool
  * (see `./tools/executeCesiumCode/executeCesiumCode.ts`) — the natural-language-intent tool that
  * needs this codegen pipeline rather than a live `Viewer`, unlike the tools in
- * `@cesium-ai/tools-cesium` (reserved for viewer-specific tools like `flyTo`).
+ * `@cesium-ai/tools-schemas` (reserved for viewer-specific tools like `flyTo`).
  */
 export { noopCodegenLogger, type CodegenLogger } from "./logger.js";
 export { noopCodegenMetrics, type CodegenMetrics, type CodegenTokenUsage } from "./metrics.js";

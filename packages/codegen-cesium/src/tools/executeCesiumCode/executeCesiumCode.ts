@@ -71,7 +71,7 @@ export type ExecuteCesiumCodeConfig = ClientToolConfig<ExecuteCesiumCodeFieldDes
 
 /**
  * `executeCesiumCode` — describes a more complex custom camera/entity/scene
- * manipulation by intent, for cases that don't fit `@cesium-ai/tools-cesium`'s
+ * manipulation by intent, for cases that don't fit `@cesium-ai/tools-schemas`'s
  * `flyTo` simple fly-to-location shape.
  *
  * Unlike `flyTo`, this tool's intent can't just be validated and handed to the
@@ -79,13 +79,13 @@ export type ExecuteCesiumCodeConfig = ClientToolConfig<ExecuteCesiumCodeFieldDes
  * needs a codegen + static-verification step first
  * ({@link file://./../../pipeline/generate-verified-cesium-code.ts}'s
  * `generateVerifiedCesiumCode`). That's why this tool lives in
- * `@cesium-ai/codegen-cesium` rather than `@cesium-ai/tools-cesium`: the
+ * `@cesium-ai/codegen-cesium` rather than `@cesium-ai/tools-schemas`: the
  * latter is reserved for tools that run directly against a live CesiumJS
  * `Viewer`, while this one needs the codegen pipeline this package owns.
  * Rather than give this library tool an `execute` that would force every
  * consumer to resolve a model at import time, this tool stays **schema-only
  * by design** — the same "app builds its own extended tool on top of the
- * shared schema" pattern `@cesium-ai/tools-cesium`'s `flyTo` follows via
+ * shared schema" pattern `@cesium-ai/tools-schemas`'s `flyTo` follows via
  * `backend/src/tools/flyto-tool.ts`.
  *
  * A host application that wants `executeCesiumCode` to actually do something
@@ -94,7 +94,7 @@ export type ExecuteCesiumCodeConfig = ClientToolConfig<ExecuteCesiumCodeFieldDes
  * `backend/src/tools/execute-cesium-code-tool.ts` (`createExecuteCesiumCodeTool`)
  * — that app imports this schema-only tool's description/input schema and
  * layers a real server-side `execute` on top, merging the result into its
- * tool registry alongside `@cesium-ai/tools-cesium`'s viewer tools. See that
+ * tool registry alongside `@cesium-ai/tools-schemas`'s viewer tools. See that
  * file, and this package's README, for the real end-to-end pipeline.
  *
  * Pass {@link ExecuteCesiumCodeConfig} to tune the description, individual field
