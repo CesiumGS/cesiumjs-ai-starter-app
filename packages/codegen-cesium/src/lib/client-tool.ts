@@ -6,7 +6,7 @@ import type { z } from "zod";
  * override, optional per-field `.describe()` hint overrides, or a full
  * input-schema replacement (which takes precedence over `fieldDescriptions`).
  * Parameterized over the tool's own field-descriptions type so each tool keeps
- * its own field names typed. Mirrors `@cesium-ai/tools-cesium`'s identical
+ * its own field names typed. Mirrors `@cesium-ai/tools-schemas`'s identical
  * helper (duplicated rather than imported — see `merge-descriptions.ts`'s doc
  * comment for why).
  */

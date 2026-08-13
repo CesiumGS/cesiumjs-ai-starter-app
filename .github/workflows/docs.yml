@@ -1,0 +1,57 @@
+name: Deploy Docs
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+      - "backend/README.md"
+      - "frontend/README.md"
+      - "packages/*/README.md"
+      - "packages/codegen-cesium/package.json"
+      - "shared/README.md"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+      - "backend/README.md"
+      - "frontend/README.md"
+      - "packages/*/README.md"
+      - "packages/codegen-cesium/package.json"
+      - "shared/README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build docs
+    uses: ./.github/workflows/docs-build-template.yml
+    with:
+      # Only upload the Pages artifact when this run can actually be deployed
+      # (i.e. on push to main after a PR merge, or manual dispatch) — not for
+      # pull_request validation builds, which are never deployed.
+      upload_pages_artifact: ${{ github.event_name != 'pull_request' }}
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

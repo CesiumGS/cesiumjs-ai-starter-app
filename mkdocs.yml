@@ -1,0 +1,91 @@
+site_name: CesiumJS AI Starter App
+site_description: A ready-to-run starter pairing CesiumJS with an LLM-powered chat interface.
+site_url: https://cesiumgs.github.io/cesiumjs-ai-starter-app/
+repo_url: https://github.com/CesiumGS/cesiumjs-ai-starter-app
+repo_name: CesiumGS/cesiumjs-ai-starter-app
+
+docs_dir: docs
+
+not_in_nav: |
+  README.md
+
+theme:
+  name: material
+  custom_dir: overrides
+  logo: assets/cesium-favicon.ico
+  favicon: assets/cesium-favicon.ico
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.top
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/panzoom-buttons.js
+
+plugins:
+  - search
+  - include-markdown
+  - panzoom:
+      full_screen: true
+      always_show_hint: true
+
+markdown_extensions:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+nav:
+  - Getting Started: getting-started.md
+  - Architecture:
+      - Overview: architectures/architecture.md
+      - Codegen Architecture:
+          - Overview: architectures/architecture-codegen.md
+          - Codegen Security: architectures/codegen-tool-security-attacks-vectors.md
+          - Codegen Execution Sandbox Options: architectures/codegen-execution-sandbox-options.md
+      - MCP Support:
+          - MCP Architecture: architectures/architecture-mcp.md
+          - MCP Apps Architecture: architectures/architecture-mcp-apps.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - Cesium Viewer Tools Tutorial: tutorials/cesium-viewer-tools-tutorial.md
+      - Codegen Tool Tutorial:
+          - Overview: tutorials/codegen-tool-tutorial.md
+          - How Codegen Works: tutorials/codegen-pipeline.md
+      - Adding an MCP Server: tutorials/mcp-server-tutorial.md
+  - Packages:
+      - Overview: packages/index.md
+      - cesium-ai/codegen-cesium: packages/codegen-cesium/index.md
+      - cesium-ai/codegen-sandbox: packages/codegen-sandbox/index.md
+      - cesium-ai/mcp-tools: packages/mcp-tools/index.md
+      - cesium-ai/tools-schemas:
+          - Overview: packages/tools-schemas/index.md
+          - Tool Catalogue: packages/tools-schemas/tools.md
+      - cesium-ai/tools: packages/tools/index.md
+      - cesium-ai/server: packages/server/index.md
+      - cesium-ai/chat-element: packages/chat-element/index.md
+      - cesium-ai/sample-config: packages/sample-config/index.md
+      - cesiumjs-ai-sample-backend: packages/backend.md
+      - cesiumjs-ai-sample-frontend: packages/frontend.md

@@ -1,6 +1,6 @@
 # @cesium-ai/mcp-tools
 
-Server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](../tools-schemas/README.md)'s `createCesiumTools()` returns, so a host app composes them the same way:
+Server-only [Model Context Protocol](https://modelcontextprotocol.io) (MCP) client bridge for the AI SDK. Connects to one or more MCP servers over SSE or streamable HTTP (stdio — spawning a local executable — is deliberately unsupported, see the Security model table below), namespaces and allowlist-filters their tools, and merges them into a plain AI SDK `ToolSet` — the same shape [`@cesium-ai/tools-schemas`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/)'s `createCesiumTools()` returns, so a host app composes them the same way:
 
 ```ts
 import { createMcpTools } from "@cesium-ai/mcp-tools";
@@ -29,7 +29,7 @@ This package has **no dependency on `@cesium-ai/server` or `@cesium-ai/tools-sch
 
 MCP tools are architecturally different from this repo's other tool groups:
 
-- **They run entirely server-side.** Unlike `flyTo` (streamed to the browser, executed against the live `Viewer`), an MCP tool's `execute()` talks to the MCP server directly from Node and its result is the real, final outcome — never streamed as a client tool call. See the root [README's architecture section](../../README.md#architecture) and [`docs/architectures/architecture`](../../site/architectures/architecture/index.html) for the split-execution model this follows.
+- **They run entirely server-side.** Unlike `flyTo` (streamed to the browser, executed against the live `Viewer`), an MCP tool's `execute()` talks to the MCP server directly from Node and its result is the real, final outcome — never streamed as a client tool call. See the root [README's architecture section](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/README.md#architecture) and [`docs/architectures/architecture`](https://cesiumgs.github.io/cesiumjs-ai-starter-app/architectures/architecture/) for the split-execution model this follows.
 - **The tool registry is third-party, dynamic content.** `flyTo`'s schema is hand-authored and reviewed; an MCP server can add, remove, or reword its tools at any time. That's a materially different trust boundary, so it gets its own package rather than living in `@cesium-ai/tools-schemas` (which is scoped to this repo's own hand-authored viewer tools) or `@cesium-ai/server` (model-/tool-agnostic, and shouldn't gain an MCP SDK dependency just to support an optional feature).
 
 ## Security model
@@ -38,7 +38,7 @@ MCP tool calls run arbitrary code you don't control, so this package is delibera
 
 | Risk                                                                                                                                                                                                                                                                                               | Mitigation                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Config is attacker-influenceable** — a server URL controls what code runs.                                                                                                                                                                                                                       | `McpServerConfig[]` is a plain, host-supplied argument, exactly like the LLM API key — it must come from trusted operator config (e.g. an `mcp.config.json` file, see the backend's `env.ts`), **never** from a chat request.                                                                                                                                   |
+| **Config is attacker-influenceable** — a server URL controls what code runs.                                                                                                                                                                                                                       | `McpServerConfig[]` is a plain, host-supplied argument, exactly like the LLM API key — it must come from trusted operator config (e.g. an `mcp.config.json` file, see the backend's [`env.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/env.ts)), **never** from a chat request.                                         |
 | **A locally-spawned process is a larger attack surface than a URL.**                                                                                                                                                                                                                               | `stdio` transport (spawning an arbitrary local executable) is deliberately unsupported — `McpTransportConfig` only allows `sse`/`http`, and `McpServerConfigsSchema` rejects any other `type` at parse time. Only network transports this app merely calls are supported.                                                                                       |
 | **[Tool poisoning](https://owasp.org/www-community/attacks/MCP_Tool_Poisoning) / silent "rug pull"** — an MCP server can change a tool's `name`/`description` (which the model reads to decide what to call) at any time, including after your app has been reviewed against the original wording. | Every discovered tool's name + description is logged via the `logger` option (`createConsoleMcpToolsLogger("info")` or higher) at connect time — review these logs whenever an MCP server updates. Prefer `allowedTools` (an explicit per-server allowlist) over accepting a server's full, unreviewed tool catalogue.                                          |
 | **Name collisions across servers.**                                                                                                                                                                                                                                                                | Every tool is namespaced `mcp__<serverName>__<toolName>` before merging, so two servers can never silently shadow each other's tools.                                                                                                                                                                                                                           |
@@ -91,7 +91,7 @@ interface McpServerConfig {
 `createMcpTools` attempts every server the same way, with no `authProvider` attached. Per server, the outcome is one of:
 
 - **Connects successfully** — shared by every visitor from then on (tools merged into `McpToolsHandle.tools`).
-- **Fails with a 401** — auto-detected as needing per-user authentication (`isUnauthorizedMcpError`, see `src/connection/mcp-error.ts`) and collected into `McpToolsHandle.authRequiredServers` instead of a hard failure. Feed that list into `createSessionMcpManager` (below) to offer it through an interactive "Connect" flow.
+- **Fails with a 401** — auto-detected as needing per-user authentication (`isUnauthorizedMcpError`, see [`src/connection/mcp-error.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/connection/mcp-error.ts)) and collected into `McpToolsHandle.authRequiredServers` instead of a hard failure. Feed that list into `createSessionMcpManager` (below) to offer it through an interactive "Connect" flow.
 - **Fails any other way** (network unreachable, bad URL, ...) — recorded as a genuine failure in `McpToolsHandle.servers`, isolated from other servers.
 
 ```ts
@@ -127,13 +127,13 @@ const sessionMcp = createSessionMcpManager({
 });
 ```
 
-`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `@cesium-ai/server/mcp`'s `mcp-session-router.ts` (one `GET /api/mcp/callback` route, not one per server).
+`oauth` is an optional override bag with `clientId`, `clientSecret`, `clientName`, and `scope` — omit `clientId` to use RFC 7591 dynamic client registration. Scope is normally discovered from RFC 9728 Protected Resource Metadata; configure `scope` when a provider requires it but omits `scopes_supported` (Cesium ion currently does). `buildRedirectUrl` returns ONE shared URL for every server — an operator registers a single redirect URI per third-party OAuth app, since the callback routes to the right in-flight flow via the OAuth `state` parameter, not the URL. The host owns the session/callback HTTP routes; this repo's implementation is `@cesium-ai/server/mcp`'s [`mcp-session-router.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/routers/mcp-session-router.ts) (one `GET /api/mcp/callback` route, not one per server).
 
 `@ai-sdk/mcp` handles dynamic client registration, PKCE (S256), authorization-code exchange, and refresh. This package keeps provider state in memory only — the host must call `disconnect`, `disconnectSession`, and `closeAll` at the appropriate lifecycle boundaries.
 
 ### `McpServerConfigsSchema`
 
-A zod schema validating a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.config.json` file) — checks transport shape and rejects duplicate server names. Use `McpServerConfigsSchema.parse(value)` (throws on violation) or `.safeParse(value)` (returns `{success, data | error}`); see `backend/src/utils/mcp-servers-config.ts` for the latter.
+A zod schema validating a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d from an `mcp.config.json` file) — checks transport shape and rejects duplicate server names. Use `McpServerConfigsSchema.parse(value)` (throws on violation) or `.safeParse(value)` (returns `{success, data | error}`); see [`backend/src/utils/mcp-servers-config.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/src/utils/mcp-servers-config.ts) for the latter.
 
 ### Logging
 
@@ -143,8 +143,8 @@ A zod schema validating a full `McpServerConfig[]` list (e.g. `JSON.parse()`'d f
 
 Both `createMcpTools` and `createSessionMcpManager` always advertise `@ai-sdk/mcp`'s `mcpAppClientCapabilities` during connect — the ["MCP Apps"](https://modelcontextprotocol.io) extension that lets a tool declare an interactive `ui://` HTML widget resource (via `_meta.ui.resourceUri`) instead of/alongside a plain JSON result. This package only discovers that metadata (`getMcpAppToolMeta`) and attaches it directly onto the discovered tool as `tool.mcpApp` (see `McpTool`) — no separate map to look up alongside the tool registry — plus a way to reach the underlying live `MCPClient` (`getClient` / `getSessionClient`). It does **not** fetch resources or call tools on a widget's behalf. That's the host's job:
 
-- `@cesium-ai/server/mcp`'s `mcp-app-router.ts` exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
-- `packages/chat-element/src/McpAppWidget.tsx` uses `@mcp-ui/client`'s `AppRenderer`, which implements the MCP Apps JSON-RPC/postMessage protocol and isolates widget HTML through a host-served double-iframe sandbox proxy. This repo serves that proxy from `frontend/public/sandbox_proxy.html`; another host can pass its URL through `AiChatPanel`'s `mcpAppSandboxUrl` prop. Widget-initiated tool calls remain approval-gated.
+- `@cesium-ai/server/mcp`'s [`mcp-app-router.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/routers/mcp-app-router.ts) exposes bounded `GET /api/mcp-app/resource` and `POST /api/mcp-app/tool-call` routes. It returns raw `MCPClient.readResource` results expected by `AppRenderer`, validates tool calls against the request's resolved tool set, and applies the configured MCP timeout to both operations.
+- [`packages/chat-element/src/components/McpAppWidget.tsx`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/chat-element/src/components/McpAppWidget.tsx) uses `@mcp-ui/client`'s `AppRenderer`, which implements the MCP Apps JSON-RPC/postMessage protocol and isolates widget HTML through a host-served double-iframe sandbox proxy. This repo serves that proxy from [`frontend/public/sandbox_proxy.html`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/frontend/public/sandbox_proxy.html); another host can pass its URL through `AiChatPanel`'s `mcpAppSandboxUrl` prop. Widget-initiated tool calls remain approval-gated.
 
 ## Request flows
 
@@ -179,7 +179,7 @@ sequenceDiagram
 
 ### Session-scoped interactive OAuth connect
 
-Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are `@cesium-ai/server/mcp`'s own `mcp-session-router.ts`:
+Triggered by a user clicking "Connect" for a server `createMcpTools` reported in `authRequiredServers`. Routes shown are `@cesium-ai/server/mcp`'s own [`mcp-session-router.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/server/src/routers/mcp-session-router.ts):
 
 ```mermaid
 sequenceDiagram
@@ -270,14 +270,14 @@ These are written to ALONGSIDE (never instead of) the real in-memory
 _descriptor_ (`{sessionId, serverName, toolNames, connectedAt}` /
 `{sessionId, serverName, state, startedAt}`), never the live `MCPClient`/OAuth provider,
 which genuinely cannot be serialized (see the doc comments on `ConnectedMcpConnection`/
-`PendingMcpConnection` in `storage/models.ts`). That makes them safe to back with an
+`PendingMcpConnection` in [`storage/models.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/storage/models.ts)). That makes them safe to back with an
 external store like Redis (or Azure Table, DynamoDB, etc.) purely for cross-instance
 **status observability** — e.g. answering "is this session connected to `ion`, and since
 when" from any instance, not just the one that created the connection.
 
 Both are just the standard `McpConnectionRepository<T>` interface
 (`findById`/`save`/`delete`/`listAll`, each `T | Promise<T>`) already used by the in-memory
-default (`storage/in-memory-repositories.ts`) — this package doesn't ship a Redis-specific
+default ([`storage/in-memory-repositories.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/mcp-tools/src/storage/in-memory-repositories.ts)) — this package doesn't ship a Redis-specific
 implementation itself (no `redis`/`ioredis` dependency), so switching is writing a small
 adapter for whichever store you pick, following that same shape:
 
