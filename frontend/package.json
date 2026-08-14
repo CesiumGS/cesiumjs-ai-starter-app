@@ -16,6 +16,7 @@
     "@cesium-ai/codegen-sandbox": "*",
     "@cesium-ai/tools-schemas": "*",
     "@cesium-ai/tools": "*",
+    "@cesium-ai/webmcp-cesium": "*",
     "@stratakit/mui": "^0.5.0",
     "cesium": "^1.127.0",
     "react": "^19.1.0",
