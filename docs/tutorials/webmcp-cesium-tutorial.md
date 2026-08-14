@@ -150,8 +150,7 @@ MCP client is running `chrome-devtools-mcp`. To try it:
 3. Ask the agent to call `list_webmcp_tools` — it should return this package's registered tools
    (`flyTo`, `cameraSetView`, `entityAdd`, `entityList`, ...), callable via `execute_webmcp_tool`.
 
-<!-- TODO: add ../assets/chrome-devtools-mcp-webmcp.gif demoing an MCP client driving chrome-devtools-mcp's
-     list_webmcp_tools/execute_webmcp_tool against this app's flyTo tool -->
+![GitHub Copilot executing WebMCP tools against this app through chrome-devtools-mcp](../assets/web-mcp-github-copilot.gif)
 
 This is still an experimental, actively-changing category of a third-party tool, not a stable
 integration path — treat it as a way to test/demo this package's WebMCP registration from Copilot or
