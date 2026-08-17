@@ -12,7 +12,7 @@ Pick **one** of the two run modes below; each has its own prerequisites.
 | Run mode                   | Requires                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------ |
 | **Docker (recommended)**   | [Docker Desktop](https://docs.docker.com/get-docker/) (includes Compose v2) — nothing else |
-| **Local dev (hot reload)** | Node.js ≥ 20, npm ≥ 9                                                                      |
+| **Local dev (hot reload)** | Node.js ≥ 22, npm ≥ 9                                                                      |
 
 You'll also want, before you start:
 
