@@ -99,7 +99,7 @@ export function buildCesiumWebMcpTools(
     .filter((name) => options.toolConfig?.[name] !== false)
     .map((name) => {
       const definition = CESIUM_WEBMCP_TOOL_DEFINITIONS[name];
-      const override = options.toolConfig?.[name] || undefined;
+      const override = options.toolConfig?.[name] as CesiumWebMcpToolConfig | undefined;
       const executor = executors[name];
 
       return {

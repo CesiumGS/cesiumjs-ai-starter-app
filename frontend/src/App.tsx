@@ -3,19 +3,12 @@ import type { Viewer } from "cesium";
 import { Root } from "@stratakit/mui";
 import CesiumGlobe from "./components/CesiumGlobe";
 import ChatPanel from "./components/ChatPanel";
-import { registerAppWebMcpTools } from "./tools/webmcp-tools";
+// WebMCP: registers this app's viewer tools on document.modelContext (see ./tools/webmcp-tools.ts)
+import { useAppWebMcp } from "./tools/use-app-webmcp";
 
 export default function App() {
   const viewerRef = useRef<Viewer | null>(null);
-  const webMcpUnregisterRef = useRef<(() => void) | null>(null);
-  // Guards against React StrictMode's dev-only double-invoke of effects: the first mount's viewer
-  // is destroyed before its (async) WebMCP registration finishes, so `onViewerDestroy` aborts this
-  // controller immediately. `registerAppWebMcpTools` checks the signal before every individual
-  // tool registration, so a superseded mount stops mid-batch instead of racing the second mount's
-  // registration for the same tool names (previously both mounts could interleave registerTool
-  // calls, so a tool name could non-deterministically end up bound to the already-destroyed
-  // first-mount viewer).
-  const cancelPendingWebMcpRegistrationRef = useRef<AbortController | null>(null);
+  const webMcp = useAppWebMcp(); // WebMCP
 
   return (
     <Root
@@ -27,21 +20,11 @@ export default function App() {
       <CesiumGlobe
         onViewerReady={(viewer) => {
           viewerRef.current = viewer;
-          const cancelController = new AbortController();
-          cancelPendingWebMcpRegistrationRef.current = cancelController;
-          void registerAppWebMcpTools(viewer, cancelController.signal).then(({ unregister }) => {
-            if (cancelController.signal.aborted) {
-              unregister();
-              return;
-            }
-            webMcpUnregisterRef.current = unregister;
-          });
+          webMcp.onViewerReady(viewer); // WebMCP
         }}
         onViewerDestroy={() => {
           viewerRef.current = null;
-          cancelPendingWebMcpRegistrationRef.current?.abort();
-          webMcpUnregisterRef.current?.();
-          webMcpUnregisterRef.current = null;
+          webMcp.onViewerDestroy(); // WebMCP
         }}
       />
 
