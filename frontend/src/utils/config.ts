@@ -14,8 +14,8 @@ const VALID_LOG_LEVELS: readonly LogLevel[] = ["debug", "info", "warn", "error",
 /**
  * Resolves an env var to one of a fixed set of allowed string values, falling back when the env
  * var is unset or holds something outside `validValues`. Generic so any future `VITE_*` enum
- * setting (not just `VITE_LOG_LEVEL`) can reuse the same validated-with-fallback pattern instead
- * of duplicating this "check membership, else default" logic per setting.
+ * setting (not just `VITE_OTEL_LOG_LEVEL`) can reuse the same validated-with-fallback pattern
+ * instead of duplicating this "check membership, else default" logic per setting.
  */
 function resolveEnvEnum<T extends string>(
   raw: string | undefined,
@@ -28,12 +28,13 @@ function resolveEnvEnum<T extends string>(
   return fallback;
 }
 
-function resolveLogLevel(): LogLevel {
-  return resolveEnvEnum(
-    import.meta.env.VITE_LOG_LEVEL as string | undefined,
-    VALID_LOG_LEVELS,
-    import.meta.env.DEV ? "debug" : "silent",
-  );
+function resolveBooleanEnv(raw: string | undefined, fallback: boolean): boolean {
+  if (!raw || raw.trim() === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(raw.trim().toLowerCase());
+}
+
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, "");
 }
 
 function resolveSandboxAllowedNetworkOrigins(): string[] {
@@ -61,6 +62,31 @@ export const config = {
    * `@cesium-ai/chat-element`'s `AiChatPanelProps.apiBase`.
    */
   apiBase: apiBaseUrl,
-  logLevel: resolveLogLevel(),
   sandboxAllowedNetworkOrigins: resolveSandboxAllowedNetworkOrigins(),
+  telemetryEnabled: resolveBooleanEnv(
+    import.meta.env.VITE_TELEMETRY_ENABLED as string | undefined,
+    false,
+  ),
+  otelExporterOtlpEndpoint: (() => {
+    const value = import.meta.env.VITE_OTEL_EXPORTER_OTLP_ENDPOINT as string | undefined;
+    return value && value.trim() !== "" ? trimTrailingSlash(value.trim()) : undefined;
+  })(),
+  otelExporterOtlpLogsEndpoint: (() => {
+    const value = import.meta.env.VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT as string | undefined;
+    return value && value.trim() !== "" ? value.trim() : undefined;
+  })(),
+  otelExporterOtlpHeaders:
+    (import.meta.env.VITE_OTEL_EXPORTER_OTLP_HEADERS as string | undefined) ?? "",
+  otelServiceName:
+    (import.meta.env.VITE_OTEL_SERVICE_NAME as string | undefined)?.trim() ||
+    "cesiumjs-ai-starter-app-frontend",
+  otelServiceNamespace:
+    (import.meta.env.VITE_OTEL_SERVICE_NAMESPACE as string | undefined)?.trim() || "cesium-ai",
+  otelResourceAttributes:
+    (import.meta.env.VITE_OTEL_RESOURCE_ATTRIBUTES as string | undefined) ?? "",
+  otelLogLevel: resolveEnvEnum(
+    import.meta.env.VITE_OTEL_LOG_LEVEL as string | undefined,
+    VALID_LOG_LEVELS,
+    import.meta.env.DEV ? "debug" : "silent",
+  ),
 };

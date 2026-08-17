@@ -7,10 +7,14 @@
  * needs this codegen pipeline rather than a live `Viewer`, unlike the tools in
  * `@cesium-ai/tools-schemas` (reserved for viewer-specific tools like `flyTo`).
  */
+export { noopCodegenLogger, type CodegenLogger } from "./logger.js";
+export { noopCodegenMetrics, type CodegenMetrics, type CodegenTokenUsage } from "./metrics.js";
 export { loadCesiumSkills, type CesiumSkill } from "./pipeline/skills-loader.js";
 export {
   matchSkillsForIntent,
-  matchBestSkill,
+  matchBestSkills,
+  DEFAULT_SKILL_MATCH_LIMIT,
+  DEFAULT_SKILL_MATCH_THRESHOLD,
   type DomainMatch,
 } from "./pipeline/domain-matcher.js";
 export { buildCodegenPrompt, type BuildPromptOptions } from "./pipeline/prompt-builder.js";

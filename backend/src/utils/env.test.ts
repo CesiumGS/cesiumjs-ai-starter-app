@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * `env.ts` parses `process.env` at module-load time (top-level `parsed`), so
  * each test resets the module registry and re-imports with a controlled
- * environment. `dotenv.config` is a no-op here since no `.env` file exists
- * relative to the test's `process.cwd()`.
+ * environment.
  *
  * `env.ts` now also imports `@cesium-ai/mcp-tools` (for MCP config typing),
  * a heavier dependency chain than before. `vi.resetModules()` forces every
@@ -17,17 +16,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * `existsSync` is mocked to always report "not found": this repo's own
  * repo-root `mcp.config.json` is a REAL file that otherwise gets picked up
- * by `mcp-servers-config.ts`. Forcing `existsSync` to `false` isolates these
- * environment tests from that file and also reinforces the pre-existing
- * "no .env file" assumption above, since `dotenv.config` calls the same
- * `existsSync` before its own `readFileSync`. `readFileSync` itself is left
- * real/unmocked — nothing in this file's tests should ever reach it once
- * `existsSync` always says "no file here".
+ * by `mcp-servers-config.ts`. `dotenv` itself is ALSO mocked to a no-op —
+ * `dotenv`'s internals call CJS `require("fs")` directly rather than the
+ * `node:fs` specifier this file mocks, so `vi.mock("node:fs")` alone does
+ * NOT stop `dotenv.config` from reading this repo's real root `.env` file
+ * (confirmed: real API keys/URLs from that file were leaking into "no
+ * override" test cases). Mocking `dotenv` directly is what actually
+ * guarantees the "no .env file" assumption below. `readFileSync` itself is
+ * left real/unmocked — nothing in this file's tests should ever reach it
+ * once `existsSync` always says "no file here" and `dotenv` never reads
+ * anything.
  */
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
   return { ...actual, existsSync: () => false };
 });
+
+vi.mock("dotenv", () => ({ default: { config: vi.fn() } }));
 
 vi.setConfig({ testTimeout: 15_000 });
 
@@ -61,6 +66,12 @@ describe("env parsing", () => {
       CODEGEN_ALLOWED_SYMBOLS: undefined,
       CODEGEN_EXTRA_INSTRUCTIONS: undefined,
       TELEMETRY_ENABLED: undefined,
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: undefined,
+      OTEL_EXPORTER_OTLP_HEADERS: undefined,
+      OTEL_SERVICE_NAME: undefined,
+      OTEL_SERVICE_NAMESPACE: undefined,
+      OTEL_RESOURCE_ATTRIBUTES: undefined,
+      OTEL_LOG_LEVEL: undefined,
     });
 
     expect(env.PUBLIC_URL).toBe("http://localhost:3001");
@@ -74,6 +85,12 @@ describe("env parsing", () => {
     expect(env.CODEGEN_ALLOWED_SYMBOLS).toBeUndefined();
     expect(env.CODEGEN_EXTRA_INSTRUCTIONS).toBeUndefined();
     expect(env.TELEMETRY_ENABLED).toBe(false);
+    expect(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT).toBeUndefined();
+    expect(env.OTEL_EXPORTER_OTLP_HEADERS).toBeUndefined();
+    expect(env.OTEL_SERVICE_NAME).toBe("cesiumjs-ai-starter-app-backend");
+    expect(env.OTEL_SERVICE_NAMESPACE).toBe("cesium-ai");
+    expect(env.OTEL_RESOURCE_ATTRIBUTES).toBeUndefined();
+    expect(env.OTEL_LOG_LEVEL).toBe("info");
   });
 
   it("rejects an invalid AI_PROVIDER value", async () => {
@@ -169,6 +186,22 @@ describe("env parsing", () => {
     );
   });
 
+  it("coerces CODEGEN_SKILL_THRESHOLD to a number", async () => {
+    const { env } = await loadEnv({ CODEGEN_SKILL_THRESHOLD: "2.5" });
+    expect(env.CODEGEN_SKILL_THRESHOLD).toBe(2.5);
+  });
+
+  it("allows CODEGEN_SKILL_THRESHOLD=0 to disable threshold filtering", async () => {
+    const { env } = await loadEnv({ CODEGEN_SKILL_THRESHOLD: "0" });
+    expect(env.CODEGEN_SKILL_THRESHOLD).toBe(0);
+  });
+
+  it("rejects a negative CODEGEN_SKILL_THRESHOLD", async () => {
+    await expect(loadEnv({ CODEGEN_SKILL_THRESHOLD: "-1" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
   it("coerces CODEGEN_MAX_ATTEMPTS to a positive integer", async () => {
     const { env } = await loadEnv({ CODEGEN_MAX_ATTEMPTS: "5" });
     expect(env.CODEGEN_MAX_ATTEMPTS).toBe(5);
@@ -230,6 +263,18 @@ describe("env parsing", () => {
 
   it("rejects a malformed OTEL_EXPORTER_OTLP_ENDPOINT", async () => {
     await expect(loadEnv({ OTEL_EXPORTER_OTLP_ENDPOINT: "not-a-url" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects a malformed OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", async () => {
+    await expect(loadEnv({ OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "not-a-url" })).rejects.toThrow(
+      /Invalid environment configuration/i,
+    );
+  });
+
+  it("rejects an invalid OTEL_LOG_LEVEL", async () => {
+    await expect(loadEnv({ OTEL_LOG_LEVEL: "trace" })).rejects.toThrow(
       /Invalid environment configuration/i,
     );
   });

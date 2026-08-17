@@ -4,7 +4,7 @@ import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "../chat-client";
-import type { ToolExecutionOutcome } from "../chat-client";
+import type { ChatLogger, ToolExecutionOutcome } from "../chat-client";
 import { MessageItem } from "./MessageItem";
 import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import { RegisteredTools } from "./RegisteredTools";
@@ -105,6 +105,13 @@ export interface AiChatPanelProps {
    * every tool call renders with the generic result view.
    */
   codeResultToolName?: string;
+  /**
+   * Structured logger for stream/tool/approval errors the underlying
+   * {@link ChatClient} encounters — passed straight through to its
+   * `logger` option. Omit to log nothing (errors still always reach the
+   * transcript regardless).
+   */
+  logger?: ChatLogger;
 }
 
 /**
@@ -124,6 +131,7 @@ function useChatClient(
   onApprovalRequired: AiChatPanelProps["onApprovalRequired"],
   maxToolCallRounds: AiChatPanelProps["maxToolCallRounds"],
   setPendingApproval: (pending: PendingApproval | null) => void,
+  logger: AiChatPanelProps["logger"],
 ) {
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
@@ -164,6 +172,7 @@ function useChatClient(
         });
       },
       maxToolCallRounds,
+      logger,
     });
   }
 
@@ -190,6 +199,7 @@ export function AiChatPanel({
   onApprovalRequired,
   maxToolCallRounds,
   codeResultToolName,
+  logger,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
@@ -216,6 +226,7 @@ export function AiChatPanel({
     onApprovalRequired,
     maxToolCallRounds,
     setPendingApproval,
+    logger,
   );
 
   const handleApprove = useCallback(() => {

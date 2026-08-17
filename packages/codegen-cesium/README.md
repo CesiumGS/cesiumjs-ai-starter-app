@@ -146,15 +146,19 @@ generation retry loop below — can see the full picture in one pass.
 
 ## Generation + verification entry point (`src/pipeline/generate-verified-cesium-code.ts`)
 
-**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts?, maxSkills?, maxLength?, maxLines?, allowedSymbols?, extraInstructions?, runtimeFeedback? })`
+**Function signature:** `generateVerifiedCesiumCode({ intent, model, maxAttempts?, maxSkills?, maxLength?, maxLines?, allowedSymbols?, extraInstructions?, runtimeFeedback?, logger? })`
 
 `maxLength`, `maxLines`, and `allowedSymbols` are passed straight through to `verifyCesiumCode` (see
 Verification Rules above). `extraInstructions` is passed straight through to `buildCodegenPrompt`,
 appended to the end of the generation prompt's output rules — intended for app/operator-supplied
 constraints (e.g. house style, app-specific caveats), never raw end-user chat input, since it feeds
-directly into the codegen model's prompt. The sample backend's `createExecuteCesiumCodeTool`
+directly into the codegen model's prompt. `logger` (a `CodegenLogger`, default `noopCodegenLogger` —
+silent) reports each attempt's model-call failures, verification violations, and the overall
+success/failure once all attempts are exhausted — pass your own implementation (e.g. one wired into
+your app's OTEL telemetry) to observe them. The sample backend's `createExecuteCesiumCodeTool`
 exposes matching options wired from the `CODEGEN_MAX_CODE_LENGTH`, `CODEGEN_MAX_CODE_LINES`,
-`CODEGEN_ALLOWED_SYMBOLS`, and `CODEGEN_EXTRA_INSTRUCTIONS` env vars (see the root `.env.example`).
+`CODEGEN_ALLOWED_SYMBOLS`, and `CODEGEN_EXTRA_INSTRUCTIONS` env vars (see the root `.env.example`),
+plus its own `logger` wired from the backend's telemetry.
 
 `runtimeFeedback` accepts `{ previousCode, executionError }` from an earlier browser-sandbox run.
 When present, both values are appended to every generation attempt as diagnostic correction context,

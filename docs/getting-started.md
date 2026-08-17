@@ -1,8 +1,3 @@
----
-hide:
-  - navigation
----
-
 # Getting Started
 
 <img src="../assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />

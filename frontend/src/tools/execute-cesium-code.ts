@@ -1,6 +1,7 @@
 import type { Viewer } from "cesium";
-import { createConsoleLogger, runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
+import { runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
 import { config } from "../utils/config";
+import { createFrontendLogger } from "../utils/telemetry";
 import { executeCesiumCodeResultShape } from "./execute-cesium-code-result";
 import { createRenderErrorWatch, DEFAULT_RENDER_ERROR_WATCH_MS } from "./render-error-watch";
 
@@ -12,12 +13,12 @@ export {
 export { waitForRenderError } from "./render-error-watch";
 
 /**
- * Console-backed sandbox logger, level configured via `config.logLevel` (env `VITE_LOG_LEVEL`,
- * defaults to `debug` in dev / `silent` in production builds — see `utils/config.ts`). Shared
- * across every `executeApprovedCesiumCode` call rather than created per-call since it's stateless
- * and its level never changes at runtime.
+ * Telemetry-aware sandbox logger. It keeps normal console output behavior while optionally
+ * exporting structured logs to any OTLP-compatible collector configured via `VITE_OTEL_*` env vars.
+ * Shared across every `executeApprovedCesiumCode` call rather than created per-call since it's
+ * stateless and its level never changes at runtime.
  */
-const sandboxLogger = createConsoleLogger(config.logLevel);
+const sandboxLogger = createFrontendLogger("@cesium-ai/codegen-sandbox");
 
 /**
  * Runs a server-generated, statically-verified CesiumJS snippet in a fresh QuickJS-WASM sandbox

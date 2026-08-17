@@ -26,15 +26,16 @@ When `model` is `undefined`, `/api/chat` responds `400 { error: "NOT_CONFIGURED"
 
 `createChatRouter` accepts a `ChatRouterOptions` object:
 
-| Option           | Default                             | Description                                                                                              |
-| ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `model`          | —                                   | Required to enable chat. Omit to run with `/api/chat` returning `NOT_CONFIGURED`.                        |
-| `tools`          | —                                   | Required. The tool registry exposed to the agent loop, e.g. `createCesiumTools()`.                       |
-| `system`         | `DEFAULT_SYSTEM_PROMPT` (see below) | System prompt override.                                                                                  |
-| `maxSteps`       | `DEFAULT_MAX_STEPS` = `5`           | Max agent-loop iterations (model call → tool call → model call) per request.                             |
-| `maxMessages`    | `DEFAULT_MAX_MESSAGES` = `100`      | Max messages accepted in a single request body; requests over the cap get `400 INVALID_REQUEST`.         |
-| `toolApproval`   | —                                   | Per-tool human-in-the-loop approval gating, passed straight through to `streamText`.                     |
-| `stopAfterTools` | —                                   | Tool names to end the agent loop after, instead of letting the model reply in the same turn (see below). |
+| Option           | Default                             | Description                                                                                                                          |
+| ---------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `model`          | —                                   | Required to enable chat. Omit to run with `/api/chat` returning `NOT_CONFIGURED`.                                                    |
+| `tools`          | —                                   | Required. The tool registry exposed to the agent loop, e.g. `createCesiumTools()`.                                                   |
+| `system`         | `DEFAULT_SYSTEM_PROMPT` (see below) | System prompt override.                                                                                                              |
+| `maxSteps`       | `DEFAULT_MAX_STEPS` = `5`           | Max agent-loop iterations (model call → tool call → model call) per request.                                                         |
+| `maxMessages`    | `DEFAULT_MAX_MESSAGES` = `100`      | Max messages accepted in a single request body; requests over the cap get `400 INVALID_REQUEST`.                                     |
+| `toolApproval`   | —                                   | Per-tool human-in-the-loop approval gating, passed straight through to `streamText`.                                                 |
+| `stopAfterTools` | —                                   | Tool names to end the agent loop after, instead of letting the model reply in the same turn (see below).                             |
+| `logger`         | `noopServerLogger` (silent)         | Structured logger for agent-loop failures. Pass your own `ServerLogger` (e.g. wired into your app's OTEL telemetry) to observe them. |
 
 `system`, `maxSteps`, `toolApproval`, and `stopAfterTools` are forwarded to `runAgent` (see below); `maxMessages` is enforced only at the router's request-validation layer.
 
@@ -245,21 +246,23 @@ The MCP-related routers (`createMcpAppRouter`, `createMcpSessionRouter`) live be
 
 ### `@cesium-ai/server` (main entry)
 
-| Export                  | From         | Description                                            |
-| ----------------------- | ------------ | ------------------------------------------------------ |
-| `createChatRouter`      | `./index.js` | Builds the Express `Router` mounting `POST /api/chat`. |
-| `ChatRouterOptions`     | `./index.js` | Type for `createChatRouter`'s options.                 |
-| `runAgent`              | `./index.js` | Runs one agent-loop turn with `streamText`.            |
-| `DEFAULT_MAX_STEPS`     | `./index.js` | Default `maxSteps` (`5`).                              |
-| `DEFAULT_SYSTEM_PROMPT` | `./index.js` | Default system prompt string.                          |
-| `RunAgentOptions`       | `./index.js` | Type for `runAgent`'s options.                         |
-| `createToolsRouter`     | `./index.js` | Builds the Express `Router` mounting `GET /api/tools`. |
-| `ToolsRouterOptions`    | `./index.js` | Type for `createToolsRouter`'s options.                |
+| Export                  | From         | Description                                                                      |
+| ----------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `createChatRouter`      | `./index.js` | Builds the Express `Router` mounting `POST /api/chat`.                           |
+| `ChatRouterOptions`     | `./index.js` | Type for `createChatRouter`'s options.                                           |
+| `runAgent`              | `./index.js` | Runs one agent-loop turn with `streamText`.                                      |
+| `DEFAULT_MAX_STEPS`     | `./index.js` | Default `maxSteps` (`5`).                                                        |
+| `DEFAULT_SYSTEM_PROMPT` | `./index.js` | Default system prompt string.                                                    |
+| `RunAgentOptions`       | `./index.js` | Type for `runAgent`'s options.                                                   |
+| `createToolsRouter`     | `./index.js` | Builds the Express `Router` mounting `GET /api/tools`.                           |
+| `ToolsRouterOptions`    | `./index.js` | Type for `createToolsRouter`'s options.                                          |
+| `ServerLogger`          | `./index.js` | Structured logger interface accepted by `createChatRouter`/`createMcpAppRouter`. |
+| `noopServerLogger`      | `./index.js` | Default `ServerLogger` — silent, used when no `logger` is passed.                |
 
 ### `@cesium-ai/server/mcp` (requires `@cesium-ai/mcp-tools`)
 
 | Export                   | From       | Description                                                                 |
 | ------------------------ | ---------- | --------------------------------------------------------------------------- |
 | `createMcpAppRouter`     | `./mcp.js` | Builds the Express `Router` mounting `/api/mcp-app/resource` + `tool-call`. |
-| `McpAppRouterOptions`    | `./mcp.js` | Type for `createMcpAppRouter`'s options.                                    |
+| `McpAppRouterOptions`    | `./mcp.js` | Type for `createMcpAppRouter`'s options, including its optional `logger`.   |
 | `createMcpSessionRouter` | `./mcp.js` | Builds the Express `Router` mounting `/api/mcp/*` OAuth connect routes.     |

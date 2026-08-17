@@ -73,6 +73,15 @@ services:
         # proxies to the backend service (see frontend/nginx.conf). Set this to
         # point the image at a different backend (requires a rebuild).
         VITE_API_BASE_URL: ""
+        # Optional frontend OTLP log export settings (build-time Vite vars).
+        VITE_TELEMETRY_ENABLED: ${VITE_TELEMETRY_ENABLED:-false}
+        VITE_OTEL_EXPORTER_OTLP_ENDPOINT: ${VITE_OTEL_EXPORTER_OTLP_ENDPOINT:-}
+        VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: ${VITE_OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-}
+        VITE_OTEL_EXPORTER_OTLP_HEADERS: ${VITE_OTEL_EXPORTER_OTLP_HEADERS:-}
+        VITE_OTEL_SERVICE_NAME: ${VITE_OTEL_SERVICE_NAME:-cesiumjs-ai-starter-app-frontend}
+        VITE_OTEL_SERVICE_NAMESPACE: ${VITE_OTEL_SERVICE_NAMESPACE:-cesium-ai}
+        VITE_OTEL_RESOURCE_ATTRIBUTES: ${VITE_OTEL_RESOURCE_ATTRIBUTES:-}
+        VITE_OTEL_LOG_LEVEL: ${VITE_OTEL_LOG_LEVEL:-}
     ports:
       # host:container — nginx listens on 80 inside the container; published on
       # 8080 on the host to avoid needing elevated privileges and to sidestep

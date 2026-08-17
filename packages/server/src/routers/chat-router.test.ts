@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import type { AddressInfo } from "node:net";
 import { tool, simulateReadableStream, type LanguageModel } from "ai";
@@ -391,5 +391,78 @@ describe("createChatRouter — streaming the agent loop", () => {
     // ...but the model's same-turn reply — based only on that preliminary
     // result — never reaches the client transcript.
     expect(res.text).not.toContain("Premature success!");
+  });
+});
+
+describe("createChatRouter — metrics", () => {
+  function fakeMetrics() {
+    return {
+      recordTokenUsage: vi.fn(),
+      recordRequestDuration: vi.fn(),
+      recordToolApproval: vi.fn(),
+    };
+  }
+
+  it("records token usage and request duration once the response finishes streaming", async () => {
+    const metrics = fakeMetrics();
+    const { url } = await startChatServer({ model: textModel("Bonjour!"), tools: {}, metrics });
+
+    const res = await postChat(url, oneUserMessage);
+    expect(res.status).toBe(200);
+
+    // Recording happens fire-and-forget after the stream fully settles, slightly after the
+    // last response byte reaches this test's `fetch` call — poll briefly rather than assuming
+    // it's already happened the instant `postChat` resolves.
+    await vi.waitFor(() => expect(metrics.recordTokenUsage).toHaveBeenCalled());
+
+    expect(metrics.recordTokenUsage).toHaveBeenCalledWith({
+      inputTokens: 1,
+      outputTokens: 1,
+      totalTokens: 2,
+    });
+    expect(metrics.recordRequestDuration).toHaveBeenCalledWith(expect.any(Number));
+  });
+
+  it("never throws when metrics is omitted (defaults to a no-op)", async () => {
+    const { url } = await startChatServer({ model: textModel("Bonjour!"), tools: {} });
+
+    const res = await postChat(url, oneUserMessage);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("Bonjour!");
+  });
+
+  it("records a tool approval decision found in the request's messages", async () => {
+    const metrics = fakeMetrics();
+    const { url } = await startChatServer({
+      model: textModel("Premature success!"),
+      tools: { codegenTool },
+      toolApproval: { codegenTool: "user-approval" },
+      stopAfterTools: ["codegenTool"],
+      metrics,
+    });
+
+    const resumingApproval = {
+      messages: [
+        { role: "user", parts: [{ type: "text", text: "do the thing" }] },
+        {
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-codegenTool",
+              toolCallId: "call-1",
+              state: "approval-responded",
+              input: {},
+              approval: { id: "approval-1", approved: true },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await postChat(url, resumingApproval);
+
+    expect(res.status).toBe(200);
+    expect(metrics.recordToolApproval).toHaveBeenCalledWith("codegenTool", true);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchBestSkill, matchSkillsForIntent } from "./domain-matcher.js";
+import { matchBestSkills, matchSkillsForIntent } from "./domain-matcher.js";
 import type { CesiumSkill } from "./skills-loader.js";
 
 function makeSkill(name: string, description: string, body = "body"): CesiumSkill {
@@ -55,7 +55,8 @@ describe("matchSkillsForIntent", () => {
 
   it("scores zero everywhere for an intent that matches nothing", () => {
     const matches = matchSkillsForIntent("compute the fibonacci sequence in python", testSkills);
-    expect(matches).toEqual([]);
+    expect(matches).toHaveLength(testSkills.length);
+    expect(matches.every((m) => m.score === 0)).toBe(true);
   });
 
   it("doesn't crash on intent words that collide with Object.prototype property names (regression: 'constructor' resolved COMPOUND_TERM_ALIASES['constructor'] to the inherited Object constructor function instead of undefined, and calling .includes on it threw)", () => {
@@ -68,15 +69,15 @@ describe("matchSkillsForIntent", () => {
   });
 });
 
-describe("matchBestSkill", () => {
+describe("matchBestSkills", () => {
   it("returns the top-matching skills in relevance order", () => {
-    const best = matchBestSkill("position the camera with setView", 3, 1.0, testSkills);
+    const best = matchBestSkills("position the camera with setView", 3, 1.0, testSkills);
     expect(best).toHaveLength(1);
     expect(best[0].name).toBe("cesiumjs-camera");
   });
 
   it("returns multiple skills when several match the intent", () => {
-    const best = matchBestSkill(
+    const best = matchBestSkills(
       "load GeoJSON data and fly the camera to view it",
       3,
       1.0,
@@ -89,12 +90,12 @@ describe("matchBestSkill", () => {
   });
 
   it("returns empty array when nothing scores above the threshold", () => {
-    const best = matchBestSkill("write a sorting algorithm in rust", 3, 1.0, testSkills);
+    const best = matchBestSkills("write a sorting algorithm in rust", 3, 1.0, testSkills);
     expect(best).toEqual([]);
   });
 
   it("respects the limit parameter", () => {
-    const best = matchBestSkill(
+    const best = matchBestSkills(
       "load GeoJSON data and fly the camera to view it",
       2,
       1.0,
@@ -105,7 +106,7 @@ describe("matchBestSkill", () => {
 
   it("respects the threshold parameter, filtering out low-scoring matches", () => {
     // High threshold: only the strongest match
-    const highThreshold = matchBestSkill(
+    const highThreshold = matchBestSkills(
       "load GeoJSON data and fly the camera to view it",
       3,
       5.0,
@@ -113,7 +114,7 @@ describe("matchBestSkill", () => {
     );
 
     // Low threshold: more permissive
-    const lowThreshold = matchBestSkill(
+    const lowThreshold = matchBestSkills(
       "load GeoJSON data and fly the camera to view it",
       3,
       0.1,
@@ -125,8 +126,8 @@ describe("matchBestSkill", () => {
   });
 
   it("allows disabling threshold filtering with threshold=0", () => {
-    const noFilter = matchBestSkill("position the camera", 3, 0, testSkills);
-    const withFilter = matchBestSkill("position the camera", 3, 1.0, testSkills);
+    const noFilter = matchBestSkills("position the camera", 3, 0, testSkills);
+    const withFilter = matchBestSkills("position the camera", 3, 1.0, testSkills);
 
     // No filter should return at least as many results
     expect(noFilter.length).toBeGreaterThanOrEqual(withFilter.length);

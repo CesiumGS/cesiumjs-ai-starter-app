@@ -58,7 +58,9 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 
 nav:
-  - Getting Started: getting-started.md
+  - Getting Started:
+      - Run the code: getting-started.md
+      - Configure logging: connecting-OTel-providers.md
   - Architecture:
       - Overview: architectures/architecture.md
       - Codegen Architecture:
