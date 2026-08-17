@@ -1,6 +1,6 @@
 # Adding an MCP Server
 
-<img src="../../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
+<img src="https://raw.githubusercontent.com/CesiumGS/cesiumjs-ai-starter-app/main/docs/assets/ty-book.png" alt="Ty mascot with book" align="right" width="200" class="doc-illustration" />
 
 This tutorial covers [`@cesium-ai/mcp-tools`](../packages/mcp-tools/index.md), the optional,
 server-only bridge that connects this starter's chat agent to one or more

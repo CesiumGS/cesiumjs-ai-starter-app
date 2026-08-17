@@ -45,7 +45,10 @@ function resolveSandboxAllowedNetworkOrigins(): string[] {
 }
 
 export const config = {
-  cesiumIonToken: import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN as string | undefined,
+  cesiumIonToken: (() => {
+    const value = import.meta.env.VITE_CESIUM_ION_ACCESS_TOKEN as string | undefined;
+    return value && value.trim() !== "" ? value : undefined;
+  })(),
   /**
    * Cesium ion API server the token above is validated against. Cesium defaults this to the
    * production `https://api.cesium.com/` server — a token issued by a different ion server (e.g.
