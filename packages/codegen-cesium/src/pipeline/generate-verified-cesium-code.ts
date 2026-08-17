@@ -12,9 +12,16 @@
  * This module NEVER executes the generated code. `verifyCesiumCode` is parse-only static analysis.
  */
 import { generateText, type LanguageModel } from "ai";
-import { matchBestSkill } from "./domain-matcher.js";
+import {
+  matchBestSkills,
+  matchSkillsForIntent,
+  DEFAULT_SKILL_MATCH_THRESHOLD,
+} from "./domain-matcher.js";
 import { buildCodegenPrompt } from "./prompt-builder.js";
 import { verifyCesiumCode } from "./ast-verifier.js";
+import { noopCodegenLogger, type CodegenLogger } from "../logger.js";
+import { noopCodegenMetrics, type CodegenMetrics } from "../metrics.js";
+import { DEFAULT_MAX_ATTEMPTS, DEFAULT_SKILL_MATCH_LIMIT } from "./constants.js";
 
 export interface GenerateVerifiedCesiumCodeOptions {
   /** The user's natural-language intent, e.g. "fly the camera to Paris". */
@@ -23,8 +30,10 @@ export interface GenerateVerifiedCesiumCodeOptions {
   model: LanguageModel;
   /** Max regeneration attempts if a generation fails verification. Default 3. */
   maxAttempts?: number;
-  /** Max number of matched skills to inline as grounding context in the generation prompt. Controlled by `CODEGEN_MAX_SKILLS` env var in the sample app (default `1`). */
+  /** Max number of matched skills to inline as grounding context in the generation prompt. Defaults to {@link DEFAULT_SKILL_MATCH_LIMIT} if omitted; controlled by `CODEGEN_MAX_SKILLS` env var in the sample app (default `1`). */
   maxSkills?: number;
+  /** Minimum BM25 score a skill must reach to be considered a match. Defaults to {@link DEFAULT_SKILL_MATCH_THRESHOLD}. Set to 0 to disable filtering. */
+  threshold?: number;
   /** Hard cap on generated source size in characters, passed through to `verifyCesiumCode`. Default 4000. */
   maxLength?: number;
   /** Hard cap on generated line count, passed through to `verifyCesiumCode`. Default 100. */
@@ -40,6 +49,10 @@ export interface GenerateVerifiedCesiumCodeOptions {
   extraInstructions?: string;
   /** Previous generated source and its browser-sandbox failure, used to correct a runtime retry. */
   runtimeFeedback?: RuntimeCodegenFeedback;
+  /** Structured logger for generation attempts/failures. Defaults to a no-op (silent) logger. */
+  logger?: CodegenLogger;
+  /** Metrics sink for token usage, skill-match scores, and generation duration. Defaults to a no-op. */
+  metrics?: CodegenMetrics;
 }
 
 export interface RuntimeCodegenFeedback {
@@ -49,8 +62,6 @@ export interface RuntimeCodegenFeedback {
 
 export type GenerateVerifiedCesiumCodeResult =
   { verified: true; code: string } | { verified: false; error: string; violations?: string[] };
-
-const DEFAULT_MAX_ATTEMPTS = 3;
 
 /** Strips a leading/trailing ```-fenced code block, if the model wrapped its output in one. */
 function stripCodeFences(raw: string): string {
@@ -68,22 +79,63 @@ function stripCodeFences(raw: string): string {
 export async function generateVerifiedCesiumCode(
   options: GenerateVerifiedCesiumCodeOptions,
 ): Promise<GenerateVerifiedCesiumCodeResult> {
-  const {
-    intent,
-    model,
-    maxSkills,
-    maxLength,
-    maxLines,
-    allowedSymbols,
-    extraInstructions,
-    runtimeFeedback,
-  } = options;
+  const { intent, model, maxLength, maxLines, allowedSymbols, extraInstructions, runtimeFeedback } =
+    options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  // Resolved once here (rather than left to matchBestSkill's own default) since this is the only
+  // cap on how many skills get inlined — buildCodegenPrompt trusts whatever `skills` it's given.
+  const maxSkills = options.maxSkills ?? DEFAULT_SKILL_MATCH_LIMIT;
+  const threshold = options.threshold ?? DEFAULT_SKILL_MATCH_THRESHOLD;
+  const logger = options.logger ?? noopCodegenLogger;
+  const metrics = options.metrics ?? noopCodegenMetrics;
 
-  // Retrieve top candidate skills to provide grounding context for code generation.
-  const skills = matchBestSkill(intent);
+  logger.debug("Generating CesiumJS code", {
+    intent,
+    maxAttempts,
+    maxSkills,
+    hasRuntimeFeedback: Boolean(runtimeFeedback),
+  });
 
-  const initialPrompt = buildCodegenPrompt({ intent, skills, maxSkills, extraInstructions });
+  const skillsWithScores = matchSkillsForIntent(intent);
+
+  if (skillsWithScores.length > 0) {
+    logger.debug("Scored skills for intent", {
+      intent,
+      threshold,
+      totalScored: skillsWithScores.length,
+      passedThreshold: skillsWithScores.filter((m) => m.score >= threshold).length,
+      topSkill: skillsWithScores[0].skill.name,
+      topScore: skillsWithScores[0].score,
+      skillsWithScore: skillsWithScores.map((m) => ({ name: m.skill.name, score: m.score })),
+      averageScore: skillsWithScores.reduce((sum, m) => sum + m.score, 0) / skillsWithScores.length,
+    });
+  }
+
+  const bestSkills = matchBestSkills(intent, maxSkills, threshold);
+
+  if (bestSkills.length === 0) {
+    logger.warn("No skill matched intent; generating with no grounding context", { intent });
+  } else {
+    logger.debug("Matched skills for intent", {
+      intent,
+      skillNames: bestSkills.map((s) => s.name),
+    });
+  }
+
+  // Record every scored skill's score (not just the ones that passed the threshold/limit), so a
+  // metrics consumer can inspect the full score distribution per prompt and tune `threshold`
+  // independently of this pipeline's own filtering.
+  skillsWithScores.forEach((match, rank) => {
+    metrics.recordSkillMatchScore(match.score, {
+      skill: match.skill.name,
+      rank,
+      passedThreshold: match.score >= threshold,
+      score: match.score,
+      includedInBestSkills: bestSkills.some((s) => s.name === match.skill.name),
+    });
+  });
+
+  const initialPrompt = buildCodegenPrompt({ intent, skills: bestSkills, extraInstructions });
   const basePrompt = runtimeFeedback
     ? `${initialPrompt}
 
@@ -104,15 +156,30 @@ Generate a corrected code snippet that avoids all of the above issues, still fol
   let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const prompt =
-      attempt === 1 || !lastViolations ? basePrompt : correctionPrompt(basePrompt, lastViolations);
+    const prompt = lastViolations ? correctionPrompt(basePrompt, lastViolations) : basePrompt;
+    const attemptStart = Date.now();
 
     let rawCode: string;
     try {
       const result = await generateText({ model, prompt });
       rawCode = result.text;
+      if (result.usage) {
+        metrics.recordTokenUsage(
+          {
+            inputTokens: result.usage.inputTokens,
+            outputTokens: result.usage.outputTokens,
+            totalTokens: result.usage.totalTokens,
+          },
+          { attempt },
+        );
+      }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
+      logger.warn("Model call failed during code generation", { attempt, error: lastError });
+      metrics.recordGenerationDuration(Date.now() - attemptStart, {
+        attempt,
+        outcome: "model_error",
+      });
       continue;
     }
 
@@ -120,11 +187,25 @@ Generate a corrected code snippet that avoids all of the above issues, still fol
     const verifyResult = verifyCesiumCode(code, { maxLength, maxLines, allowedSymbols });
 
     if (verifyResult.verified) {
+      logger.info("Generated and verified CesiumJS code", { attempt });
+      metrics.recordGenerationDuration(Date.now() - attemptStart, { attempt, outcome: "verified" });
       return { verified: true, code };
     }
 
+    logger.warn("Generated code failed static verification", {
+      attempt,
+      violationCount: verifyResult.violations?.length ?? 0,
+      violations: verifyResult.violations,
+    });
+    metrics.recordGenerationDuration(Date.now() - attemptStart, { attempt, outcome: "rejected" });
     lastViolations = verifyResult.violations;
   }
+
+  logger.error("Code generation failed after all attempts", {
+    maxAttempts,
+    error: lastError,
+    violations: lastViolations,
+  });
 
   return {
     verified: false,

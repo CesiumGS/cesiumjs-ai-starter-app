@@ -13,6 +13,10 @@
  * it, so it can't support the query-vs-corpus matching this module needs.
  */
 import { loadCesiumSkills, type CesiumSkill } from "./skills-loader.js";
+import { DEFAULT_SKILL_MATCH_LIMIT, DEFAULT_SKILL_MATCH_THRESHOLD } from "./constants.js";
+// Re-exported so existing consumers (e.g. this package's index.ts) can keep importing these
+// user-overridable defaults from domain-matcher.js, their original home.
+export { DEFAULT_SKILL_MATCH_LIMIT, DEFAULT_SKILL_MATCH_THRESHOLD };
 
 /** Term-frequency saturation parameter — higher values let repeated terms keep adding score. */
 const BM25_K1 = 1.5;
@@ -152,7 +156,7 @@ function countTermOccurrences(term: string, docTokens: string[]): number {
 
 /**
  * Scores every skill's `description` against the given intent and returns matches sorted by
- * descending score, filtering out zero-score matches. Uses BM25 ranking for better discrimination.
+ * descending score. Uses BM25 ranking for better discrimination.
  * Defaults `skills` to {@link loadCesiumSkills}'s output; pass an explicit array in tests to avoid
  * depending on the real vendored data.
  */
@@ -171,7 +175,6 @@ export function matchSkillsForIntent(
       skill,
       score: scores[idx],
     }))
-    .filter((match) => match.score > 0)
     .sort((a, b) => b.score - a.score);
 
   return matches;
@@ -184,15 +187,15 @@ export function matchSkillsForIntent(
  * Useful when multiple skills are needed to generate comprehensive context for code generation.
  *
  * @param intent - The user's natural-language request
- * @param limit - Maximum number of skills to return (default: 3)
- * @param threshold - Minimum BM25 score to include a skill (default: 1.0). Set to 0 to disable filtering.
+ * @param limit - Maximum number of skills to return (default: {@link DEFAULT_SKILL_MATCH_LIMIT})
+ * @param threshold - Minimum BM25 score to include a skill (default: {@link DEFAULT_SKILL_MATCH_THRESHOLD}). Set to 0 to disable filtering.
  * @param skills - Optional skill array; defaults to loaded vendored CesiumJS skills
  * @returns Array of skills sorted by BM25 score (highest relevance first), all scoring ≥ threshold
  */
-export function matchBestSkill(
+export function matchBestSkills(
   intent: string,
-  limit: number = 3,
-  threshold: number = 1.0,
+  limit: number = DEFAULT_SKILL_MATCH_LIMIT,
+  threshold: number = DEFAULT_SKILL_MATCH_THRESHOLD,
   skills: CesiumSkill[] = loadCesiumSkills(),
 ): CesiumSkill[] {
   return matchSkillsForIntent(intent, skills)

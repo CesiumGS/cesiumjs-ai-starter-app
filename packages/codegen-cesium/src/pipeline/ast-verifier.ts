@@ -11,6 +11,7 @@
 import { parse } from "acorn";
 import { simple as walkSimple, ancestor as walkAncestor } from "acorn-walk";
 import type { Node } from "acorn";
+import { DEFAULT_MAX_LENGTH, DEFAULT_MAX_LINES } from "./constants.js";
 
 export interface VerifyOptions {
   /**
@@ -31,9 +32,6 @@ export interface VerifyResult {
   /** Populated when verified is false — every reason the code was rejected. */
   violations?: string[];
 }
-
-const DEFAULT_MAX_LENGTH = 4000;
-const DEFAULT_MAX_LINES = 100;
 
 /** Names of globals/APIs that must never be referenced by generated code, regardless of allowlist. */
 const BANNED_GLOBALS = new Set([

@@ -68,6 +68,29 @@ describe("createExecuteCesiumCodeTool", () => {
     });
   });
 
+  it("threads threshold through to generateVerifiedCesiumCode when provided", async () => {
+    generateVerifiedCesiumCode.mockResolvedValueOnce({
+      verified: true,
+      code: "viewer.camera.flyTo({});",
+    });
+
+    const cesiumTool = createExecuteCesiumCodeTool({ model: fakeModel, threshold: 0.5 });
+    await cesiumTool.execute!(
+      { intent: "fly to Paris" },
+      {
+        toolCallId: "call-1c",
+        messages: [],
+        context: undefined,
+      },
+    );
+
+    expect(generateVerifiedCesiumCode).toHaveBeenCalledWith({
+      intent: "fly to Paris",
+      model: fakeModel,
+      threshold: 0.5,
+    });
+  });
+
   it("threads maxAttempts through to generateVerifiedCesiumCode when provided", async () => {
     generateVerifiedCesiumCode.mockResolvedValueOnce({
       verified: true,

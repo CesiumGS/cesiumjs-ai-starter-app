@@ -10,6 +10,8 @@ import {
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { runAgent } from "../agent.js";
+import { noopServerLogger, type ServerLogger } from "../logger.js";
+import { noopServerMetrics, type ServerMetrics } from "../metrics.js";
 
 /** Default cap on the number of messages accepted in a single request. */
 const DEFAULT_MAX_MESSAGES = 100;
@@ -52,6 +54,41 @@ function hasPendingApprovedToolCall(
   }
 
   return false;
+}
+
+/**
+ * Extracts every human-in-the-loop approval decision (any tool name) present in this request's
+ * messages, so they can be recorded exactly once via `ServerMetrics.recordToolApproval`. Safe to
+ * scan the *entire* message history on every request: a client only ever sends a given
+ * `toolCallId`'s part in `state: "approval-responded"` for the one request immediately following
+ * the human's decision — by the next turn `ChatClient` has already resolved it to `"result"`
+ * (see `packages/chat-element/src/chat-client/chat-client.ts`'s `resolveApprovals`/
+ * `applyToolResult`), so re-scanning older messages on later requests can't double-count.
+ */
+function findApprovalDecisions(
+  messages: ReadonlyArray<Record<string, unknown>>,
+): Array<{ toolName: string; approved: boolean }> {
+  const decisions: Array<{ toolName: string; approved: boolean }> = [];
+
+  for (const message of messages) {
+    const parts = message.parts;
+    if (!Array.isArray(parts)) continue;
+
+    for (const part of parts) {
+      if (typeof part !== "object" || part === null) continue;
+      const p = part as Record<string, unknown>;
+
+      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) continue;
+      if (p.state !== "approval-responded") continue;
+
+      const approval = p.approval as { approved?: unknown } | undefined;
+      if (typeof approval?.approved !== "boolean") continue;
+
+      decisions.push({ toolName: p.type.slice("tool-".length), approved: approval.approved });
+    }
+  }
+
+  return decisions;
 }
 
 /**
@@ -122,6 +159,10 @@ export interface ChatRouterOptions {
   resolveToolApproval?: (tools: ToolSet) => ToolApprovalConfiguration<ToolSet, never>;
   /** Tool names to stop the loop after — see {@link RunAgentOptions.stopAfterTools}. */
   stopAfterTools?: readonly string[];
+  /** Structured logger for agent-loop failures. Defaults to a no-op (silent) logger. */
+  logger?: ServerLogger;
+  /** Metrics sink for `/api/chat`'s token usage and request duration. Defaults to a no-op. */
+  metrics?: ServerMetrics;
 }
 
 /**
@@ -144,6 +185,8 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     toolApproval,
     resolveToolApproval,
     stopAfterTools,
+    logger = noopServerLogger,
+    metrics = noopServerMetrics,
   } = options;
 
   const router = Router();
@@ -177,10 +220,17 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     }
 
     try {
+      const requestStart = Date.now();
       const resolvedTools = typeof tools === "function" ? await tools(req) : tools;
       const resolvedToolApproval = resolveToolApproval
         ? resolveToolApproval(resolvedTools)
         : toolApproval;
+
+      // Recorded synchronously, independent of the agent run below — a human already made this
+      // decision, so it's tracked regardless of what the agent loop does with it afterwards.
+      for (const decision of findApprovalDecisions(parsed.data.messages)) {
+        metrics.recordToolApproval(decision.toolName, decision.approved);
+      }
 
       const result = await runAgent({
         messages: parsed.data.messages as unknown as UIMessage[],
@@ -191,6 +241,19 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         toolApproval: resolvedToolApproval,
         stopAfterTools,
       });
+
+      // Fire-and-forget: `usage` only resolves once the full response has streamed, and
+      // recording it must never delay (or fail) the response actually being piped below.
+      void Promise.resolve(result.usage)
+        .then((usage) => {
+          metrics.recordTokenUsage({
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+          });
+          metrics.recordRequestDuration(Date.now() - requestStart);
+        })
+        .catch(() => {});
 
       // If this request is resolving a `stopAfterTools` tool's approval, the
       // model's unavoidable first reply this turn can only be based on that
@@ -208,6 +271,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      logger.error("Agent loop failed", { error: message });
       if (!res.headersSent) {
         res.status(500).json({ error: "AGENT_ERROR", message });
       } else {

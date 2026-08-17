@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { loadCesiumSkills } from "./skills-loader.js";
-import { matchSkillsForIntent } from "./domain-matcher.js";
+import { matchBestSkills, matchSkillsForIntent } from "./domain-matcher.js";
 import { buildCodegenPrompt } from "./prompt-builder.js";
 
 /** All 14 domain skill names currently shipped by `@cesium/cesiumjs-skills` (excludes the
@@ -90,7 +90,12 @@ describe("domain coverage — real vendored skills package", () => {
 
     const prompt = buildCodegenPrompt({
       intent: REPRESENTATIVE_INTENTS["cesiumjs-terrain-environment"],
-      skills: matches.map((m) => m.skill),
+      skills: matchBestSkills(
+        REPRESENTATIVE_INTENTS["cesiumjs-terrain-environment"],
+        1,
+        1.0,
+        skills,
+      ),
     });
 
     expect(prompt).toContain("TerrainProvider");

@@ -10,9 +10,12 @@ import {
   type SessionMcpManager,
 } from "@cesium-ai/mcp-tools";
 import type { LanguageModel, ToolApprovalConfiguration, ToolSet } from "ai";
+import type { ServerMetrics } from "@cesium-ai/server";
+import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
+import type { AppLogger } from "./utils/telemetry.js";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
@@ -59,6 +62,28 @@ export interface BackendAppOptions {
    * doesn't make session-scoped MCP connections multi-instance-safe.
    */
   sessionStore?: SessionOptions["store"];
+  /**
+   * Builds a scoped structured logger (e.g. `@cesium-ai/server`,
+   * `@cesium-ai/codegen-cesium`) — passed straight through to `createChatRouter`,
+   * `createMcpAppRouter`, and `createExecuteCesiumCodeTool` so every package's
+   * internal logging flows through this app's own OTEL-wired telemetry (see
+   * `./utils/telemetry.js`'s `BackendTelemetry.createLogger`). Omit to run with
+   * every package's logging silenced (its own no-op default).
+   */
+  createLogger?: (scope: string) => AppLogger;
+  /**
+   * Builds a scoped `@cesium-ai/server`-shaped metrics sink — passed straight through to
+   * `createChatRouter` so `/api/chat`'s token usage and request duration flow into this app's
+   * own OTEL-wired telemetry (see `./utils/telemetry.js`'s `BackendTelemetry.createServerMetrics`).
+   * Omit to run with metrics recording disabled (its own no-op default).
+   */
+  createServerMetrics?: (scope: string) => ServerMetrics;
+  /**
+   * Builds a scoped `@cesium-ai/codegen-cesium`-shaped metrics sink — passed straight through to
+   * `createExecuteCesiumCodeTool` so token usage, skill-match scores, and generation duration flow
+   * into this app's own OTEL-wired telemetry. Omit to run with metrics recording disabled.
+   */
+  createCodegenMetrics?: (scope: string) => CodegenMetrics;
 }
 
 /**
@@ -77,8 +102,15 @@ export function createBackendApp({
   mcp,
   sessionMcp,
   sessionStore,
+  createLogger,
+  createServerMetrics,
+  createCodegenMetrics,
 }: BackendAppOptions): Express {
   const app = express();
+  const serverLogger = createLogger?.("@cesium-ai/server");
+  const codegenLogger = createLogger?.("@cesium-ai/codegen-cesium");
+  const serverMetrics = createServerMetrics?.("@cesium-ai/server");
+  const codegenMetrics = createCodegenMetrics?.("@cesium-ai/codegen-cesium");
 
   app.use(cors({ origin: env.ALLOWED_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "256kb" }));
@@ -119,11 +151,14 @@ export function createBackendApp({
           [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: createExecuteCesiumCodeTool({
             model,
             maxSkills: env.CODEGEN_MAX_SKILLS,
+            threshold: env.CODEGEN_SKILL_THRESHOLD,
             maxAttempts: env.CODEGEN_MAX_ATTEMPTS,
             maxLength: env.CODEGEN_MAX_CODE_LENGTH,
             maxLines: env.CODEGEN_MAX_CODE_LINES,
             allowedSymbols: env.CODEGEN_ALLOWED_SYMBOLS,
             extraInstructions: env.CODEGEN_EXTRA_INSTRUCTIONS,
+            logger: codegenLogger,
+            metrics: codegenMetrics,
           }),
         }
       : {}),
@@ -152,7 +187,14 @@ export function createBackendApp({
   // every route otherwise.
   if (mcp || sessionMcp) {
     app.use("/api/mcp-app", rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
-    app.use(createMcpAppRouter({ mcp, sessionMcp, timeoutMs: env.MCP_TOOL_TIMEOUT_MS }));
+    app.use(
+      createMcpAppRouter({
+        mcp,
+        sessionMcp,
+        timeoutMs: env.MCP_TOOL_TIMEOUT_MS,
+        logger: serverLogger,
+      }),
+    );
   }
 
   app.use(
@@ -188,6 +230,8 @@ export function createBackendApp({
       // Stop the agent loop right after that tool call so the model can't
       // generate a premature "done!" reply before the real outcome is known.
       stopAfterTools: [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode],
+      logger: serverLogger,
+      metrics: serverMetrics,
     }),
   );
 

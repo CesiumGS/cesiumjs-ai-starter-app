@@ -163,13 +163,28 @@ function guestHostBridgeBody(): void {
 
   // Recursively converts a value received from the host (a get/apply result) into its guest-side
   // representation: opaque handle references become new remote proxies, tagged value-type data
-  // (Cartesian3, Color, ...) passes through as-is (already plain, guest-usable data), and
-  // everything else is walked elementwise.
+  // (Cartesian3, Color, ...) is reconstructed into a real instance of the guest's own bundled
+  // value-type class (see `guest-prelude-value-types.ts`'s `__CesiumCoreBundle__`) so instance
+  // methods like `.clone()`/`.equals()`/`.withAlpha()` work on a host-originated value (e.g.
+  // `viewer.camera.positionWC`) exactly as they would on a guest-constructed one (e.g.
+  // `Cesium.Cartesian3.fromDegrees(...)`) — previously this branch returned the tagged plain
+  // object as-is, which silently dropped every prototype method, and everything else is walked
+  // elementwise.
   function __reviveRemoteValue__(value: any): unknown {
     if (Array.isArray(value)) return value.map(__reviveRemoteValue__);
     if (value !== null && typeof value === "object") {
       if (__handleMark__ in value) return __remoteProxy__(value[__handleMark__]);
-      if (__valueTypeMark__ in value) return value;
+      if (__valueTypeMark__ in value) {
+        const definition = __valueTypeDefinitions__.find(
+          (d) => d.name === value[__valueTypeMark__],
+        );
+        if (!definition) return value;
+        const Ctor = __CesiumCoreBundle__[definition.name];
+        return Reflect.construct(
+          Ctor,
+          definition.fields.map((field) => value[field]),
+        );
+      }
       if (__dateMark__ in value) return new Date(value[__dateMark__]);
       const out: Record<string, unknown> = {};
       for (const key in value) out[key] = __reviveRemoteValue__(value[key]);

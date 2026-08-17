@@ -11,8 +11,6 @@ export interface BuildPromptOptions {
   intent: string;
   /** Matched skills, most relevant first (see {@link matchSkillsForIntent}). */
   skills: CesiumSkill[];
-  /** Max number of skills to inline as grounding context. Defaults to 1. */
-  maxSkills?: number;
   /**
    * Optional extra instructions appended to the end of the prompt's output rules, e.g. app-specific
    * constraints ("this app's Viewer has no timeline/animation widgets") or house style preferences.
@@ -22,9 +20,6 @@ export interface BuildPromptOptions {
    */
   extraInstructions?: string;
 }
-
-const DEFAULT_MAX_SKILLS = 1;
-
 /**
  * Builds a prompt that states the intent, includes the top-matched skill(s)' body content as
  * grounding, and instructs the model to output only a bare JavaScript code snippet using only the
@@ -33,12 +28,9 @@ const DEFAULT_MAX_SKILLS = 1;
 export function buildCodegenPrompt({
   intent,
   skills,
-  maxSkills = DEFAULT_MAX_SKILLS,
   extraInstructions,
 }: BuildPromptOptions): string {
-  const groundingSkills = skills.slice(0, maxSkills);
-
-  const groundingSections = groundingSkills
+  const groundingSections = skills
     .map((skill) => `### Reference: ${skill.name}\n\n${skill.body.trim()}`)
     .join("\n\n---\n\n");
 
@@ -61,7 +53,7 @@ Output rules:
 - The execution VM is disposed when the snippet completes, so callbacks cannot outlive it. Never use \`setTimeout\`, \`setInterval\`, \`requestAnimationFrame\`, event-listener callbacks, or completion callbacks to implement persistent animation or interaction; these timer globals are unavailable and rejected by verification. Only perform effects that complete within the top-level snippet using documented Promise-returning APIs and \`await\`.
 - This VM-disposal limitation also rules out \`Cesium.CallbackProperty\`/\`Cesium.CallbackPositionProperty\` (and any other CesiumJS API whose argument is a function CesiumJS calls later, on its own, after your snippet has already returned) — passing a function into ANY CesiumJS API is rejected at runtime, even though it isn't an event listener or a timer. For dynamic/time-varying values, use a documented pre-computed property type instead: \`Cesium.SampledProperty\`/\`Cesium.SampledPositionProperty\` (add concrete samples via \`.addSample(time, value)\` for known times) or \`Cesium.TimeIntervalCollectionProperty\` (add concrete \`Cesium.TimeInterval\`s with fixed values), whichever the reference material shows. If the intent truly needs a value computed from something only known at render time, pick a fixed/static value instead and state that limitation is why in a one-line comment rather than using a callback.
 - The same VM-disposal limitation also rules out \`.addEventListener(callback)\` on any CesiumJS \`Event\` object (e.g. \`tileset.readyEvent\`, \`model.readyEvent\`, \`imageryLayer.readyEvent\`, \`terrainProvider.errorEvent\`) — the callback is retained and invoked later, after the VM is gone, and is rejected the same way a timer or \`CallbackProperty\` callback is. Never call \`.addEventListener(...)\` on any of these. Instead, \`await\` the object's own async-returning factory (e.g. \`await Cesium.Cesium3DTileset.fromIonAssetId(...)\`, \`await Cesium.Model.fromGltfAsync(...)\`) — by the time it resolves, the object is already fully ready, so there is no need to also listen for its ready event.
-- In a \`Cesium3DTileStyle\` style expression (e.g. \`Cesium.Cesium3DTileStyle\`'s \`color\`/\`show\` conditions), a feature property that a tile doesn't have (e.g. \`\${feature['height']}\`) evaluates to \`undefined\`, NOT \`null\` — guarding a numeric comparison with \`!== null\` does NOT protect it (\`undefined !== null\` is \`true\`, so the comparison still runs and throws "Operator ... requires number arguments"). Guard with \`!== undefined\` instead (or check both), and always list the guard clause before the numeric comparison in the same \`&&\` condition.
+- In a \`Cesium3DTileStyle\` style expression (e.g. \`Cesium.Cesium3DTileStyle\`'s \`color\`/\`show\` conditions), a feature property that a tile doesn't have (e.g. \`\${feature['height']}\`) evaluates to \`undefined\`, NOT \`null\` — guarding a numeric comparison with \`!== null\` does NOT protect it (\`undefined !== null\` is \`true\`, so the comparison still runs and throws "Operator ... requires number arguments"). Guard with \`!== undefined\` instead (or check both), and always list the guard clause before the numeric comparison in the same \`&&\` condition. Each style property (\`color\`, \`show\`, \`pointSize\`, ...) is evaluated independently per feature — a guard placed only in \`show\`'s conditions (e.g. \`["\${height} === undefined", "false"]\`) does NOT protect \`color\`'s conditions from the same undefined property; every style property whose conditions reference a potentially-missing property needs its own \`=== undefined\` guard as its first condition (e.g. \`["\${height} === undefined", "color('#FFFFFF')"]\` ahead of any \`\${height} >= ...\` condition in that same property's list).
 - Any Scene picking method (\`scene.pick\`, \`scene.drillPick\`, \`scene.pickPosition\`, \`scene.pickVoxel\`, \`scene.pickAsync\`) can return \`undefined\` if nothing is at the given screen position — NEVER access a property or call a method on its return value without first guarding with \`Cesium.defined(result)\` (and, if you need a specific type such as a 3D Tiles feature, also an \`instanceof\` check, e.g. \`result instanceof Cesium.Cesium3DTileFeature\`), exactly as the reference material's own examples always do. This also applies to a synchronous pick performed at the top level of your snippet (not just inside an event handler) — content just added in the same snippet may not have rendered a frame yet at that screen position, so the pick can legitimately come back \`undefined\` even when the content exists.
 - \`viewer.camera.lookAt(target, offset)\` and \`viewer.camera.lookAtTransform(transform, offset)\` are NOT interchangeable — never pass one method's first argument to the other. \`lookAt\`'s first argument must be a \`Cesium.Cartesian3\` world position (e.g. \`Cesium.Cartesian3.fromDegrees(...)\`); \`lookAtTransform\`'s first argument must be a \`Cesium.Matrix4\` reference frame (e.g. the return value of \`Cesium.Transforms.eastNorthUpToFixedFrame(...)\`). Passing a \`Matrix4\` transform into \`lookAt\` (or a \`Cartesian3\` into \`lookAtTransform\`) throws a runtime error (e.g. "origin has a NaN component") because the wrong-shaped value is read as if it had \`x\`/\`y\`/\`z\` components. If you've already computed an east-north-up transform via \`Transforms.eastNorthUpToFixedFrame\`, call \`lookAtTransform\` with it directly — do not also call \`lookAt\`.
 - Never access \`Cesium.Material._materialCache\` (or any other \`_\`-prefixed internal) to register a custom material type — it is a private implementation detail and is always rejected. To define a custom material with your own Fabric/GLSL source, construct it directly instead: \`new Cesium.Material({ fabric: { type: "...", uniforms: {...}, source: "..." } })\` (or \`components: {...}\` in place of \`source\`), exactly as shown in the reference material.

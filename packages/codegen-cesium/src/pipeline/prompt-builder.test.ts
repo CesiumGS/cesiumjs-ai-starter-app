@@ -26,21 +26,20 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("camera.flyTo");
   });
 
-  it("defaults maxSkills to 1, only inlining the top-matched skill's body", () => {
+  it("only inlines the skill(s) passed in `skills` — narrowing which/how many is the caller's job", () => {
     const prompt = buildCodegenPrompt({
       intent: "fly the camera to Paris",
-      skills: [cameraSkill, entitiesSkill],
+      skills: [cameraSkill],
     });
 
     expect(prompt).toContain("Camera Fundamentals");
     expect(prompt).not.toContain("viewer.entities.add");
   });
 
-  it("inlines multiple skills when maxSkills is raised", () => {
+  it("inlines every skill passed in `skills`", () => {
     const prompt = buildCodegenPrompt({
       intent: "fly the camera to Paris and add a marker",
       skills: [cameraSkill, entitiesSkill],
-      maxSkills: 2,
     });
 
     expect(prompt).toContain("Camera Fundamentals");

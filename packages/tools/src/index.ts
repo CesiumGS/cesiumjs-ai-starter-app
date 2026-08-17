@@ -18,7 +18,8 @@ import {
   globeSetLighting,
 } from "./tools/animation.js";
 import { imageryAdd, imageryList, imageryRemove } from "./tools/imagery.js";
-import type { CesiumToolExecutorOverrides, CesiumToolExecutors } from "./types.js";
+import type { ToolsLogger } from "./logger.js";
+import type { CesiumToolExecutorOverrides, CesiumToolExecutors, ToolExecutor } from "./types.js";
 
 export type {
   ToolExecutor,
@@ -26,6 +27,13 @@ export type {
   CesiumToolExecutors,
   CesiumToolExecutorOverrides,
 } from "./types.js";
+
+export {
+  noopToolsLogger,
+  createConsoleToolsLogger,
+  type ToolsLogger,
+  type ToolsLogLevel,
+} from "./logger.js";
 
 export {
   createFlyToExecutor,
@@ -128,6 +136,32 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
   [CESIUM_TOOL_NAMES.imageryList]: imageryList,
 };
 
+/** Wraps an executor so its resolved `{ error }` (or a thrown rejection) is reported to `logger`. */
+function withLogging(toolName: string, executor: ToolExecutor, logger: ToolsLogger): ToolExecutor {
+  return async (viewer, rawArgs) => {
+    try {
+      const result = await executor(viewer, rawArgs);
+      if (result.error) {
+        logger.warn(`Tool call failed: ${toolName}`, { error: result.error });
+      } else {
+        // include the result payload (e.g. animationId, entities) so success logs are distinguishable per call
+        const { success: _success, error: _error, ...data } = result;
+        if (Object.keys(data).length > 0) {
+          logger.debug(`Tool call succeeded: ${toolName}`, data);
+        } else {
+          logger.debug(`Tool call succeeded: ${toolName}`);
+        }
+      }
+      return result;
+    } catch (err) {
+      logger.error(`Tool call threw: ${toolName}`, {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw err;
+    }
+  };
+}
+
 /**
  * Builds a `CesiumToolExecutors` registry, applying per-tool overrides over
  * the defaults. Pass a replacement executor for any tool name to change or
@@ -135,9 +169,25 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
  * (this repo's own sample app does exactly this for `flyTo`, adding
  * `duration`/`easingFunction` — see the package README) — without forking the
  * rest of the registry.
+ *
+ * Pass `logger` (e.g. {@link createConsoleToolsLogger} or your own OTEL-wired
+ * {@link ToolsLogger}) to have every executor's outcome — success, a resolved
+ * `{ error }`, or a thrown rejection — reported through it. Omitted by
+ * default, in which case executors are returned unwrapped (this package has
+ * zero logging of its own unless you opt in) — a `noopToolsLogger` is also
+ * available if you want the wrapping without the console/OTEL output.
  */
 export function createCesiumToolExecutors(
   overrides: CesiumToolExecutorOverrides = {},
+  logger?: ToolsLogger,
 ): CesiumToolExecutors {
-  return { ...DEFAULT_CESIUM_TOOL_EXECUTORS, ...overrides };
+  const merged = { ...DEFAULT_CESIUM_TOOL_EXECUTORS, ...overrides };
+  if (!logger) return merged;
+
+  return Object.fromEntries(
+    Object.entries(merged).map(([toolName, executor]) => [
+      toolName,
+      withLogging(toolName, executor as ToolExecutor, logger),
+    ]),
+  ) as CesiumToolExecutors;
 }

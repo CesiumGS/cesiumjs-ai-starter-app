@@ -1,7 +1,7 @@
 export { AiChatPanel } from "./components/AiChatPanel";
 export type { AiChatPanelProps } from "./components/AiChatPanel";
 export { ChatClient } from "./chat-client";
-export type { Message, ToolExecutionOutcome, ToolInvocation } from "./chat-client";
+export type { ChatLogger, Message, ToolExecutionOutcome, ToolInvocation } from "./chat-client";
 export { RegisteredTools } from "./components/RegisteredTools";
 export type { RegisteredToolsProps } from "./components/RegisteredTools";
 export { fetchRegisteredTools } from "./mcp/registered-tools";

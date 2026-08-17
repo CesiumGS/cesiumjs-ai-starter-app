@@ -1,8 +1,9 @@
 # Architecture
 
 This document explains how the CesiumJS AI starter app is put together: its high-level
-component architecture, the request/response sequence for a tool-calling chat turn, and
-how it's deployed (Docker Compose topology).
+component architecture, the request/response sequence for a tool-calling chat turn.
+
+![CesiumJS AI Starter App architecture](../assets/architecture-diagram.svg)
 
 ## 1. Component overview
 

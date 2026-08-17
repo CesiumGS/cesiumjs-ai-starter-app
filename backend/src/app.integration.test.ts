@@ -108,6 +108,7 @@ describe("backend app — /health", () => {
       status: "ok",
       provider: "anthropic",
       providerConfigured: true,
+      telemetry: { endpointConfigured: false },
     });
   });
 
@@ -511,7 +512,7 @@ describe("backend app — /api/mcp-app routes", () => {
   });
 
   it("warns when a resource changes between reads", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.fn();
     const readResource = vi
       .fn()
       .mockResolvedValueOnce({ contents: [{ uri: "ui://ion/importer", text: "first" }] })
@@ -519,12 +520,22 @@ describe("backend app — /api/mcp-app routes", () => {
     const mcp = fakeMcpToolsHandle({
       getClient: () => ({ readResource }) as never,
     });
-    const { url } = await start(createBackendApp({ env: fakeEnv(), model: flyToModel(), mcp }));
+    const { url } = await start(
+      createBackendApp({
+        env: fakeEnv(),
+        model: flyToModel(),
+        mcp,
+        createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() }),
+      }),
+    );
 
     await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
     await fetch(`${url}/api/mcp-app/resource?server=ion&uri=ui://ion/importer`);
 
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("changed since it was first loaded"));
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("changed since it was first loaded"),
+      expect.anything(),
+    );
   });
 
   it("rejects a non-ui:// resource uri", async () => {

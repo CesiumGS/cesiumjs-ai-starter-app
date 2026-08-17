@@ -977,6 +977,7 @@ function fakeViewer() {
       zoomOut: vi.fn(),
       lookAt: vi.fn(),
       positionCartographic: { latitude: 0.8527, longitude: 0.041, height: 1000 },
+      positionWC: new Cartesian3(1, 2, 3),
     },
     entities: {
       get values() {
@@ -2022,6 +2023,24 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     expect(result.height).toBe(1000);
   });
 
+  // Regression test: `viewer.camera.positionWC` is a host-originated `Cartesian3` (a real
+  // CesiumJS instance), not one the guest itself constructed via `Cesium.Cartesian3.fromDegrees`
+  // — before this fix, `__reviveRemoteValue__` returned it as a plain tagged data object with no
+  // prototype methods, so `.clone()` failed with "TypeError: not a function".
+  test("calls .clone() on a host-originated Cartesian3 (viewer.camera.positionWC)", async () => {
+    const viewer = fakeViewer();
+
+    const outcome = await runCesiumCodeInSandbox({
+      viewer: viewer as never,
+      code: `
+        const center = viewer.camera.positionWC.clone();
+        return { x: center.x, y: center.y, z: center.z };
+      `,
+    });
+
+    expect(outcome).toEqual({ success: true, result: { x: 1, y: 2, z: 3 } });
+  });
+
   test("rejects a lifecycle call even when the real Viewer exposes it", async () => {
     const viewer = fakeViewer();
 
@@ -2839,8 +2858,8 @@ viewer.scene.camera.flyAround(target, 0.8);`,
 
       expect(outcome).toEqual({ success: true, result: "done" });
       expect(logger.error).not.toHaveBeenCalled();
-      expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^Starting sandbox run/));
-      expect(logger.debug).toHaveBeenCalledWith("Sandbox run completed successfully");
+      expect(logger.info).toHaveBeenCalledWith(expect.stringMatching(/^Starting sandbox run/));
+      expect(logger.info).toHaveBeenCalledWith("Sandbox run completed successfully");
       // At least one `get`/`apply`/`construct`/`set` host-bridge call must have been logged too.
       expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^get "/));
       expect(logger.debug).toHaveBeenCalledWith(expect.stringMatching(/^apply on handle/));
