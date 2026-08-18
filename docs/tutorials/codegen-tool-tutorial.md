@@ -1,6 +1,6 @@
 # Tutorial: Using the Codegen Tool
 
-<img src="../../assets/ty-book.png" alt="Ty mascot with book" class="doc-illustration" />
+<img src="https://raw.githubusercontent.com/CesiumGS/cesiumjs-ai-starter-app/main/docs/assets/ty-book.png" alt="Ty mascot with book" align="right" width="200" class="doc-illustration" />
 
 This tutorial covers the `executeCesiumCode` tool provided by the [`@cesium-ai/codegen-cesium`](../packages/codegen-cesium/index.md) package. The tool lets users describe what they want to see on the globe in plain English. The backend translates that description into verified CesiumJS JavaScript, which the browser then executes against the live `Viewer`. This tutorial explains how to use the tool, what you can configure, and how to tune its behaviour.
 

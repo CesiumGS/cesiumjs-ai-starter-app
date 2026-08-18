@@ -1,6 +1,6 @@
 # Getting Started
 
-<img src="../assets/ty-book.png" alt="Developer working with CesiumJS" class="doc-illustration" />
+<img src="https://raw.githubusercontent.com/CesiumGS/cesiumjs-ai-starter-app/main/docs/assets/ty-book.png" alt="Developer working with CesiumJS" align="right" width="200" class="doc-illustration" />
 
 This guide gets you from a fresh clone to a running CesiumJS globe with an AI chat panel
 that can fly the camera around on request.
@@ -12,7 +12,7 @@ Pick **one** of the two run modes below; each has its own prerequisites.
 | Run mode                   | Requires                                                                                   |
 | -------------------------- | ------------------------------------------------------------------------------------------ |
 | **Docker (recommended)**   | [Docker Desktop](https://docs.docker.com/get-docker/) (includes Compose v2) — nothing else |
-| **Local dev (hot reload)** | Node.js ≥ 20, npm ≥ 9                                                                      |
+| **Local dev (hot reload)** | Node.js ≥ 22, npm ≥ 9                                                                      |
 
 You'll also want, before you start:
 
