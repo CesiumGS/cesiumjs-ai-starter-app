@@ -64,6 +64,7 @@ export {
 } from "./tools/flyTo/flyTo.js";
 export { CESIUM_TOOL_NAMES, type CesiumToolName } from "./tool-names.js";
 export { flyToInputShape, type FlyToInput } from "./schemas.js";
+export { CESIUM_TOOL_DEFINITIONS, type CesiumToolDefinition } from "./tool-definitions.js";
 export {
   createCameraSetView,
   cameraSetView,

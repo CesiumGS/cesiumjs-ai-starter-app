@@ -5,7 +5,8 @@
 #
 # CesiumJS assets and the workspace packages this app consumes
 # (@cesium-ai/chat-element, @cesium-ai/tools-schemas, @cesium-ai/tools,
-# @cesium-ai/codegen-cesium, @cesium-ai/codegen-sandbox, @cesium-ai/sample-config)
+# @cesium-ai/webmcp-cesium, @cesium-ai/codegen-cesium, @cesium-ai/codegen-sandbox,
+# @cesium-ai/sample-config)
 # are resolved via npm workspaces from the repo
 # root, so the frontend image can't be built from the frontend/ folder alone.
 # Only manifests for workspaces the frontend actually depends on are copied —
@@ -26,6 +27,7 @@ COPY frontend/package.json frontend/package.json
 COPY shared/package.json shared/package.json
 COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY packages/tools/package.json packages/tools/package.json
+COPY packages/webmcp-cesium/package.json packages/webmcp-cesium/package.json
 COPY packages/chat-element/package.json packages/chat-element/package.json
 COPY packages/codegen-cesium/package.json packages/codegen-cesium/package.json
 COPY packages/codegen-sandbox/package.json packages/codegen-sandbox/package.json
@@ -34,6 +36,7 @@ RUN npm ci
 COPY shared shared
 COPY packages/tools-schemas packages/tools-schemas
 COPY packages/tools packages/tools
+COPY packages/webmcp-cesium packages/webmcp-cesium
 COPY packages/chat-element packages/chat-element
 COPY packages/codegen-cesium packages/codegen-cesium
 COPY packages/codegen-sandbox packages/codegen-sandbox
@@ -64,7 +67,7 @@ ENV VITE_OTEL_LOG_LEVEL=$VITE_OTEL_LOG_LEVEL
 
 # Not `npm run build:packages` — that script also builds @cesium-ai/server,
 # which isn't checked out here (backend-only dependency).
-RUN npm run build -w @cesium-ai/tools-schemas && npm run build -w @cesium-ai/tools && npm run build -w @cesium-ai/codegen-cesium && npm run build -w @cesium-ai/codegen-sandbox && npm run build -w @cesium-ai/sample-config && npm run build -w frontend
+RUN npm run build -w @cesium-ai/tools-schemas && npm run build -w @cesium-ai/tools && npm run build -w @cesium-ai/webmcp-cesium && npm run build -w @cesium-ai/codegen-cesium && npm run build -w @cesium-ai/codegen-sandbox && npm run build -w @cesium-ai/sample-config && npm run build -w frontend
 
 # ---- Stage 2: serve ----------------------------------------------------------
 FROM nginx:1.27-alpine AS runner

@@ -10,6 +10,7 @@ cesiumjs-ai-starter-app/
 ├── packages/
 │   ├── tools-schemas/    @cesium-ai/tools-schemas     — CesiumJS viewer tool schemas (server + client)
 │   ├── tools/            @cesium-ai/tools              — default client-side viewer tool executors (frontend only)
+│   ├── webmcp-cesium/    @cesium-ai/webmcp-cesium     — registers viewer tools on document.modelContext (WebMCP, frontend only)
 │   ├── codegen-cesium/   @cesium-ai/codegen-cesium    — intent-to-code generation pipeline (server only)
 │   ├── codegen-sandbox/  @cesium-ai/codegen-sandbox   — QuickJS-wasm execution sandbox (frontend only)
 │   ├── mcp-tools/        @cesium-ai/mcp-tools          — optional MCP client tool bridge (server only)
@@ -30,6 +31,7 @@ packages into a working product.
 flowchart TD
     tools_schemas["@cesium-ai/tools-schemas"]
     tools["@cesium-ai/tools"]
+    webmcp["@cesium-ai/webmcp-cesium"]
     codegen["@cesium-ai/codegen-cesium"]
     sandbox["@cesium-ai/codegen-sandbox"]
     mcp["@cesium-ai/mcp-tools"]
@@ -46,10 +48,13 @@ flowchart TD
     backend --> shared
     frontend --> tools_schemas
     frontend --> tools
+    frontend --> webmcp
     frontend --> chatel
     frontend --> shared
     frontend --> sandbox
     tools --> tools_schemas
+    webmcp --> tools_schemas
+    webmcp --> tools
     shared --> tools_schemas
     server --> tools_schemas
 ```
@@ -57,7 +62,10 @@ flowchart TD
 `tools-schemas` is the shared foundation everything builds on; `tools` is its default,
 ready-to-use client-side executor implementation (frontend-only, depends only on `tools-schemas`
 
-- `cesium`); `codegen-cesium` (intent-to-code generation + static verification) and `mcp-tools`
+- `cesium`); `webmcp-cesium` (frontend-only) registers that same catalogue on
+  `document.modelContext` for the browser-native WebMCP standard, depending on both
+  `tools-schemas` (descriptions/schemas) and `tools` (executors); `codegen-cesium`
+  (intent-to-code generation + static verification) and `mcp-tools`
   (optional MCP client bridge) are server-only dependencies (never bundled into the client);
   `codegen-sandbox` (execution of already-verified code against a live `Viewer`) is frontend-only
   (depends on `cesium` + `quickjs-emscripten`) and never imported server-side; `backend` and
@@ -67,18 +75,19 @@ ready-to-use client-side executor implementation (frontend-only, depends only on
 
 Because of the graph above, packages must be built before the apps that depend on them:
 
-| Command                  | What it does                                                                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run build:packages` | Builds `tools-schemas` → `tools` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `sample-config` → `server` in dependency order |
-| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                                 |
-| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                            |
-| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                                       |
-| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                         |
+| Command                  | What it does                                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build:packages` | Builds `tools-schemas` → `tools` → `webmcp-cesium` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `sample-config` → `server` in dependency order |
+| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                                                   |
+| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                                              |
+| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                                                         |
+| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                                           |
 
 ## Packages
 
 - [tools-schemas](tools-schemas/index.md) — CesiumJS viewer tool library
 - [tools](tools/index.md) — default client-side viewer tool executors
+- [webmcp-cesium](webmcp-cesium/index.md) — registers viewer tools on `document.modelContext` (WebMCP)
 - [codegen-cesium](codegen-cesium/index.md) — intent-to-code generation pipeline
 - [codegen-sandbox](codegen-sandbox/index.md) — QuickJS-wasm execution sandbox for generated code
 - [mcp-tools](mcp-tools/index.md) — optional Model Context Protocol client tool bridge

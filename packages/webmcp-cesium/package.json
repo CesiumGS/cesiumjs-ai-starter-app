@@ -1,0 +1,37 @@
+{
+  "name": "@cesium-ai/webmcp-cesium",
+  "version": "0.0.1",
+  "description": "Registers @cesium-ai/tools-schemas' CesiumJS viewer tools on document.modelContext (the browser-native WebMCP Imperative API), backed by @cesium-ai/tools' executors running against a live Viewer. Browser-only.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@cesium-ai/tools": "*",
+    "@cesium-ai/tools-schemas": "*",
+    "cesium": "^1.127.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

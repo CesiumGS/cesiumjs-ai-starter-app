@@ -3,9 +3,12 @@ import type { Viewer } from "cesium";
 import { Root } from "@stratakit/mui";
 import CesiumGlobe from "./components/CesiumGlobe";
 import ChatPanel from "./components/ChatPanel";
+// WebMCP: registers this app's viewer tools on document.modelContext (see ./tools/webmcp-tools.ts)
+import { useAppWebMcp } from "./tools/use-app-webmcp";
 
 export default function App() {
   const viewerRef = useRef<Viewer | null>(null);
+  const webMcp = useAppWebMcp(); // WebMCP
 
   return (
     <Root
@@ -17,9 +20,11 @@ export default function App() {
       <CesiumGlobe
         onViewerReady={(viewer) => {
           viewerRef.current = viewer;
+          webMcp.onViewerReady(viewer); // WebMCP
         }}
         onViewerDestroy={() => {
           viewerRef.current = null;
+          webMcp.onViewerDestroy(); // WebMCP
         }}
       />
 

@@ -77,6 +77,7 @@ nav:
           - Overview: tutorials/codegen-tool-tutorial.md
           - How Codegen Works: tutorials/codegen-pipeline.md
       - Adding an MCP Server: tutorials/mcp-server-tutorial.md
+      - Registering WebMCP Tools: tutorials/webmcp-cesium-tutorial.md
   - Packages:
       - Overview: packages/index.md
       - cesium-ai/codegen-cesium: packages/codegen-cesium/index.md
@@ -86,6 +87,7 @@ nav:
           - Overview: packages/tools-schemas/index.md
           - Tool Catalogue: packages/tools-schemas/tools.md
       - cesium-ai/tools: packages/tools/index.md
+      - cesium-ai/webmcp-cesium: packages/webmcp-cesium/index.md
       - cesium-ai/server: packages/server/index.md
       - cesium-ai/chat-element: packages/chat-element/index.md
       - cesium-ai/sample-config: packages/sample-config/index.md

@@ -15,6 +15,7 @@
     "@cesium-ai/codegen-sandbox": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/tools": "*",
+    "@cesium-ai/webmcp-cesium": "*",
     "@cesium-ai/tools-schemas": "*",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
