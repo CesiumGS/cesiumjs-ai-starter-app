@@ -49,6 +49,17 @@ describe("buildCesiumWebMcpTools", () => {
     expect(flyTo.inputSchema).not.toHaveProperty("$schema");
   });
 
+  // cameraOrbit/entityAdd are root-level z.discriminatedUnion(...) schemas, which z.toJSONSchema()
+  // serializes as a bare `{ oneOf: [...] }` with no root `type: "object"` — regression coverage for
+  // that class of bug (see @cesium-ai/tools-schemas' toolInputJsonSchema).
+  test("root discriminated-union tools (cameraOrbit, entityAdd) still get a root type: object", () => {
+    const [cameraOrbit, entityAdd] = buildCesiumWebMcpTools({} as Viewer, {
+      enabled: [CESIUM_TOOL_NAMES.cameraOrbit, CESIUM_TOOL_NAMES.entityAdd],
+    });
+    expect(cameraOrbit.inputSchema).toMatchObject({ type: "object" });
+    expect(entityAdd.inputSchema).toMatchObject({ type: "object" });
+  });
+
   test("enabled allowlists which tools are built", () => {
     const tools = buildCesiumWebMcpTools({} as Viewer, { enabled: [CESIUM_TOOL_NAMES.flyTo] });
     expect(tools.map((tool) => tool.name)).toEqual([CESIUM_TOOL_NAMES.flyTo]);
