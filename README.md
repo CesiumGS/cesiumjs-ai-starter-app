@@ -66,16 +66,17 @@ If no provider key is configured, the globe still runs as a plain viewer, with a
 
 Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) to the browser and executed against the live `Viewer`. The LLM API key never reaches the browser — all inference happens behind the Node.js API. See [Architecture](docs/architectures/architecture.md) for the full component diagram, request sequence, and deployment topology. The workspace packages provide the reusable pieces:
 
-| Package                                                   | Role                                                                                                                                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`@cesium-ai/server`](packages/server/)                   | [Express](https://expressjs.com) router — mounts `POST /api/chat`, runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop |
-| [`@cesium-ai/tools-schemas`](packages/tools-schemas/)     | [Zod](https://zod.dev)-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute`                                                 |
-| [`@cesium-ai/tools`](packages/tools/)                     | Default client-side executors for every tool in `tools-schemas` — a host app can override or extend any single tool without forking the rest                        |
-| [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/)   | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                    |
-| [`@cesium-ai/codegen-sandbox`](packages/codegen-sandbox/) | [QuickJS](https://bellard.org/quickjs/) + WASM runtime isolation for executing verified CesiumJS snippets in the browser                                            |
-| [`@cesium-ai/mcp-tools`](packages/mcp-tools/)             | Optional [Model Context Protocol](https://modelcontextprotocol.io) client bridge — opt-in via `mcp.config.json`, exposes allowlisted MCP tools to the agent         |
-| [`@cesium-ai/chat-element`](packages/chat-element/)       | Reusable React chat panel component that renders streamed assistant/tool activity and the tool-approval UX                                                          |
-| [`@cesium-ai/sample-config`](shared/)                     | App-level tool allowlist and shared `flyTo` args contract                                                                                                           |
+| Package                                                   | Role                                                                                                                                                                                                                                |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`@cesium-ai/server`](packages/server/)                   | [Express](https://expressjs.com) router — mounts `POST /api/chat`, runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop                                                                 |
+| [`@cesium-ai/tools-schemas`](packages/tools-schemas/)     | [Zod](https://zod.dev)-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute`                                                                                                                 |
+| [`@cesium-ai/tools`](packages/tools/)                     | Default client-side executors for every tool in `tools-schemas` — a host app can override or extend any single tool without forking the rest                                                                                       |
+| [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/)   | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                                                                                    |
+| [`@cesium-ai/codegen-sandbox`](packages/codegen-sandbox/) | [QuickJS](https://bellard.org/quickjs/) + WASM runtime isolation for executing verified CesiumJS snippets in the browser                                                                                                            |
+| [`@cesium-ai/mcp-tools`](packages/mcp-tools/)             | Optional [Model Context Protocol](https://modelcontextprotocol.io) client bridge — opt-in via `mcp.config.json`, exposes allowlisted MCP tools to the agent                                                                         |
+| [`@cesium-ai/webmcp-cesium`](packages/webmcp-cesium/)     | Registers viewer tools on `document.modelContext`, the browser-native [WebMCP](https://developer.chrome.com/docs/ai/webmcp) standard — a different, in-browser counterpart to `@cesium-ai/mcp-tools`' server-side MCP client bridge |
+| [`@cesium-ai/chat-element`](packages/chat-element/)       | Reusable React chat panel component that renders streamed assistant/tool activity and the tool-approval UX                                                                                                                          |
+| [`@cesium-ai/sample-config`](shared/)                     | App-level tool allowlist and shared `flyTo` args contract                                                                                                                                                                           |
 
 Because `executeCesiumCode` is a "Code Mode" tool — the model's output is arbitrary generated code, not bounded typed args like `flyTo`'s lat/lon/altitude — it needs a materially different security posture. Server-side AST verification ([`packages/codegen-cesium`](packages/codegen-cesium/README.md)) is defense-in-depth only, not a substitute for runtime isolation; the frontend independently executes verified snippets in a fresh QuickJS-WASM sandbox with memory/deadline limits and a guarded bridge to the live `Viewer` ([`packages/codegen-sandbox`](packages/codegen-sandbox/README.md)).
 
@@ -117,6 +118,10 @@ There's no manual "does this need OAuth" flag to set. `backend/src/index.ts` att
 The full resolved tool registry for a given request — including any connected MCP tools, which aren't knowable statically at build time — can be inspected via `GET /api/tools` (rate-limited the same as `/api/chat`); the frontend's `ChatPanel` shows this list in a small "Tools (N)" disclosure so it's visible which tools (built-in and MCP) are actually available in a running instance.
 
 If a connected server's tool declares an ["MCP Apps"](https://modelcontextprotocol.io) `ui://` widget resource (e.g. an interactive asset-import launcher), `GET /api/tools` reports it via that tool's `mcpApp` field and the chat panel renders it inline in a sandboxed iframe (`packages/chat-element/src/McpAppWidget.tsx`) — including a bridge that lets the widget call tools back on its own server, gated behind an explicit inline Approve/Reject prompt. See the mcp-tools README's [MCP Apps widgets](packages/mcp-tools/README.md#mcp-apps-widgets) section for the full architecture.
+
+### Registering WebMCP tools
+
+Separately from the MCP client bridge above, this app also registers its viewer tools on `document.modelContext` — the browser-native [WebMCP](https://developer.chrome.com/docs/ai/webmcp) standard — via [`@cesium-ai/webmcp-cesium`](packages/webmcp-cesium/README.md) (wired in `frontend/src/tools/webmcp-tools.ts` / `frontend/src/App.tsx`). This lets an agent already running **inside the browser tab** call these tools directly against the live `Viewer`; it does **not** make them callable from VS Code Copilot's or Claude Desktop's MCP configuration, which speak MCP over stdio/HTTP/SSE to a separate server process instead. See the [Registering WebMCP Tools tutorial](https://cesiumgs.github.io/cesiumjs-ai-starter-app/tutorials/webmcp-cesium-tutorial/) for how to enable and test it in Chrome.
 
 ---
 
@@ -173,6 +178,7 @@ cesiumjs-ai-starter-app/
 │   ├── codegen-cesium/    # @cesium-ai/codegen-cesium — codegen pipeline + executeCesiumCode tool
 │   ├── codegen-sandbox/   # @cesium-ai/codegen-sandbox — frontend sandbox for generated code
 │   ├── mcp-tools/         # @cesium-ai/mcp-tools — optional MCP client bridge
+│   ├── webmcp-cesium/     # @cesium-ai/webmcp-cesium — registers viewer tools on document.modelContext
 │   └── chat-element/      # @cesium-ai/chat-element — reusable chat panel component
 ├── shared/                # @cesium-ai/sample-config — enabled tools + flyTo args contract
 ├── compose.yaml           # Docker Compose — frontend + backend on internal network
