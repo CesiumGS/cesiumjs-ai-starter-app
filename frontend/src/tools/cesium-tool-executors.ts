@@ -1,6 +1,7 @@
 import type { Viewer } from "cesium";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml/names";
 import { createCesiumToolExecutors, type ToolsLogger } from "@cesium-ai/tools";
 import { createFrontendLogger } from "../utils/telemetry";
 import { flyToLocation } from "./camera";
@@ -36,6 +37,12 @@ export const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
     Promise.resolve({
       success: false,
       error: "executeCesiumCode is resolved server-side; no client-side executor runs for it.",
+    }),
+  // generateCzml is server-resolved (intent -> verified CZML); stub serves as defense-in-depth.
+  [CODEGEN_CZML_TOOL_NAMES.generateCzml]: () =>
+    Promise.resolve({
+      success: false,
+      error: "generateCzml is resolved server-side; no client-side executor runs for it.",
     }),
 } as Record<EnabledCesiumTool, ToolExecutor>;
 

@@ -8,6 +8,7 @@ import {
   handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
+import { handleGenerateCzmlResult, isGenerateCzmlTool } from "../tools/generate-czml";
 import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import { createFrontendLogger, frontendLogger } from "../utils/telemetry";
@@ -72,6 +73,12 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
    * this follow-up. `continueConversation` must therefore always be `true`
    * here, whether the outcome is success, a runtime execution failure, or a
    * verification failure the tool itself already reported as `{ error }`.
+   *
+   * `generateCzml` follows the same "stop the agent loop, report the real
+   * outcome in a follow-up" shape (see `backend/src/app.ts`'s
+   * `stopAfterTools`), though it needs no user approval: loading an
+   * already-verified CZML document is declarative data, not arbitrary code
+   * execution.
    */
   const handleServerToolResult = useCallback(
     async (toolCall: {
@@ -79,23 +86,37 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       toolName: string;
       output: unknown;
     }): Promise<ToolExecutionOutcome | undefined> => {
-      if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
+      if (isExecuteCesiumCodeTool(toolCall.toolName)) {
+        const errorMessage = await handleExecuteCesiumCodeResult(
+          viewerRef.current,
+          toolCall.output,
+          () => sandboxRateLimiterRef.current?.checkAndRecord(),
+        );
 
-      const errorMessage = await handleExecuteCesiumCodeResult(
-        viewerRef.current,
-        toolCall.output,
-        () => sandboxRateLimiterRef.current?.checkAndRecord(),
-      );
+        return {
+          result: errorMessage
+            ? { ...(toolCall.output as object), executionError: errorMessage }
+            : toolCall.output,
+          continueConversation: true,
+        };
+      }
 
-      return {
-        result: errorMessage
-          ? { ...(toolCall.output as object), executionError: errorMessage }
-          : toolCall.output,
-        continueConversation: true,
-      };
+      if (isGenerateCzmlTool(toolCall.toolName)) {
+        const outcome = await handleGenerateCzmlResult(viewerRef.current, toolCall.output);
+
+        return {
+          result: outcome.success
+            ? { ...(toolCall.output as object), entityCount: outcome.entityCount }
+            : { ...(toolCall.output as object), error: outcome.error },
+          continueConversation: true,
+        };
+      }
+
+      return undefined;
     },
     [viewerRef],
   );
+
 
   return (
     <AiChatPanel
