@@ -17,8 +17,48 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "../src/utils/env.js";
 import { createModel, createProviderConfig, isProviderConfigured } from "../src/utils/providers.js";
-import { generateVerifiedCzml } from "@cesium-ai/codegen-czml";
+import {
+  generateVerifiedCzml,
+  type CodegenLogger,
+  type CodegenMetrics,
+} from "@cesium-ai/codegen-czml";
 import { CZML_EVAL_CASES, exampleUrl, type CzmlEvalCase } from "./czml-eval-cases.js";
+
+/** Per-case generation stats useful for comparing skill-grounding strategies (BM25 vs. dynamic `loadSkill` tool loading), not just pass/fail. */
+interface GenerationStats {
+  /** Sum of `totalTokens` across every model call the attempt loop made for this case. */
+  totalTokens: number;
+  /** The 1-based attempt number that produced the returned result (or the last attempted, on failure). */
+  attempts: number;
+  /** Skill names loaded via the `loadSkill` tool, in call order, across all attempts (empty for the BM25 approach, which never calls a tool). */
+  skillsLoaded: string[];
+}
+
+/** Builds a fresh `{ metrics, logger, stats }` trio that captures {@link GenerationStats} for one `generateVerifiedCzml` call via its existing metrics/logger seams — no pipeline changes needed. */
+function createStatsCollector(): { metrics: CodegenMetrics; logger: CodegenLogger; stats: GenerationStats } {
+  const stats: GenerationStats = { totalTokens: 0, attempts: 0, skillsLoaded: [] };
+  const metrics: CodegenMetrics = {
+    recordTokenUsage: (usage) => {
+      stats.totalTokens += usage.totalTokens ?? 0;
+    },
+    recordSkillMatchScore: () => {},
+    recordGenerationDuration: (_durationMs, attributes) => {
+      const attempt = Number(attributes?.attempt ?? 0);
+      if (attempt > stats.attempts) stats.attempts = attempt;
+    },
+  };
+  const logger: CodegenLogger = {
+    debug: (message, meta) => {
+      if (message === "Model loaded a CZML skill via loadSkill tool" && typeof meta?.skill === "string") {
+        stats.skillsLoaded.push(meta.skill);
+      }
+    },
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  };
+  return { metrics, logger, stats };
+}
 
 interface CliOptions {
   filter?: string;
@@ -55,23 +95,29 @@ function anyPacketHasPath(czml: Record<string, unknown>[], path: string): boolea
 }
 
 type CaseOutcome =
-  | { name: string; status: "verified_and_matched"; entityCount: number; durationMs: number }
-  | {
+  | (GenerationStats & {
+      name: string;
+      status: "verified_and_matched";
+      entityCount: number;
+      durationMs: number;
+    })
+  | (GenerationStats & {
       name: string;
       status: "verified_but_missing_expected_properties";
       entityCount: number;
       missingProperties: string[];
       durationMs: number;
-    }
-  | { name: string; status: "rejected"; violations: string[]; durationMs: number }
-  | { name: string; status: "generation_error"; error: string; durationMs: number };
+    })
+  | (GenerationStats & { name: string; status: "rejected"; violations: string[]; durationMs: number })
+  | (GenerationStats & { name: string; status: "generation_error"; error: string; durationMs: number });
 
 async function runCase(
   evalCase: CzmlEvalCase,
   model: Awaited<ReturnType<typeof createModel>>,
 ): Promise<CaseOutcome> {
   const start = Date.now();
-  const result = await generateVerifiedCzml({ intent: evalCase.intent, model });
+  const { metrics, logger, stats } = createStatsCollector();
+  const result = await generateVerifiedCzml({ intent: evalCase.intent, model, metrics, logger });
   const durationMs = Date.now() - start;
 
   if (!result.verified) {
@@ -80,6 +126,7 @@ async function runCase(
       status: "rejected",
       violations: result.violations ?? [result.error],
       durationMs,
+      ...stats,
     };
   }
 
@@ -93,6 +140,7 @@ async function runCase(
       entityCount: result.entityCount,
       missingProperties,
       durationMs,
+      ...stats,
     };
   }
 
@@ -101,6 +149,7 @@ async function runCase(
     status: "verified_and_matched",
     entityCount: result.entityCount,
     durationMs,
+    ...stats,
   };
 }
 
@@ -166,7 +215,9 @@ async function main(): Promise<void> {
     cases.map((evalCase) => async () => {
       const outcome = await runCase(evalCase, model);
       console.log(
-        `${statusIcon(outcome.status)} ${outcome.name} (${outcome.durationMs}ms) — ${outcome.status}`,
+        `${statusIcon(outcome.status)} ${outcome.name} (${outcome.durationMs}ms, ` +
+          `${outcome.attempts} attempt(s), ${outcome.totalTokens} tokens` +
+          `${outcome.skillsLoaded.length > 0 ? `, loaded: ${outcome.skillsLoaded.join(", ")}` : ""}) — ${outcome.status}`,
       );
       if (outcome.status === "rejected") {
         outcome.violations.forEach((v) => console.log(`    - ${v}`));
@@ -189,9 +240,14 @@ async function main(): Promise<void> {
   const rejected = outcomes.filter((o) => o.status === "rejected").length;
   const errored = outcomes.filter((o) => o.status === "generation_error").length;
 
+  const totalTokens = outcomes.reduce((sum, o) => sum + o.totalTokens, 0);
+  const avgAttempts = outcomes.reduce((sum, o) => sum + o.attempts, 0) / outcomes.length;
+  const avgDurationMs = outcomes.reduce((sum, o) => sum + o.durationMs, 0) / outcomes.length;
+
   console.log(
     `\nSummary: ${passed}/${outcomes.length} fully passed, ${partial} verified-but-partial, ` +
-      `${rejected} rejected by the verifier, ${errored} generation error(s).`,
+      `${rejected} rejected by the verifier, ${errored} generation error(s).\n` +
+      `Total tokens: ${totalTokens}, avg attempts/case: ${avgAttempts.toFixed(2)}, avg duration/case: ${avgDurationMs.toFixed(0)}ms.`,
   );
 
   const report = {
