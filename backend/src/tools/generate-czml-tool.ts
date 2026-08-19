@@ -13,8 +13,7 @@ import { tool, type LanguageModel, type Tool } from "ai";
  * verified CZML document plus its summary. On failure, returns an error object.
  */
 export type GenerateCzmlResult =
-  | { czml: Record<string, unknown>[]; description: string }
-  | { error: string };
+  { czml: Record<string, unknown>[]; description: string } | { error: string };
 
 export interface CreateGenerateCzmlToolOptions {
   /** The resolved language model to generate CZML with. */

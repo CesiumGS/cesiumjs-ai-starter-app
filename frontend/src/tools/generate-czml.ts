@@ -9,8 +9,7 @@ export {
 
 /** The real, client-confirmed outcome of loading an already-verified CZML document. */
 export type GenerateCzmlLoadOutcome =
-  | { success: true; entityCount: number }
-  | { success: false; error: string };
+  { success: true; entityCount: number } | { success: false; error: string };
 
 /**
  * Loads an already-verified CZML document into the live `Viewer` via `CzmlDataSource`. The

@@ -19,6 +19,16 @@ export interface CodegenMetrics {
     usage: CodegenTokenUsage,
     attributes?: Record<string, string | number | boolean>,
   ): void;
+  /**
+   * Records the BM25 score of one feature-domain skill scored against the user's intent. Called
+   * once per scored skill (not just the ones that passed the match threshold), with `rank`
+   * (0 = top score) and `passedThreshold` attributes so a consumer can reconstruct the full score
+   * distribution and how many skills passed the configured threshold for a given prompt.
+   */
+  recordSkillMatchScore(
+    score: number,
+    attributes?: Record<string, string | number | boolean>,
+  ): void;
   /** Records how long a generation attempt (model call + CZML verification) took, in ms. */
   recordGenerationDuration(
     durationMs: number,
@@ -29,5 +39,6 @@ export interface CodegenMetrics {
 /** A {@link CodegenMetrics} whose methods are all no-ops. Used whenever metrics aren't configured. */
 export const noopCodegenMetrics: CodegenMetrics = {
   recordTokenUsage: () => {},
+  recordSkillMatchScore: () => {},
   recordGenerationDuration: () => {},
 };

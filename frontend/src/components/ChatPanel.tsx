@@ -117,7 +117,6 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
     [viewerRef],
   );
 
-
   return (
     <AiChatPanel
       apiBase={config.apiBase}

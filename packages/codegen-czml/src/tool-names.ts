@@ -18,4 +18,5 @@ export const CODEGEN_CZML_TOOL_NAMES = {
 } as const;
 
 /** Union of every codegen-czml tool name. */
-export type CodegenCzmlToolName = (typeof CODEGEN_CZML_TOOL_NAMES)[keyof typeof CODEGEN_CZML_TOOL_NAMES];
+export type CodegenCzmlToolName =
+  (typeof CODEGEN_CZML_TOOL_NAMES)[keyof typeof CODEGEN_CZML_TOOL_NAMES];

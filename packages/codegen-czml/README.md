@@ -28,13 +28,28 @@ graph TD
 
 Unlike `@cesium-ai/codegen-cesium`'s `executeCesiumCode` (arbitrary JavaScript, needing AST verification and a runtime sandbox), CZML is declarative data Cesium already knows how to parse safely — so GATE 1 doubles as both the structural check and the real semantic parse (via `CzmlDataSource`, headless, no `Viewer` needed), and GATE 2 is just loading the already-verified document into the live `Viewer`.
 
+## Supported dynamic behaviors
+
+Grounded by [`czml-reference.ts`](./src/pipeline/czml-reference.ts), which is inlined into every generation prompt:
+
+| Dynamic behavior              | CZML mechanism                                                        | Example use case                                                    |
+| ----------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Time-varying position         | `position` with `epoch` + sampled `cartographicDegrees` offsets       | Satellite orbit, moving vehicle/aircraft                            |
+| Motion trail                  | `path` (`resolution`, `leadTime`, `trailTime`, `material`, `width`)   | Ground track drawn behind a moving satellite                        |
+| Scheduled appear/disappear    | `availability` (ISO8601 interval)                                     | Entity only exists during part of the scene's clock                 |
+| Global timeline & playback    | document `clock` (`interval`, `currentTime`, `multiplier`, `range`)   | Populates the Cesium timeline widget; loop/clamp/unbounded playback |
+| Static multi-point geometry   | `polyline` with a fixed `positions` array (not time-sampled)          | Fixed flight path or route line                                     |
+| Point/billboard/label styling | `point`, `billboard`, `label` (`color`, `pixelSize`, `scale`, `show`) | Markers and text that ride along a dynamic position                 |
+
+Anything outside this set (e.g. custom materials, sensor cones, 3D models, CZML interpolation/extrapolation tuning) is not covered by the current reference and generation will fall back to whatever the model infers, which is not guaranteed to pass verification.
+
 ## Entry points
 
-| Subpath                          | Exports                                                          | Consumer     |
-| --------------------------------- | ----------------------------------------------------------------| ------------ |
+| Subpath                           | Exports                                                           | Consumer     |
+| --------------------------------- | ----------------------------------------------------------------- | ------------ |
 | `@cesium-ai/codegen-czml`         | Full pipeline + `generateCzml` tool with model-facing description | Backend only |
-| `@cesium-ai/codegen-czml/names`   | `CODEGEN_CZML_TOOL_NAMES`, `CodegenCzmlToolName`                 | Both         |
-| `@cesium-ai/codegen-czml/schemas` | `generateCzmlInputShape`, `GenerateCzmlInput`                    | Both         |
+| `@cesium-ai/codegen-czml/names`   | `CODEGEN_CZML_TOOL_NAMES`, `CodegenCzmlToolName`                  | Both         |
+| `@cesium-ai/codegen-czml/schemas` | `generateCzmlInputShape`, `GenerateCzmlInput`                     | Both         |
 
 Never import the root from client code — it pulls in `ai` and model-facing descriptions.
 

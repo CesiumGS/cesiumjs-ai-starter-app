@@ -63,6 +63,8 @@ COPY --from=build /app/packages/codegen-cesium/package.json packages/codegen-ces
 COPY --from=build /app/packages/codegen-cesium/dist packages/codegen-cesium/dist
 COPY --from=build /app/packages/codegen-czml/package.json packages/codegen-czml/package.json
 COPY --from=build /app/packages/codegen-czml/dist packages/codegen-czml/dist
+COPY --from=build /app/packages/codegen-czml/schema packages/codegen-czml/schema
+COPY --from=build /app/packages/codegen-czml/skills packages/codegen-czml/skills
 COPY --from=build /app/packages/mcp-tools/package.json packages/mcp-tools/package.json
 COPY --from=build /app/packages/mcp-tools/dist packages/mcp-tools/dist
 

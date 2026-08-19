@@ -67,4 +67,3 @@ describe("ChatPanel's generateCzml result handling", () => {
     expect("error" in parsed).toBe(true);
   });
 });
-

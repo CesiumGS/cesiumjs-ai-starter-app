@@ -33,7 +33,7 @@ describe("loadGeneratedCzml", () => {
 });
 
 describe("handleGenerateCzmlResult", () => {
-  it('returns { success: false } for output matching neither result shape', async () => {
+  it("returns { success: false } for output matching neither result shape", async () => {
     const outcome = await handleGenerateCzmlResult(fakeViewer(), {});
     expect(outcome).toEqual({ success: false, error: "Malformed generateCzml result." });
   });
