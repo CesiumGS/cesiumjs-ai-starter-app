@@ -8,12 +8,14 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "typecheck:test": "tsc -p tsconfig.typecheck.json",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "eval:czml": "tsx evals/eval-czml-generation.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.0",
     "@ai-sdk/otel": "^1.0.59",
     "@cesium-ai/codegen-cesium": "*",
+    "@cesium-ai/codegen-czml": "*",
     "@cesium-ai/mcp-tools": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/server": "*",

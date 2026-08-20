@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 // tool names together cover exactly that selection.
 import { createCesiumTools, CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml";
 import { ENABLED_CESIUM_TOOLS } from "./enabled-tools.js";
 
 /**
@@ -28,10 +29,11 @@ describe("enabled-tools allowlist", () => {
     expect(registered).toEqual(enabledViewerTools);
   });
 
-  test("every enabled name is a known viewer tool or the codegen-cesium executeCesiumCode tool", () => {
+  test("every enabled name is a known viewer tool, the executeCesiumCode tool, or the generateCzml tool", () => {
     const known = new Set([
       ...Object.values(CESIUM_TOOL_NAMES),
       ...Object.values(CODEGEN_CESIUM_TOOL_NAMES),
+      ...Object.values(CODEGEN_CZML_TOOL_NAMES),
     ]);
     for (const name of ENABLED_CESIUM_TOOLS) {
       expect(known, `"${name}" is not a known tool name`).toContain(name);

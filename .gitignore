@@ -27,6 +27,13 @@ site/
 playwright-report/
 test-results/
 
+# CZML generation eval reports (non-deterministic, real-model-call output)
+backend/eval-results/
+
+# Vendored official CZML JSON Schema — re-fetched by `npm run sync:czml-schema`
+# (see packages/codegen-czml/scripts/sync-czml-schema.mjs), never committed.
+packages/codegen-czml/schema/
+
 # Vite cache
 .vite/
 

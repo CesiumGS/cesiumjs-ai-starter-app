@@ -1,0 +1,55 @@
+{
+  "name": "@cesium-ai/codegen-czml",
+  "version": "0.0.1",
+  "description": "Intent-to-verified-CZML generation pipeline (model-agnostic generation grounded in a core CZML reference plus BM25-matched, per-intent feature skills, and semantic verification via Cesium's own CzmlDataSource parser) and the schema-only `generateCzml` tool definition that fronts it.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./names": {
+      "types": "./dist/tool-names.d.ts",
+      "import": "./dist/tool-names.js",
+      "default": "./dist/tool-names.js"
+    },
+    "./schemas": {
+      "types": "./dist/schemas.d.ts",
+      "import": "./dist/schemas.js",
+      "default": "./dist/schemas.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schema",
+    "skills"
+  ],
+  "scripts": {
+    "sync:czml-schema": "node scripts/sync-czml-schema.mjs",
+    "prebuild": "npm run sync:czml-schema",
+    "build": "tsc",
+    "predev": "npm run sync:czml-schema",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "typecheck:test": "tsc -p tsconfig.typecheck.json",
+    "prepack": "npm run sync:czml-schema",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "ai": "^7.0.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "cesium": "^1.127.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "rimraf": "^6.0.0",
+    "typescript": "~5.8.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

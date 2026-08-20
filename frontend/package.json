@@ -12,6 +12,7 @@
   "dependencies": {
     "@cesium-ai/chat-element": "*",
     "@cesium-ai/codegen-cesium": "*",
+    "@cesium-ai/codegen-czml": "*",
     "@cesium-ai/codegen-sandbox": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/tools": "*",

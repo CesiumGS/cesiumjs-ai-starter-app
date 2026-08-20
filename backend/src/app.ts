@@ -3,6 +3,7 @@ import { createChatRouter, createToolsRouter } from "@cesium-ai/server";
 import { createMcpAppRouter, createMcpSessionRouter } from "@cesium-ai/server/mcp";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml";
 import {
   resolveMcpTools,
   type McpToolsHandle,
@@ -19,6 +20,7 @@ import type { AppLogger } from "./utils/telemetry.js";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
+import { createGenerateCzmlTool } from "./tools/generate-czml-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
 import { createSessionMiddleware } from "./utils/session.js";
@@ -162,6 +164,19 @@ export function createBackendApp({
           }),
         }
       : {}),
+    ...(model && ENABLED_CESIUM_TOOLS.includes(CODEGEN_CZML_TOOL_NAMES.generateCzml)
+      ? {
+          [CODEGEN_CZML_TOOL_NAMES.generateCzml]: createGenerateCzmlTool({
+            model,
+            maxAttempts: env.CODEGEN_CZML_MAX_ATTEMPTS,
+            maxPackets: env.CODEGEN_CZML_MAX_PACKETS,
+            maxLength: env.CODEGEN_CZML_MAX_LENGTH,
+            extraInstructions: env.CODEGEN_CZML_EXTRA_INSTRUCTIONS,
+            logger: codegenLogger,
+            metrics: codegenMetrics,
+          }),
+        }
+      : {}),
     // MCP tools run arbitrary server-side code owned by a third party (the MCP
     // server), never the browser — see @cesium-ai/mcp-tools. Unlike flyTo/
     // executeCesiumCode, these are never streamed as client tool calls.
@@ -229,7 +244,15 @@ export function createBackendApp({
       // see `handleServerToolResult`/`continueConversation` in the frontend).
       // Stop the agent loop right after that tool call so the model can't
       // generate a premature "done!" reply before the real outcome is known.
-      stopAfterTools: [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode],
+      // generateCzml needs the exact same treatment: its server-side result only
+      // means the generated CZML passed verification, not that it has actually
+      // loaded into the live Viewer yet (no user approval needed for it, though —
+      // unlike executeCesiumCode it never executes arbitrary code, just declarative
+      // CZML data through Cesium's own CzmlDataSource parser).
+      stopAfterTools: [
+        CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
+        CODEGEN_CZML_TOOL_NAMES.generateCzml,
+      ],
       logger: serverLogger,
       metrics: serverMetrics,
     }),
