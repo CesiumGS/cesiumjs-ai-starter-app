@@ -1,27 +1,29 @@
 /**
  * Orchestration entry point: turns a natural-language intent into a **verified** CZML document.
- * Mirrors `@cesium-ai/codegen-cesium`'s `generateVerifiedCesiumCode` shape (domain matching ->
- * prompt building -> model call -> verify -> retry-with-feedback), but generates structured data
- * via the AI SDK's `generateObject` instead of raw text, and verifies via `verifyCzml` (zod + a
- * real `CzmlDataSource` parse) instead of AST analysis — CZML is declarative data, not code, so
- * there is nothing to statically analyze for unsafe operations, only structural/semantic validity
- * to check.
+ * Mirrors `@cesium-ai/codegen-cesium`'s `generateVerifiedCesiumCode` shape (prompt building ->
+ * model call -> verify -> retry-with-feedback) and verifies via `verifyCzml` (zod + a real
+ * `CzmlDataSource` parse) instead of AST analysis — CZML is declarative data, not code, so there
+ * is nothing to statically analyze for unsafe operations, only structural/semantic validity to
+ * check.
+ *
+ * Feature-domain skill grounding is dynamic/model-driven rather than harness-computed: the model
+ * is shown only the skill catalog (names/descriptions, see `prompt-builder.ts`) and may call the
+ * `loadSkill` tool (see `skill-tool.ts`) to pull in a skill's full body as needed, so this uses
+ * `generateText` with `tools`/`stopWhen`/`output: Output.object(...)` (structured output alongside
+ * tool calls) instead of `generateObject`, which supports neither.
  *
  * Model-agnostic by design: this function receives an already-resolved `LanguageModel` from the
  * caller and never selects a provider or reads API keys itself.
  */
-import { generateObject, type LanguageModel } from "ai";
+import { generateText, stepCountIs, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { buildCzmlPrompt } from "./prompt-builder.js";
 import { verifyCzml, czmlPacketShape } from "./czml-verifier.js";
-import {
-  matchBestSkills,
-  matchSkillsForIntent,
-  DEFAULT_SKILL_MATCH_THRESHOLD,
-} from "./domain-matcher.js";
+import { loadCzmlSkills } from "./skills-loader.js";
+import { createLoadSkillTool } from "./skill-tool.js";
 import { noopCodegenLogger, type CodegenLogger } from "../logger.js";
 import { noopCodegenMetrics, type CodegenMetrics } from "../metrics.js";
-import { DEFAULT_MAX_ATTEMPTS, DEFAULT_SKILL_MATCH_LIMIT } from "./constants.js";
+import { DEFAULT_MAX_ATTEMPTS, DEFAULT_MAX_TOOL_STEPS } from "./constants.js";
 
 /** The structured object the model is asked to produce for one generation attempt. */
 const czmlGenerationObjectShape = z.object({
@@ -40,15 +42,13 @@ export interface GenerateVerifiedCzmlOptions {
   maxPackets?: number;
   /** Hard cap on generated CZML size in characters, passed through to `verifyCzml`. */
   maxLength?: number;
-  /** Max number of matched feature-domain skills to inline as extra grounding context in the generation prompt. Defaults to {@link DEFAULT_SKILL_MATCH_LIMIT}. */
-  maxSkills?: number;
-  /** Minimum BM25 score a skill must reach to be considered a match. Defaults to {@link DEFAULT_SKILL_MATCH_THRESHOLD}. Set to 0 to disable filtering. */
-  threshold?: number;
+  /** Max steps (each a `loadSkill` tool call, or the final structured-output step) the model may take per generation attempt. Defaults to {@link DEFAULT_MAX_TOOL_STEPS}. */
+  maxToolSteps?: number;
   /** Optional extra instructions appended to the generation prompt's output rules. */
   extraInstructions?: string;
   /** Structured logger for generation attempts/failures. Defaults to a no-op (silent) logger. */
   logger?: CodegenLogger;
-  /** Metrics sink for token usage, skill-match scores, and generation duration. Defaults to a no-op. */
+  /** Metrics sink for token usage and generation duration. Defaults to a no-op. */
   metrics?: CodegenMetrics;
 }
 
@@ -67,49 +67,22 @@ export async function generateVerifiedCzml(
 ): Promise<GenerateVerifiedCzmlResult> {
   const { intent, model, maxPackets, maxLength, extraInstructions } = options;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-  const maxSkills = options.maxSkills ?? DEFAULT_SKILL_MATCH_LIMIT;
-  const threshold = options.threshold ?? DEFAULT_SKILL_MATCH_THRESHOLD;
+  const maxToolSteps = options.maxToolSteps ?? DEFAULT_MAX_TOOL_STEPS;
   const logger = options.logger ?? noopCodegenLogger;
   const metrics = options.metrics ?? noopCodegenMetrics;
 
-  logger.debug("Generating CZML", { intent, maxAttempts, maxSkills });
+  logger.debug("Generating CZML", { intent, maxAttempts, maxToolSteps });
 
-  const skillsWithScores = matchSkillsForIntent(intent);
-
-  if (skillsWithScores.length > 0) {
-    logger.debug("Scored skills for intent", {
-      intent,
-      threshold,
-      totalScored: skillsWithScores.length,
-      passedThreshold: skillsWithScores.filter((m) => m.score >= threshold).length,
-      topSkill: skillsWithScores[0].skill.name,
-      topScore: skillsWithScores[0].score,
-    });
-  }
-
-  const bestSkills = matchBestSkills(intent, maxSkills, threshold);
-
-  if (bestSkills.length === 0) {
-    logger.debug("No feature-domain skill matched intent; generating with core reference only", {
-      intent,
-    });
-  } else {
-    logger.debug("Matched skills for intent", {
-      intent,
-      skillNames: bestSkills.map((s) => s.name),
-    });
-  }
-
-  skillsWithScores.forEach((match, rank) => {
-    metrics.recordSkillMatchScore(match.score, {
-      skill: match.skill.name,
-      rank,
-      passedThreshold: match.score >= threshold,
-      includedInBestSkills: bestSkills.some((s) => s.name === match.skill.name),
-    });
+  const skills = loadCzmlSkills();
+  const loadSkill = createLoadSkillTool(skills, (skillName) => {
+    logger.debug("Model loaded a CZML skill via loadSkill tool", { intent, skill: skillName });
   });
 
-  const basePrompt = buildCzmlPrompt({ intent, skills: bestSkills, extraInstructions });
+  const basePrompt = buildCzmlPrompt({
+    intent,
+    availableSkills: skills.map(({ name, description }) => ({ name, description })),
+    extraInstructions,
+  });
   const correctionPrompt = (violations: string[]) =>
     `${basePrompt}
 
@@ -127,10 +100,12 @@ Generate a corrected CZML document that avoids all of the above issues, still fo
 
     let generated: { czml: Record<string, unknown>[]; description: string };
     try {
-      const result = await generateObject({
+      const result = await generateText({
         model,
-        schema: czmlGenerationObjectShape,
         prompt,
+        tools: { loadSkill },
+        stopWhen: stepCountIs(maxToolSteps),
+        output: Output.object({ schema: czmlGenerationObjectShape }),
         // CZML packets are deliberately loosely-typed (`z.record`, see czml-verifier.ts) since
         // real CZML properties vary per packet — that produces a `propertyNames` keyword in the
         // JSON schema, which OpenAI's *strict* structured-output mode rejects
@@ -138,7 +113,7 @@ Generate a corrected CZML document that avoids all of the above issues, still fo
         // keys, so this only affects OpenAI.
         providerOptions: { openai: { strictJsonSchema: false } },
       });
-      generated = result.object;
+      generated = result.output;
       if (result.usage) {
         metrics.recordTokenUsage(
           {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCzmlPrompt } from "./prompt-builder.js";
 import { CZML_REFERENCE } from "./czml-reference.js";
-import type { CzmlSkill } from "./skills-loader.js";
 
 describe("buildCzmlPrompt", () => {
   it("includes the intent and the core CZML reference material", () => {
@@ -26,22 +25,19 @@ describe("buildCzmlPrompt", () => {
     expect(prompt).not.toContain("Additional instructions from the host application");
   });
 
-  it("inlines matched skill bodies when supplied", () => {
-    const skill: CzmlSkill = {
-      name: "czml-orientation",
-      description: "orientation skill",
-      body: "## CZML Orientation\n\nUse unitQuaternion for a fixed orientation.",
-      filePath: "czml-orientation/SKILL.md",
-    };
+  it("lists available skill names/descriptions (but not bodies) when supplied", () => {
+    const prompt = buildCzmlPrompt({
+      intent: "orient the entity",
+      availableSkills: [{ name: "czml-orientation", description: "orientation skill" }],
+    });
 
-    const prompt = buildCzmlPrompt({ intent: "orient the entity", skills: [skill] });
-
-    expect(prompt).toContain("Use unitQuaternion for a fixed orientation.");
+    expect(prompt).toContain("czml-orientation: orientation skill");
+    expect(prompt).toContain("loadSkill");
   });
 
-  it("omits the matched-skills section when no skills are supplied", () => {
+  it("omits the skill catalog section when no skills are supplied", () => {
     const prompt = buildCzmlPrompt({ intent: "show a flight path" });
 
-    expect(prompt).not.toContain("Additional reference material for this intent");
+    expect(prompt).not.toContain("Additional feature-domain reference material");
   });
 });

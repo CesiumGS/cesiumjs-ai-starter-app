@@ -4,8 +4,8 @@
  * (see `prompt-builder.ts`), since almost every generated document needs them regardless of
  * intent. Everything else (billboard/label, polyline, polygon, orientation, document clock,
  * viewFrom, time-dynamic motion) is intent-specific and lives in `../../skills/*\/SKILL.md`
- * instead, matched per-intent via `domain-matcher.ts` (mirrors
- * `@cesium-ai/codegen-cesium`'s skill-matching approach) rather than always inlined in full.
+ * instead, loaded on demand by the generating model itself via the `loadSkill` tool (see
+ * `skill-tool.ts`/`prompt-builder.ts`) rather than always inlined in full.
  */
 export const CZML_REFERENCE = `# CZML quick reference
 

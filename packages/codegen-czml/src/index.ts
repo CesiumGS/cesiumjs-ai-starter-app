@@ -11,13 +11,7 @@ export { noopCodegenLogger, type CodegenLogger } from "./logger.js";
 export { noopCodegenMetrics, type CodegenMetrics, type CodegenTokenUsage } from "./metrics.js";
 export { CZML_REFERENCE } from "./pipeline/czml-reference.js";
 export { loadCzmlSkills, type CzmlSkill } from "./pipeline/skills-loader.js";
-export {
-  matchSkillsForIntent,
-  matchBestSkills,
-  type DomainMatch,
-  DEFAULT_SKILL_MATCH_LIMIT,
-  DEFAULT_SKILL_MATCH_THRESHOLD,
-} from "./pipeline/domain-matcher.js";
+export { createLoadSkillTool, type OnSkillLoaded } from "./pipeline/skill-tool.js";
 export { buildCzmlPrompt, type BuildPromptOptions } from "./pipeline/prompt-builder.js";
 export {
   verifyCzml,

@@ -1,9 +1,12 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
-const generateObjectMock = vi.fn();
+const generateTextMock = vi.fn();
 
 vi.mock("ai", () => ({
-  generateObject: (...args: unknown[]) => generateObjectMock(...args),
+  generateText: (...args: unknown[]) => generateTextMock(...args),
+  tool: (options: unknown) => options,
+  stepCountIs: (steps: number) => ({ type: "stepCountIs", steps }),
+  Output: { object: (options: unknown) => options },
 }));
 
 // Imported after the mock so the module under test picks up the mocked `ai` export.
@@ -20,12 +23,12 @@ const VALID_OBJECT = {
 };
 
 beforeEach(() => {
-  generateObjectMock.mockReset();
+  generateTextMock.mockReset();
 });
 
 describe("generateVerifiedCzml", () => {
   it("returns verified CZML with an entity count on the first attempt", async () => {
-    generateObjectMock.mockResolvedValueOnce({ object: VALID_OBJECT });
+    generateTextMock.mockResolvedValueOnce({ output: VALID_OBJECT });
 
     const result = await generateVerifiedCzml({ intent: "add a single marker", model: fakeModel });
 
@@ -34,15 +37,15 @@ describe("generateVerifiedCzml", () => {
       expect(result.description).toBe("A single marker");
       expect(result.entityCount).toBe(1);
     }
-    expect(generateObjectMock).toHaveBeenCalledTimes(1);
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
   });
 
   it("retries once with violation feedback and succeeds on the second attempt", async () => {
-    generateObjectMock
+    generateTextMock
       .mockResolvedValueOnce({
-        object: { czml: [{ id: "not-document" }], description: "broken" },
+        output: { czml: [{ id: "not-document" }], description: "broken" },
       })
-      .mockResolvedValueOnce({ object: VALID_OBJECT });
+      .mockResolvedValueOnce({ output: VALID_OBJECT });
 
     const result = await generateVerifiedCzml({
       intent: "add a single marker",
@@ -51,15 +54,15 @@ describe("generateVerifiedCzml", () => {
     });
 
     expect(result.verified).toBe(true);
-    expect(generateObjectMock).toHaveBeenCalledTimes(2);
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
 
-    const secondCallArgs = generateObjectMock.mock.calls[1][0] as { prompt: string };
+    const secondCallArgs = generateTextMock.mock.calls[1][0] as { prompt: string };
     expect(secondCallArgs.prompt).toMatch(/document packet/i);
   });
 
   it("returns verified:false with violations after exhausting all attempts", async () => {
-    generateObjectMock.mockResolvedValue({
-      object: { czml: [{ id: "not-document" }], description: "still broken" },
+    generateTextMock.mockResolvedValue({
+      output: { czml: [{ id: "not-document" }], description: "still broken" },
     });
 
     const result = await generateVerifiedCzml({
@@ -73,13 +76,13 @@ describe("generateVerifiedCzml", () => {
       expect(result.violations && result.violations.length).toBeGreaterThan(0);
       expect(result.error).toBeTruthy();
     }
-    expect(generateObjectMock).toHaveBeenCalledTimes(2);
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
   });
 
   it("treats a thrown model call as a failed attempt and retries", async () => {
-    generateObjectMock
+    generateTextMock
       .mockRejectedValueOnce(new Error("model unavailable"))
-      .mockResolvedValueOnce({ object: VALID_OBJECT });
+      .mockResolvedValueOnce({ output: VALID_OBJECT });
 
     const result = await generateVerifiedCzml({
       intent: "add a single marker",
@@ -88,17 +91,31 @@ describe("generateVerifiedCzml", () => {
     });
 
     expect(result.verified).toBe(true);
-    expect(generateObjectMock).toHaveBeenCalledTimes(2);
+    expect(generateTextMock).toHaveBeenCalledTimes(2);
   });
 
   it("defaults to 3 attempts when maxAttempts is omitted", async () => {
-    generateObjectMock.mockResolvedValue({
-      object: { czml: [{ id: "not-document" }], description: "still broken" },
+    generateTextMock.mockResolvedValue({
+      output: { czml: [{ id: "not-document" }], description: "still broken" },
     });
 
     const result = await generateVerifiedCzml({ intent: "add a single marker", model: fakeModel });
 
     expect(result.verified).toBe(false);
-    expect(generateObjectMock).toHaveBeenCalledTimes(3);
+    expect(generateTextMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("passes a loadSkill tool and a multi-step stopWhen so the model can load skills before finishing", async () => {
+    generateTextMock.mockResolvedValueOnce({ output: VALID_OBJECT });
+
+    await generateVerifiedCzml({ intent: "add a single marker", model: fakeModel });
+
+    const callArgs = generateTextMock.mock.calls[0][0] as {
+      tools: { loadSkill: { execute?: unknown } };
+      stopWhen: { type: string; steps: number };
+    };
+    expect(callArgs.tools.loadSkill.execute).toBeTypeOf("function");
+    expect(callArgs.stopWhen).toEqual({ type: "stepCountIs", steps: 6 });
   });
 });
+
