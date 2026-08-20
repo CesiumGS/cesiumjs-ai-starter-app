@@ -20,6 +20,11 @@
       "types": "./dist/schemas.d.ts",
       "import": "./dist/schemas.js",
       "default": "./dist/schemas.js"
+    },
+    "./json-schema": {
+      "types": "./dist/lib/json-schema.d.ts",
+      "import": "./dist/lib/json-schema.js",
+      "default": "./dist/lib/json-schema.js"
     }
   },
   "files": [

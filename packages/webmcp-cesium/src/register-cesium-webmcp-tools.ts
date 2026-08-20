@@ -1,6 +1,7 @@
 import type { Viewer } from "cesium";
 import { z } from "zod";
 import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-schemas/names";
+import { toolInputJsonSchema } from "@cesium-ai/tools-schemas/json-schema";
 import {
   createCesiumToolExecutors,
   type CesiumToolExecutorOverrides,
@@ -70,15 +71,6 @@ export function isWebMcpSupported(doc: Document = document): boolean {
   return typeof doc !== "undefined" && Boolean(getModelContext(doc));
 }
 
-/** Strips Zod's `$schema` key — WebMCP expects a plain JSON Schema object, not a meta-schema pointer. */
-function toPlainJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-  const { $schema: _$schema, ...rest } = z.toJSONSchema(schema, { target: "draft-07" }) as Record<
-    string,
-    unknown
-  >;
-  return rest;
-}
-
 /**
  * Builds the WebMCP tool payloads (name/description/inputSchema/execute) for every enabled Cesium
  * viewer tool, without registering them on `document.modelContext`. Exposed separately from
@@ -105,7 +97,7 @@ export function buildCesiumWebMcpTools(
       return {
         name,
         description: override?.description ?? definition.description,
-        inputSchema: toPlainJsonSchema(override?.inputSchema ?? definition.inputSchema),
+        inputSchema: toolInputJsonSchema(override?.inputSchema ?? definition.inputSchema),
         annotations: { readOnlyHint: READ_ONLY_CESIUM_WEBMCP_TOOLS.has(name) },
         // WebMCP's execute() result is handed back to the calling agent as-is; JSON-stringify the
         // structured { success, error?, ... } result the same way every Cesium tool call resolves.
