@@ -1,6 +1,6 @@
 ---
 name: czml-polygon
-description: "CZML filled polygons for regions, areas of interest, footprints, and closed shapes on the ground. Use when the intent describes an area, region, zone, footprint, or filled shape bounded by several corner points."
+description: "CZML filled polygons and polygon regions, areas of interest, footprints, and closed shapes on the ground. Use when the intent describes a polygon, area, region, zone, footprint, or filled shape bounded by several corner points."
 ---
 
 # CZML Polygon
