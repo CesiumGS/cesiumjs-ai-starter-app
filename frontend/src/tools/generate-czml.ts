@@ -23,6 +23,14 @@ export async function loadGeneratedCzml(
   try {
     const dataSource = await CzmlDataSource.load(czml);
     await viewer.dataSources.add(dataSource);
+    // `automaticallyTrackDataSourceClocks` (on by default) copies the document clock packet's
+    // startTime/stopTime/currentTime/multiplier onto `viewer.clock`, but `DataSourceClock.getValue`
+    // never touches `shouldAnimate` — so a time-dynamic document loads correctly configured but
+    // paused until the user manually presses the Animation widget's play button. Start it
+    // automatically since a generated animation is expected to play immediately.
+    if (dataSource.clock) {
+      viewer.clock.shouldAnimate = true;
+    }
     return { success: true, entityCount: dataSource.entities.values.length };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };
