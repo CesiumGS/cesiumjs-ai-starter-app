@@ -20,10 +20,17 @@ Every other packet describes one entity and MUST have a unique "id". Common prop
   - { "epoch": "<ISO8601>", "cartographicDegrees": [t0, lon0, lat0, h0, t1, lon1, lat1, h1, ...] }
     for a time-dynamic position sampled at seconds-since-epoch offsets t0 < t1 < ...
   - Prefer "cartographicDegrees" unless the intent specifically asks for a Cartesian/ECEF position.
-- "point": { "pixelSize": <number>, "color": { "rgba": [r,g,b,a] } }
+- "point": { "pixelSize": <number>, "color": { "rgba": [r,g,b,a] },
+  "outlineColor": { "rgba": [r,g,b,a] }, "outlineWidth": <number> }
 - "availability": "<ISO8601 start>/<ISO8601 end>" — restricts when the entity/its properties are
   active; required on an entity whenever its "document" packet also carries a "clock" that should
   bound this entity's visible lifetime.
+- "description": "<HTML string>" — a top-level packet property (a sibling of "position"/"point"/
+  etc.) holding an HTML description shown in the entity's info-box when clicked. Only add this when
+  the intent explicitly asks for a description/info-box.
+- "zIndex": <integer> — a top-level property on ground-clamped shapes ("polygon", "rectangle",
+  "corridor", "ellipse") controlling their stacking/draw order when they overlap; higher values
+  draw on top. Only add this when the intent explicitly asks for stacking/draw order control.
 
 ## Example: a single stationary point
 

@@ -14,8 +14,12 @@ description: "CZML time-dynamic motion: interpolated/sampled positions over an e
 - "availability": "<ISO8601 start>/<ISO8601 end>" — bounds when the entity is active; add this
   whenever the document packet also carries a "clock" that should bound this entity's lifetime.
 - "path": `{ "material": { "solidColor": { "color": { "rgba": [r,g,b,a] } } }, "width": <number>,
-"resolution": <seconds>, "leadTime": <seconds>, "trailTime": <seconds> }` — draws a trail behind
-  a time-dynamic "position".
+"resolution": <seconds>, "leadTime": <seconds>, "trailTime": <seconds>,
+"materialMode": "WHOLE"|"PORTIONS" }` — draws a trail behind a time-dynamic "position".
+  "materialMode" defaults to `"WHOLE"` (one material for the entire path). Set it to `"PORTIONS"`
+  when the intent wants the material to change along the path at distinct time intervals; in that
+  case give "material" as an array of interval-scoped materials instead of a single object:
+  `"material": [{ "interval": "<ISO8601 start>/<ISO8601 end>", "solidColor": {...} }, { "interval": "<next start>/<next end>", "polylineDash": {...} }]`.
 - This same "epoch" + interleaved-timestamp-and-value-samples pattern also applies to any other
   time-varying numeric property (e.g. a sampled rotation angle) — not just "position".
 

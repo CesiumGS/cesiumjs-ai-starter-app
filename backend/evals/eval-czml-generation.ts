@@ -30,12 +30,16 @@ interface GenerationStats {
   totalTokens: number;
   /** The 1-based attempt number that produced the returned result (or the last attempted, on failure). */
   attempts: number;
-  /** Skill names loaded via the `loadSkill` tool, in call order, across all attempts (empty for the BM25 approach, which never calls a tool). */
+  /** Skill names grounding this case's generation: either BM25-matched and inlined up front (`matchBestSkills`), or loaded mid-generation via the dynamic `loadSkill` tool, in whichever order this pipeline variant reports them. Empty means no skill matched/was loaded — core reference only. */
   skillsLoaded: string[];
 }
 
 /** Builds a fresh `{ metrics, logger, stats }` trio that captures {@link GenerationStats} for one `generateVerifiedCzml` call via its existing metrics/logger seams — no pipeline changes needed. */
-function createStatsCollector(): { metrics: CodegenMetrics; logger: CodegenLogger; stats: GenerationStats } {
+function createStatsCollector(): {
+  metrics: CodegenMetrics;
+  logger: CodegenLogger;
+  stats: GenerationStats;
+} {
   const stats: GenerationStats = { totalTokens: 0, attempts: 0, skillsLoaded: [] };
   const metrics: CodegenMetrics = {
     recordTokenUsage: (usage) => {
@@ -49,8 +53,13 @@ function createStatsCollector(): { metrics: CodegenMetrics; logger: CodegenLogge
   };
   const logger: CodegenLogger = {
     debug: (message, meta) => {
-      if (message === "Model loaded a CZML skill via loadSkill tool" && typeof meta?.skill === "string") {
+      if (
+        message === "Model loaded a CZML skill via loadSkill tool" &&
+        typeof meta?.skill === "string"
+      ) {
         stats.skillsLoaded.push(meta.skill);
+      } else if (message === "Matched skills for intent" && Array.isArray(meta?.skillNames)) {
+        stats.skillsLoaded.push(...(meta.skillNames as string[]));
       }
     },
     info: () => {},
@@ -108,8 +117,18 @@ type CaseOutcome =
       missingProperties: string[];
       durationMs: number;
     })
-  | (GenerationStats & { name: string; status: "rejected"; violations: string[]; durationMs: number })
-  | (GenerationStats & { name: string; status: "generation_error"; error: string; durationMs: number });
+  | (GenerationStats & {
+      name: string;
+      status: "rejected";
+      violations: string[];
+      durationMs: number;
+    })
+  | (GenerationStats & {
+      name: string;
+      status: "generation_error";
+      error: string;
+      durationMs: number;
+    });
 
 async function runCase(
   evalCase: CzmlEvalCase,
@@ -133,6 +152,11 @@ async function runCase(
   const missingProperties = evalCase.expectedProperties.filter(
     (path) => !anyPacketHasPath(result.czml, path),
   );
+  if (evalCase.minEntityCount !== undefined && result.entityCount < evalCase.minEntityCount) {
+    missingProperties.push(
+      `entityCount (expected >= ${evalCase.minEntityCount}, got ${result.entityCount})`,
+    );
+  }
   if (missingProperties.length > 0) {
     return {
       name: evalCase.name,

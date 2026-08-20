@@ -1,6 +1,6 @@
 ---
 name: czml-polyline
-description: "CZML static polylines for flight routes, boundaries, and fixed lines connecting two or more locations. Use when the intent describes a straight or multi-segment line, route, boundary, or connection between fixed points (not a moving entity)."
+description: "CZML static polyline and polylines for flight routes, boundaries, and fixed lines connecting two or more locations. Use when the intent describes a polyline, straight or multi-segment line, route, boundary, or connection between fixed points (not a moving entity)."
 ---
 
 # CZML Polyline

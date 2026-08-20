@@ -11,6 +11,9 @@ description: "CZML billboard icons and text labels for named ground facilities, 
 - "label": `{ "text": "<string>", "font": "<CSS font, e.g. \"14px sans-serif\">", "fillColor": { "rgba": [r,g,b,a] }, "show": true|false }` —
   draws text next to the entity's "position".
 - Both support "scale" and "show"; omit "show" to always display.
+- "description": `"<HTML string>"` — a top-level packet property (a sibling of "billboard"/"label",
+  not nested inside either) holding an HTML description shown in the entity's info-box when
+  clicked, e.g. `"<p>Learn more at <a href=\"https://example.com\">example.com</a>.</p>"`.
 
 ## Example: a named facility with an icon and a label
 
@@ -26,7 +29,8 @@ description: "CZML billboard icons and text labels for named ground facilities, 
       "text": "AGI HQ",
       "font": "14px sans-serif",
       "fillColor": { "rgba": [255, 255, 255, 255] }
-    }
+    },
+    "description": "<p>Headquarters of AGI.</p>"
   }
 ]
 ```

@@ -41,7 +41,7 @@ Grounded by [`czml-reference.ts`](./src/pipeline/czml-reference.ts), which is in
 | Static multi-point geometry   | `polyline` with a fixed `positions` array (not time-sampled)          | Fixed flight path or route line                                     |
 | Point/billboard/label styling | `point`, `billboard`, `label` (`color`, `pixelSize`, `scale`, `show`) | Markers and text that ride along a dynamic position                 |
 
-Anything outside this set (e.g. custom materials, sensor cones, 3D models, CZML interpolation/extrapolation tuning) is not covered by the current reference and generation will fall back to whatever the model infers, which is not guaranteed to pass verification.
+Anything outside this set is grounded instead by a per-intent BM25-matched feature skill under [`skills/`](./skills/) (billboard/label, polygon, polyline, orientation, clock/viewFrom, box, cylinder, corridor, ellipse, ellipsoid, rectangle, wall, polyline volume, 3D models, 3D Tiles, custom properties, reference properties, distance-based scaling, and more) rather than always inlined in the core reference — see [`czml-eval-cases.ts`](../../backend/evals/czml-eval-cases.ts) for the full evaluated feature list. Anything with no matching skill (e.g. sensor cones, CZML interpolation/extrapolation tuning) still falls back to whatever the model infers, which is not guaranteed to pass verification.
 
 ## Entry points
 
