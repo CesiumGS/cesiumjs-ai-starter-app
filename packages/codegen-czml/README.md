@@ -1,6 +1,10 @@
 # @cesium-ai/codegen-czml
 
-Intent-to-verified-CZML generation pipeline, plus the `generateCzml` tool definition. CZML is declarative data, not code — generation is grounded by an inlined CZML reference ([`czml-reference.ts`](./src/pipeline/czml-reference.ts)) and structured via the AI SDK's `generateObject`, and verification runs the result through Cesium's own `CzmlDataSource` parser (parse-only — this package never constructs a `Viewer` or renders anything).
+Intent-to-verified-CZML generation pipeline, plus the `generateCzml` tool definition. CZML is declarative data, not code — generation is grounded by an inlined CZML reference ([`czml-reference.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-czml/src/pipeline/czml-reference.ts)) and structured via the AI SDK's `generateObject`, and verification runs the result through Cesium's own `CzmlDataSource` parser (parse-only — this package never constructs a `Viewer` or renders anything).
+
+## What is CZML?
+
+[CZML](https://github.com/CesiumGS/cesium/wiki/CZML-Guide) is a JSON-based document format for describing time-dynamic graphics scenes in CesiumJS. Rather than imperative code that calls the Cesium API directly, a CZML document is declarative data: a list of packets, each describing an entity (a point, model, satellite, path, etc.) along with properties — position, orientation, color, availability — that can be constant or vary over time via time-tagged samples. Cesium's `CzmlDataSource` parses this data and renders it on the `Viewer`, interpolating between samples as the clock advances. Because it's pure data rather than executable code, generated CZML only needs to pass structural/semantic verification, not the code-execution sandboxing `@cesium-ai/codegen-cesium`'s `executeCesiumCode` requires.
 
 ## Architecture
 
@@ -30,7 +34,7 @@ Unlike `@cesium-ai/codegen-cesium`'s `executeCesiumCode` (arbitrary JavaScript, 
 
 ## Supported dynamic behaviors
 
-Grounded by [`czml-reference.ts`](./src/pipeline/czml-reference.ts), which is inlined into every generation prompt:
+Grounded by [`czml-reference.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-czml/src/pipeline/czml-reference.ts), which is inlined into every generation prompt:
 
 | Dynamic behavior              | CZML mechanism                                                        | Example use case                                                    |
 | ----------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------- |
@@ -41,7 +45,7 @@ Grounded by [`czml-reference.ts`](./src/pipeline/czml-reference.ts), which is in
 | Static multi-point geometry   | `polyline` with a fixed `positions` array (not time-sampled)          | Fixed flight path or route line                                     |
 | Point/billboard/label styling | `point`, `billboard`, `label` (`color`, `pixelSize`, `scale`, `show`) | Markers and text that ride along a dynamic position                 |
 
-Anything outside this set is grounded instead by a per-intent BM25-matched feature skill under [`skills/`](./skills/) (billboard/label, polygon, polyline, orientation, clock/viewFrom, box, cylinder, corridor, ellipse, ellipsoid, rectangle, wall, polyline volume, 3D models, 3D Tiles, custom properties, reference properties, distance-based scaling, and more) rather than always inlined in the core reference — see [`czml-eval-cases.ts`](../../backend/evals/czml-eval-cases.ts) for the full evaluated feature list. Anything with no matching skill (e.g. sensor cones, CZML interpolation/extrapolation tuning) still falls back to whatever the model infers, which is not guaranteed to pass verification.
+Anything outside this set is grounded instead by a per-intent BM25-matched feature skill under [`skills/`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/tree/main/packages/codegen-czml/skills) (billboard/label, polygon, polyline, orientation, clock/viewFrom, box, cylinder, corridor, ellipse, ellipsoid, rectangle, wall, polyline volume, 3D models, 3D Tiles, custom properties, reference properties, distance-based scaling, and more) rather than always inlined in the core reference — see [`czml-eval-cases.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/backend/evals/czml-eval-cases.ts) for the full evaluated feature list. Anything with no matching skill (e.g. sensor cones, CZML interpolation/extrapolation tuning) still falls back to whatever the model infers, which is not guaranteed to pass verification.
 
 ## Entry points
 
@@ -72,6 +76,7 @@ A host application wraps this in its own executable AI SDK tool (see this repo's
 
 ## Security
 
-- **GATE 1 — Verification (this package):** `verifyCzml` caps document size/packet count, structurally validates via zod (document packet first, unique ids), then parses the document with Cesium's own `CzmlDataSource.load` — catching anything Cesium itself would reject before it ever reaches the client. This never constructs a `Viewer` or renders anything.
+- **GATE 1 — Verification (this package):** `verifyCzml` caps document size/packet count, structurally validates via zod (document packet first, unique ids), validates every packet against the official CZML JSON Schema via ajv, then parses the document with Cesium's own `CzmlDataSource.load` — catching anything Cesium itself would reject before it ever reaches the client. This never constructs a `Viewer` or renders anything.
 - **GATE 2 — Frontend load:** The host application loads the already-verified CZML into the live `Viewer` via `CzmlDataSource` and reports the real entity count/any load error back to the agent loop.
 - Verified CZML is still attacker-influenceable model output until the frontend actually loads it — treat a `{ czml }` result as "passed verification", not "is on the globe", exactly like `executeCesiumCode`'s `{ code }` result.
+- **Not enforced by verification:** the prompt instructs the model not to invent external image/model/tileset URLs; explicit model requests may use a small allowlist of Cesium-hosted sample assets documented in the model skill when the intent supplies no URL. Neither GATE enforces that policy — a verified `{ czml }` result can still contain an attacker- or model-supplied URI that the browser will fetch once loaded. Likewise, a packet's `description` is raw HTML rendered in Cesium's `InfoBox` when that entity is clicked; verification only checks it's a valid CZML string, not that it's benign markup. Host applications with stricter requirements should add their own allowlist/sanitization on `{ czml }` before loading it.

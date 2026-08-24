@@ -7,9 +7,15 @@ description: "CZML 3D models (glTF) for vehicles, aircraft, spacecraft, or any 3
 
 - "model": `{ "gltf": "<URI or data URI>", "scale": <number>, "minimumPixelSize": <number>,
 "maximumScale": <number>, "show": true|false }` — a 3D glTF model positioned and oriented by the
-  entity's "position"/"orientation". "gltf" may be a URL or a data URI
-  (`"data:model/gltf-binary;base64,<...>"`); do not reference an external model URL unless the
-  intent explicitly supplies one — prefer a short placeholder data URI otherwise.
+  entity's "position"/"orientation". When the intent asks for a 3D model, always include this
+  property; do not substitute a point, label, or geometric primitive.
+- "gltf" may be a URL or a complete data URI. Use a URL supplied by the intent when present.
+  Otherwise, select the closest trusted Cesium sample asset below. Do not invent a URL and do not
+  emit a truncated or placeholder data URI, because neither can load:
+  - humanoid, person: `https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumMan/Cesium_Man.glb`
+  - aircraft, airplane: `https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumAir/Cesium_Air.glb`
+  - vehicle, car, crane: `https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/GroundVehicle/GroundVehicle.glb`
+  - rocket, launch vehicle: `https://cesium.com/public/SandcastleSampleData/launchvehicle.glb`
 - "minimumPixelSize": keeps the model visible (at this minimum screen size) even when the camera is
   far away; "maximumScale" caps how large that minimum-size behavior can scale the model.
 - "nodeTransformations": `{ "<nodeName>": { "translation": { "cartesian": [x, y, z] },
@@ -31,7 +37,7 @@ description: "CZML 3D models (glTF) for vehicles, aircraft, spacecraft, or any 3
     "id": "aircraft-1",
     "position": { "cartographicDegrees": [-77, 37, 10000] },
     "model": {
-      "gltf": "data:model/gltf-binary;base64,Z2xURgIAAAA=",
+      "gltf": "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/CesiumAir/Cesium_Air.glb",
       "minimumPixelSize": 64,
       "maximumScale": 20000
     }
@@ -40,7 +46,7 @@ description: "CZML 3D models (glTF) for vehicles, aircraft, spacecraft, or any 3
     "id": "vehicle-1",
     "position": { "cartographicDegrees": [-75, 40, 0] },
     "model": {
-      "gltf": "data:model/gltf-binary;base64,Z2xURgIAAAA=",
+      "gltf": "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/GroundVehicle/GroundVehicle.glb",
       "articulations": {
         "epoch": "2026-01-01T00:00:00Z",
         "turret spin": [0, 0, 60, 60]
@@ -59,7 +65,7 @@ description: "CZML 3D models (glTF) for vehicles, aircraft, spacecraft, or any 3
     "id": "crane-1",
     "position": { "cartographicDegrees": [-75, 40, 0] },
     "model": {
-      "gltf": "data:model/gltf-binary;base64,Z2xURgIAAAA=",
+      "gltf": "https://raw.githubusercontent.com/CesiumGS/cesium/main/Apps/SampleData/models/GroundVehicle/GroundVehicle.glb",
       "nodeTransformations": {
         "boom": {
           "scale": { "cartesian": [1, 2, 3] },

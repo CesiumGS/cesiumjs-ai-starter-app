@@ -3,6 +3,7 @@ import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import type { EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml/names";
 import { ENABLED_TOOLS, TOOL_EXECUTORS } from "../tools/cesium-tool-executors";
 import {
   handleExecuteCesiumCodeResult,
@@ -76,9 +77,10 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
    *
    * `generateCzml` follows the same "stop the agent loop, report the real
    * outcome in a follow-up" shape (see `backend/src/app.ts`'s
-   * `stopAfterTools`), though it needs no user approval: loading an
-   * already-verified CZML document is declarative data, not arbitrary code
-   * execution.
+   * `stopAfterTools`), and is likewise approval-gated: unlike executeCesiumCode
+   * this app's `AiChatPanel` requires no extra wiring here for that gate — the
+   * Approve/Reject UI is generic (see `ToolCard.tsx`), driven entirely by the
+   * backend's `resolveToolApproval`.
    */
   const handleServerToolResult = useCallback(
     async (toolCall: {
@@ -123,6 +125,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
       codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}
+      czmlResultToolName={CODEGEN_CZML_TOOL_NAMES.generateCzml}
       logger={chatElementLogger}
     />
   );

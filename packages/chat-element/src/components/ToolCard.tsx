@@ -5,6 +5,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ToolInvocation } from "../chat-client";
 import { formatToolPayload } from "../utils/format-tool-payload";
 import { ExecuteCesiumCodeResult } from "./ExecuteCesiumCodeResult";
+import { GenerateCzmlResult } from "./GenerateCzmlResult";
 import { McpAppWidget } from "./McpAppWidget";
 import { parseMcpToolName } from "../mcp/mcp-tool-name";
 import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
@@ -35,6 +36,7 @@ export function ToolCard({
   onApprove,
   onReject,
   codeResultToolName,
+  czmlResultToolName,
   mcpApp,
   mcpAppApiBase,
   mcpAppSandboxUrl,
@@ -50,6 +52,8 @@ export function ToolCard({
    * Omitted means no tool call gets this special-cased treatment.
    */
   codeResultToolName?: string;
+  /** Tool name whose generated `czml` field gets a formatted, copyable result panel. */
+  czmlResultToolName?: string;
   /**
    * MCP Apps widget metadata for THIS invocation's tool, if it declared one
    * (see `RegisteredTool.mcpApp` / `AiChatPanel`'s tools lookup). When set
@@ -66,7 +70,10 @@ export function ToolCard({
   const hasResult = invocation.state === "result" && invocation.result !== undefined;
   const isCodeResult =
     hasResult && codeResultToolName !== undefined && invocation.toolName === codeResultToolName;
-  const resultText = hasResult && !isCodeResult ? formatToolPayload(invocation.result) : "";
+  const isCzmlResult =
+    hasResult && czmlResultToolName !== undefined && invocation.toolName === czmlResultToolName;
+  const resultText =
+    hasResult && !isCodeResult && !isCzmlResult ? formatToolPayload(invocation.result) : "";
   const generationError =
     isCodeResult && invocation.result && typeof invocation.result === "object"
       ? (invocation.result as Record<string, unknown>).error
@@ -84,7 +91,8 @@ export function ToolCard({
           0,
         )
       : 0;
-  const combinedLength = argsText.length + resultText.length + codeLength;
+  const czmlLength = isCzmlResult ? formatToolPayload(invocation.result).length : 0;
+  const combinedLength = argsText.length + resultText.length + codeLength + czmlLength;
   const defaultOpen = isPendingApproval || combinedLength <= AUTO_EXPAND_THRESHOLD;
   const parsedMcpName = parseMcpToolName(invocation.toolName);
 
@@ -110,6 +118,8 @@ export function ToolCard({
         {hasResult &&
           (isCodeResult ? (
             <ExecuteCesiumCodeResult result={invocation.result} />
+          ) : isCzmlResult ? (
+            <GenerateCzmlResult result={invocation.result} />
           ) : (
             <pre className={styles.toolResult}>{resultText}</pre>
           ))}

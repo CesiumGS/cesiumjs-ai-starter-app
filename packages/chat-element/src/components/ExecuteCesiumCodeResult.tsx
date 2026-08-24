@@ -37,7 +37,7 @@ export function ExecuteCesiumCodeResult({ result }: { result: unknown }) {
       {typeof code === "string" && (
         <div className={styles.codeBlockWrapper}>
           <pre className={styles.codeBlock}>{code}</pre>
-          <CopyCodeButton code={code} />
+          <CopyTextButton text={code} label="Copy code" />
         </div>
       )}
     </>
@@ -47,18 +47,18 @@ export function ExecuteCesiumCodeResult({ result }: { result: unknown }) {
 type CopyState = "idle" | "copied" | "error";
 
 /**
- * Copies generated code to the clipboard via the `navigator.clipboard` API.
- * Rendered as a small icon button overlaid in the corner of the code panel
+ * Copies generated text to the clipboard via the `navigator.clipboard` API.
+ * Rendered as a small icon button overlaid in the corner of the content panel
  * (not the `<summary>` toggle, so no click-propagation concerns with the
  * parent `<details>`), swapping to a checkmark icon briefly on success before
  * resetting to the plain copy icon after 1.5s.
  */
-function CopyCodeButton({ code }: { code: string }) {
+export function CopyTextButton({ text, label }: { text: string; label: string }) {
   const [state, setState] = useState<CopyState>("idle");
 
   const handleClick = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(text);
       setState("copied");
     } catch {
       setState("error");
@@ -66,12 +66,13 @@ function CopyCodeButton({ code }: { code: string }) {
     setTimeout(() => setState("idle"), 1500);
   };
 
-  const label = state === "copied" ? "Copied!" : state === "error" ? "Copy failed" : "Copy code";
+  const accessibleLabel =
+    state === "copied" ? "Copied!" : state === "error" ? "Copy failed" : label;
 
   return (
-    <Tooltip title={label}>
+    <Tooltip title={accessibleLabel}>
       <IconButton
-        aria-label={label}
+        aria-label={accessibleLabel}
         size="small"
         className={styles.copyButton}
         onClick={handleClick}

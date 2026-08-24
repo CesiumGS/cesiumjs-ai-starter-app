@@ -12,7 +12,11 @@ export const DEFAULT_GENERATE_CZML_DESCRIPTION =
   "natural language, do NOT write CZML yourself. The intent you provide is turned into a " +
   "verified CZML (Cesium Language) document and loaded in the frontend. Use this to complement " +
   "`entityAdd`/`flyTo` for requests that need interpolated motion over time or should populate " +
-  "the timeline; use `entityAdd` instead for a single static entity. IMPORTANT: a result " +
+  "the timeline; use `entityAdd` instead for a single static entity. Before calling this tool, " +
+  "check that the user supplied every scene choice needed to fulfill the request, such as " +
+  "locations, times, durations, dimensions, colors, quantities, paths, orientations, and asset " +
+  "choices. If a needed value is missing or ambiguous, ask the user for clarification instead of " +
+  "calling the tool; never invent, estimate, or silently choose values. IMPORTANT: a result " +
   "containing `czml` only means the generated document passed verification — it does NOT " +
   "confirm the scene actually loaded successfully in the browser yet. Do not tell the user the " +
   "scene is ready until that is the only result you have seen for this request; if a later " +
@@ -32,7 +36,8 @@ export interface GenerateCzmlFieldDescriptions {
 export const DEFAULT_GENERATE_CZML_FIELD_DESCRIPTIONS: Required<GenerateCzmlFieldDescriptions> = {
   intent:
     "Natural-language description of the time-dynamic scene to create (not CZML). Be specific " +
-    "about the entities, motion/timing, and duration desired.",
+    "about the entities, motion/timing, and duration desired. Include only values explicitly " +
+    "provided or confirmed by the user; never fill in missing scene choices yourself.",
 };
 
 /**

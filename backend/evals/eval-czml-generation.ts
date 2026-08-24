@@ -136,7 +136,24 @@ async function runCase(
 ): Promise<CaseOutcome> {
   const start = Date.now();
   const { metrics, logger, stats } = createStatsCollector();
-  const result = await generateVerifiedCzml({ intent: evalCase.intent, model, metrics, logger });
+
+  // `generateVerifiedCzml` catches model-call failures internally (they surface as a normal
+  // `rejected` outcome below), but an unexpected throw (e.g. the vendored CZML schema failing to
+  // load) previously escaped uncaught here and crashed the whole eval run instead of being
+  // attributed to this one case — catch it so `generation_error` (already reported by
+  // `statusIcon`/the summary counts) is an outcome that can actually occur.
+  let result: Awaited<ReturnType<typeof generateVerifiedCzml>>;
+  try {
+    result = await generateVerifiedCzml({ intent: evalCase.intent, model, metrics, logger });
+  } catch (err) {
+    return {
+      name: evalCase.name,
+      status: "generation_error",
+      error: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - start,
+      ...stats,
+    };
+  }
   const durationMs = Date.now() - start;
 
   if (!result.verified) {

@@ -10,10 +10,9 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
  * success/verification-failure/malformed-result edge cases this real pipeline can't reliably
  * reproduce on demand).
  *
- * Unlike `executeCesiumCode`, `generateCzml` is NOT `needsApproval`-gated (loading an
- * already-verified CZML document is declarative data, not arbitrary code execution — see
- * `ChatPanel.tsx`'s doc comment on `handleServerToolResult`), so this test never clicks Approve;
- * the tool card resolves straight to a result.
+ * Like `executeCesiumCode`, `generateCzml` IS `needsApproval`-gated (see `backend/src/app.ts`'s
+ * `resolveToolApproval`) — this test clicks Approve before the server runs the real
+ * generation + verification pipeline.
  *
  * Requires the same setup as `cesium-viewer-tools-live.spec.ts`:
  *   1) npm run dev:backend     # backend on :3001 with .env loaded
@@ -79,9 +78,13 @@ test.describe("generateCzml tool — end-to-end against the live backend", () =>
       "backend returned an error — is the server running with a valid provider API key?",
     ).toHaveCount(0);
 
-    // No approval gate for generateCzml — the tool card goes straight from pending to a
-    // settled result once the server finishes generation + verification.
+    // The model calls generateCzml — its card appears, paused for approval (nothing has
+    // generated real CZML yet).
     await expect(page.getByText(/\[tool\]\s*generateCzml/)).toBeVisible({ timeout: 90_000 });
+
+    // Approve the intent — only now does the server run the real generation +
+    // verification pipeline.
+    await page.getByRole("button", { name: "Approve" }).click();
 
     const toolCard = await expandToolCard(page, "generateCzml");
     const resultBlock = toolCard.locator('pre[class*="toolResult"]');

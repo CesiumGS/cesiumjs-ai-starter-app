@@ -76,11 +76,13 @@ nav:
       - Codegen Tool Tutorial:
           - Overview: tutorials/codegen-tool-tutorial.md
           - How Codegen Works: tutorials/codegen-pipeline.md
+      - CZML Generation Tutorial: tutorials/czml-tool-tutorial.md
       - Adding an MCP Server: tutorials/mcp-server-tutorial.md
       - Registering WebMCP Tools: tutorials/webmcp-cesium-tutorial.md
   - Packages:
       - Overview: packages/index.md
       - cesium-ai/codegen-cesium: packages/codegen-cesium/index.md
+      - cesium-ai/codegen-czml: packages/codegen-czml/index.md
       - cesium-ai/codegen-sandbox: packages/codegen-sandbox/index.md
       - cesium-ai/mcp-tools: packages/mcp-tools/index.md
       - cesium-ai/tools-schemas:

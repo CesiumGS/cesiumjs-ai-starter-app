@@ -221,6 +221,10 @@ export function createBackendApp({
         // non-deprecated replacement for setting `needsApproval` directly on the
         // tool object (see `./tools/execute-cesium-code-tool.ts`).
         [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval",
+        // generateCzml is approval-gated too: even though the generated CZML is verified
+        // declarative data (not arbitrary code), it's still model-authored content the user
+        // hasn't seen yet before it's loaded into the live Viewer.
+        [CODEGEN_CZML_TOOL_NAMES.generateCzml]: "user-approval",
         // Every MCP tool is approval-gated too, for the same reason: it's
         // third-party code this app doesn't control. Unlike executeCesiumCode,
         // an MCP tool's `execute()` result is already the real, final outcome,
@@ -246,9 +250,10 @@ export function createBackendApp({
       // generate a premature "done!" reply before the real outcome is known.
       // generateCzml needs the exact same treatment: its server-side result only
       // means the generated CZML passed verification, not that it has actually
-      // loaded into the live Viewer yet (no user approval needed for it, though —
-      // unlike executeCesiumCode it never executes arbitrary code, just declarative
-      // CZML data through Cesium's own CzmlDataSource parser).
+      // loaded into the live Viewer yet. It's also approval-gated (see above) —
+      // that approval happens BEFORE this tool call is executed at all, so this
+      // `stopAfterTools` entry is purely about the separate post-execution
+      // "report the real load outcome" follow-up, same as executeCesiumCode.
       stopAfterTools: [
         CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
         CODEGEN_CZML_TOOL_NAMES.generateCzml,

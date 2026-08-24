@@ -41,6 +41,11 @@ const motionSkill = makeSkill(
   "CZML time-dynamic motion: interpolated/sampled positions over an epoch and trails for orbiting, flying, or otherwise moving entities. Use when the intent describes an entity moving, orbiting, flying, or changing position over time (not a single static point).",
 );
 
+const modelSkill = makeSkill(
+  "czml-model",
+  "CZML 3D models (glTF) for vehicles, aircraft, spacecraft, or any 3D asset placed on the globe, including per-node transformations and Model Articulations for jointed or moving parts. Use when the intent describes a 3D model, glTF asset, vehicle/aircraft/rocket model, or a model with moving, articulated, or transformed parts.",
+);
+
 const testSkills = [
   clockSkill,
   orientationSkill,
@@ -128,6 +133,15 @@ describe("matchSkillsForIntent", () => {
     expect(matches.length).toBeGreaterThan(0);
     expect(matches[0].skill.name).toBe("czml-time-dynamic-motion");
   });
+
+  it.each(["Place a 3D rocket model", "Place a 3D humanoid model"])(
+    "matches explicit model intent %j to the model skill",
+    (intent) => {
+      const matches = matchSkillsForIntent(intent, [modelSkill, ...testSkills]);
+
+      expect(matches[0].skill.name).toBe("czml-model");
+    },
+  );
 
   it("is case-insensitive", () => {
     const lower = matchSkillsForIntent("add a filled polygon area of interest", testSkills);

@@ -56,7 +56,7 @@ For requests that don't fit a single tool call, try something like **`add 3D bui
 
 ![executeCesiumCode generating and running verified code that adds 3D buildings over New York](docs/assets/codegen-new-york.gif)
 
-For a time-dynamic scene — e.g. **`animate a satellite orbit over Europe for 24 hours`** — the `generateCzml` tool generates and verifies a [CZML](https://github.com/CesiumGS/cesium/wiki/CZML-Guide) document (declarative data, not code, so no approval/sandbox is needed), and the frontend loads it via `CzmlDataSource`.
+For a time-dynamic scene — e.g. **`animate a satellite orbit over Europe for 24 hours`** — the `generateCzml` tool generates and verifies a [CZML](https://github.com/CesiumGS/cesium/wiki/CZML-Guide) document (declarative data, not code, so no sandbox is needed) behind the same human-in-the-loop approval checkpoint, and the frontend loads it via `CzmlDataSource`.
 
 If no provider key is configured, the globe still runs as a plain viewer, with a banner noting that AI chat needs a provider API key.
 

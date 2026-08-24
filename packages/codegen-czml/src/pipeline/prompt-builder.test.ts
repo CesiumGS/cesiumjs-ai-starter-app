@@ -44,4 +44,22 @@ describe("buildCzmlPrompt", () => {
 
     expect(prompt).not.toContain("Additional reference material for this intent");
   });
+
+  it("requires an explicitly requested 3D model instead of a fallback graphic", () => {
+    const prompt = buildCzmlPrompt({ intent: "Place a 3D humanoid model" });
+
+    expect(prompt).toContain(
+      'when the intent explicitly asks for a 3D model, include a "model" with "gltf"',
+    );
+    expect(prompt).toContain("do not replace it with a point, label, path, or geometric primitive");
+  });
+
+  it("forbids inventing scene choices omitted from the intent", () => {
+    const prompt = buildCzmlPrompt({ intent: "animate a satellite" });
+
+    expect(prompt).toContain(
+      "Do not invent, estimate, or silently choose unspecified locations, times, durations",
+    );
+    expect(prompt).toContain("Do not add optional styling or behavior the intent did not request");
+  });
 });

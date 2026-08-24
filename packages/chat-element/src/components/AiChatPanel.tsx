@@ -106,6 +106,11 @@ export interface AiChatPanelProps {
    */
   codeResultToolName?: string;
   /**
+   * Name of a tool whose generated `czml` result gets a formatted JSON panel
+   * with a copy button. Omitted means no tool receives this treatment.
+   */
+  czmlResultToolName?: string;
+  /**
    * Structured logger for stream/tool/approval errors the underlying
    * {@link ChatClient} encounters — passed straight through to its
    * `logger` option. Omit to log nothing (errors still always reach the
@@ -199,6 +204,7 @@ export function AiChatPanel({
   onApprovalRequired,
   maxToolCallRounds,
   codeResultToolName,
+  czmlResultToolName,
   logger,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
@@ -351,6 +357,7 @@ export function AiChatPanel({
                 onReject: handleReject,
               }}
               codeResultToolName={codeResultToolName}
+              czmlResultToolName={czmlResultToolName}
               mcpAppByToolName={mcpAppByToolName}
               mcpAppApiBase={resolvedMcpAppApiBase}
               mcpAppSandboxUrl={mcpAppSandboxUrl}

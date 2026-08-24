@@ -16,9 +16,10 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
  * app's actual load-into-Viewer wiring works, not just the pure functions already covered by
  * `frontend/src/tools/generate-czml.test.ts`'s `fakeViewer()`.
  *
- * `generateCzml` is not `needsApproval`-gated (see `ChatPanel.tsx`), and its result renders as a
- * plain JSON `pre[class*="toolResult"]` (no dedicated code/error panel — `codeResultToolName` is
- * only set for `executeCesiumCode`), so all three outcomes below are read the same way.
+ * `generateCzml` IS `needsApproval`-gated (see `backend/src/app.ts`'s `resolveToolApproval`), so
+ * every scenario here clicks Approve before reading the result. Successful results render metadata
+ * separately from the formatted, copyable CZML document; error results remain in the metadata
+ * block, so all three outcomes below can read their status consistently.
  */
 
 const VALID_CZML = [
@@ -55,6 +56,7 @@ async function mockGenerateCzmlTurn(page: Page, output: Record<string, unknown>)
     chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n`).join("") + "data: [DONE]\n";
 
   const responses = [
+    // First turn: paused for approval — nothing has generated real CZML yet.
     sseBody([
       {
         type: "tool-input-available",
@@ -62,6 +64,12 @@ async function mockGenerateCzmlTurn(page: Page, output: Record<string, unknown>)
         toolName: "generateCzml",
         input: { intent: "Add a marker using CZML" },
       },
+      { type: "tool-approval-request", toolCallId: "call-czml-1", approvalId: "approval-czml-1" },
+      { type: "finish" },
+    ]),
+    // Second turn: the client resends with the approval decision, and the server runs the
+    // real generation + verification pipeline.
+    sseBody([
       { type: "tool-output-available", toolCallId: "call-czml-1", output },
       { type: "finish" },
     ]),
@@ -88,6 +96,8 @@ async function submitAndReadGenerateCzmlResult(page: Page): Promise<Record<strin
   await page.locator(INPUT_SELECTOR).press("Enter");
 
   await expect(page.getByText(/\[tool\]\s*generateCzml/)).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Approve" }).click();
+
   const toolCard = await expandToolCard(page, "generateCzml");
   const resultBlock = toolCard.locator('pre[class*="toolResult"]');
   await expect(resultBlock).toBeVisible({ timeout: 10_000 });
@@ -96,9 +106,11 @@ async function submitAndReadGenerateCzmlResult(page: Page): Promise<Record<strin
 }
 
 test.describe("generateCzml tool — stubbed result handling", () => {
-  test("a verified CZML document loads into the live Viewer via a real CzmlDataSource", async ({
+  test("a verified CZML document loads into the live Viewer and can be copied", async ({
     page,
+    context,
   }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await mockGenerateCzmlTurn(page, { czml: VALID_CZML, description: "one marker" });
     await gotoAndWaitForInput(page);
     const before = await getViewerSnapshot(page);
@@ -108,6 +120,16 @@ test.describe("generateCzml tool — stubbed result handling", () => {
     expect(result.description).toBe("one marker");
     expect(result.entityCount).toBe(1);
     expect(result.error).toBeUndefined();
+
+    const toolCard = await expandToolCard(page, "generateCzml");
+    await expect(toolCard.locator('pre[class*="codeBlock"]')).toHaveText(
+      JSON.stringify(VALID_CZML, null, 2),
+    );
+    await toolCard.getByRole("button", { name: "Copy CZML" }).click();
+    await expect(toolCard.getByRole("button", { name: "Copied!" })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(JSON.stringify(VALID_CZML, null, 2));
 
     const after = await getViewerSnapshot(page);
     expect(after.dataSources).toBe(before.dataSources + 1);

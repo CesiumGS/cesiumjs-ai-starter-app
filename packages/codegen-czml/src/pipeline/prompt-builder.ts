@@ -53,7 +53,9 @@ Output rules:
 - Every other packet MUST have a unique, non-"document" "id".
 - Compute any interpolated positions (e.g. "cartographicDegrees" samples over an "epoch") yourself from the intent — never leave placeholder values.
 - Use only property names and structures shown in the reference material above. Do not add extra packet properties beyond what's directly needed for the intent.
-- Do not reference external image/model URLs unless the intent explicitly supplies one; prefer "point"/"path"/"polyline"/"label" styling, which need no external asset.${
+- Treat the intent as the complete source of scene choices. Do not invent, estimate, or silently choose unspecified locations, times, durations, dimensions, colors, quantities, paths, orientations, or other scene values. Do not add optional styling or behavior the intent did not request.
+- Treat the requested graphic type as a requirement. In particular, when the intent explicitly asks for a 3D model, include a "model" with "gltf"; do not replace it with a point, label, path, or geometric primitive.
+- Do not invent external image/model URLs. Use a URL supplied by the intent or, for an explicitly requested 3D model, a trusted fallback URL documented in the matched model reference material.${
     extraInstructions?.trim()
       ? `\n\nAdditional instructions from the host application:\n${extraInstructions.trim()}`
       : ""
