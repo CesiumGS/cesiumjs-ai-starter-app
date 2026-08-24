@@ -1,10 +1,6 @@
 /**
  * Matches a natural-language intent to the vendored CZML Agent Skill(s) (see `skills-loader.ts`)
  * whose `description` (trigger/activation text) most closely overlaps with the intent's wording.
- * Mirrors `@cesium-ai/codegen-cesium`'s `domain-matcher.ts` exactly (same BM25 scoring, same
- * rationale for computing it inline rather than via the unmaintained `bm25` npm package) — kept
- * as an independent copy rather than a shared dependency so each codegen package stays
- * self-contained, matching this monorepo's existing per-package logger/metrics convention.
  */
 import { loadCzmlSkills, type CzmlSkill } from "./skills-loader.js";
 import { DEFAULT_SKILL_MATCH_LIMIT, DEFAULT_SKILL_MATCH_THRESHOLD } from "./constants.js";

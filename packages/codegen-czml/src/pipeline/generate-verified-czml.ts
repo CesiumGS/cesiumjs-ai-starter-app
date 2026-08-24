@@ -1,16 +1,15 @@
 /**
  * Orchestration entry point: turns a natural-language intent into a **verified** CZML document.
- * Mirrors `@cesium-ai/codegen-cesium`'s `generateVerifiedCesiumCode` shape (domain matching ->
- * prompt building -> model call -> verify -> retry-with-feedback), but generates structured data
- * via the AI SDK's `generateObject` instead of raw text, and verifies via `verifyCzml` (zod + a
- * real `CzmlDataSource` parse) instead of AST analysis — CZML is declarative data, not code, so
+ * Pipeline: domain matching -> prompt building -> model call (via the AI SDK's `generateText`
+ * with an `Output.object()` setting, for structured output) -> verify (via `verifyCzml`: zod + a
+ * real `CzmlDataSource` parse) -> retry-with-feedback. CZML is declarative data, not code, so
  * there is nothing to statically analyze for unsafe operations, only structural/semantic validity
  * to check.
  *
  * Model-agnostic by design: this function receives an already-resolved `LanguageModel` from the
  * caller and never selects a provider or reads API keys itself.
  */
-import { generateObject, type LanguageModel } from "ai";
+import { generateText, Output, type LanguageModel } from "ai";
 import {
   noopCodegenMetrics,
   noopLogger,
@@ -24,7 +23,9 @@ import {
   matchBestSkills,
   matchSkillsForIntent,
   DEFAULT_SKILL_MATCH_THRESHOLD,
+  type DomainMatch,
 } from "./domain-matcher.js";
+import type { CzmlSkill } from "./skills-loader.js";
 import { DEFAULT_MAX_ATTEMPTS, DEFAULT_SKILL_MATCH_LIMIT } from "./constants.js";
 
 /** The structured object the model is asked to produce for one generation attempt. */
@@ -61,23 +62,16 @@ export type GenerateVerifiedCzmlResult =
   | { verified: false; error: string; violations?: string[] };
 
 /**
- * Generates a CZML document for `intent` and verifies it (structurally and semantically, via
- * `verifyCzml`) before returning it. Retries generation (feeding the previous attempt's
- * violations back to the model as extra prompt context) up to `maxAttempts` total attempts.
- * Never returns unverified CZML as if it were verified.
+ * Scores and selects the feature-domain skills to inline as extra grounding context for `intent`,
+ * logging the scoring breakdown and recording per-skill match metrics along the way.
  */
-export async function generateVerifiedCzml(
-  options: GenerateVerifiedCzmlOptions,
-): Promise<GenerateVerifiedCzmlResult> {
-  const { intent, model, maxPackets, maxLength, extraInstructions } = options;
-  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-  const maxSkills = options.maxSkills ?? DEFAULT_SKILL_MATCH_LIMIT;
-  const threshold = options.threshold ?? DEFAULT_SKILL_MATCH_THRESHOLD;
-  const logger = options.logger ?? noopLogger;
-  const metrics = options.metrics ?? noopCodegenMetrics;
-
-  logger.debug("Generating CZML", { intent, maxAttempts, maxSkills });
-
+function selectSkillsForIntent(
+  intent: string,
+  maxSkills: number,
+  threshold: number,
+  logger: Logger,
+  metrics: CodegenMetrics,
+): CzmlSkill[] {
   const skillsWithScores = matchSkillsForIntent(intent);
 
   if (skillsWithScores.length > 0) {
@@ -104,7 +98,7 @@ export async function generateVerifiedCzml(
     });
   }
 
-  skillsWithScores.forEach((match, rank) => {
+  skillsWithScores.forEach((match: DomainMatch, rank) => {
     metrics.recordSkillMatchScore(match.score, {
       skill: match.skill.name,
       rank,
@@ -113,46 +107,83 @@ export async function generateVerifiedCzml(
     });
   });
 
-  const basePrompt = buildCzmlPrompt({ intent, skills: bestSkills, extraInstructions });
-  const correctionPrompt = (violations: string[]) =>
-    `${basePrompt}
+  return bestSkills;
+}
+
+/** Appends the previous attempt's verification failures to `basePrompt` as correction feedback. */
+function buildCorrectionPrompt(basePrompt: string, violations: string[]): string {
+  return `${basePrompt}
 
 Your previous attempt was rejected by verification for the following reason(s):
 ${violations.map((v) => `- ${v}`).join("\n")}
 
 Generate a corrected CZML document that avoids all of the above issues, still following all output rules above.`;
+}
+
+/** One model call for one generation attempt; records token usage and lets callers handle errors. */
+async function generateCzmlAttempt(
+  model: LanguageModel,
+  prompt: string,
+  attempt: number,
+  metrics: CodegenMetrics,
+): Promise<{ czml: Record<string, unknown>[]; description: string }> {
+  const result = await generateText({
+    model,
+    prompt,
+    output: Output.object({ schema: czmlGenerationObjectShape }),
+    // CZML packets are deliberately loosely-typed (`z.record`, see czml-verifier.ts) since
+    // real CZML properties vary per packet — that produces a `propertyNames` keyword in the
+    // JSON schema, which OpenAI's *strict* structured-output mode rejects
+    // ("'propertyNames' is not permitted"). Other providers ignore unknown providerOptions
+    // keys, so this only affects OpenAI.
+    providerOptions: { openai: { strictJsonSchema: false } },
+  });
+
+  if (result.usage) {
+    metrics.recordTokenUsage(
+      {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+        totalTokens: result.usage.totalTokens,
+      },
+      { attempt },
+    );
+  }
+
+  return result.output;
+}
+
+/**
+ * Generates a CZML document for `intent` and verifies it (structurally and semantically, via
+ * `verifyCzml`) before returning it. Retries generation (feeding the previous attempt's
+ * violations back to the model as extra prompt context) up to `maxAttempts` total attempts.
+ * Never returns unverified CZML as if it were verified.
+ */
+export async function generateVerifiedCzml(
+  options: GenerateVerifiedCzmlOptions,
+): Promise<GenerateVerifiedCzmlResult> {
+  const { intent, model, maxPackets, maxLength, extraInstructions } = options;
+  const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const maxSkills = options.maxSkills ?? DEFAULT_SKILL_MATCH_LIMIT;
+  const threshold = options.threshold ?? DEFAULT_SKILL_MATCH_THRESHOLD;
+  const logger = options.logger ?? noopLogger;
+  const metrics = options.metrics ?? noopCodegenMetrics;
+
+  logger.debug("Generating CZML", { intent, maxAttempts, maxSkills });
+
+  const bestSkills = selectSkillsForIntent(intent, maxSkills, threshold, logger, metrics);
+  const basePrompt = buildCzmlPrompt({ intent, skills: bestSkills, extraInstructions });
 
   let lastViolations: string[] | undefined;
   let lastError: string | undefined;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const prompt = lastViolations ? correctionPrompt(lastViolations) : basePrompt;
+    const prompt = lastViolations ? buildCorrectionPrompt(basePrompt, lastViolations) : basePrompt;
     const attemptStart = Date.now();
 
     let generated: { czml: Record<string, unknown>[]; description: string };
     try {
-      const result = await generateObject({
-        model,
-        schema: czmlGenerationObjectShape,
-        prompt,
-        // CZML packets are deliberately loosely-typed (`z.record`, see czml-verifier.ts) since
-        // real CZML properties vary per packet — that produces a `propertyNames` keyword in the
-        // JSON schema, which OpenAI's *strict* structured-output mode rejects
-        // ("'propertyNames' is not permitted"). Other providers ignore unknown providerOptions
-        // keys, so this only affects OpenAI.
-        providerOptions: { openai: { strictJsonSchema: false } },
-      });
-      generated = result.object;
-      if (result.usage) {
-        metrics.recordTokenUsage(
-          {
-            inputTokens: result.usage.inputTokens,
-            outputTokens: result.usage.outputTokens,
-            totalTokens: result.usage.totalTokens,
-          },
-          { attempt },
-        );
-      }
+      generated = await generateCzmlAttempt(model, prompt, attempt, metrics);
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       logger.warn("Model call failed during CZML generation", { attempt, error: lastError });

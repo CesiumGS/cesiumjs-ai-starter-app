@@ -8,14 +8,18 @@
  * but reads the vendored local copy instead of a network fetch or a czml-writer-repo-relative
  * cwd, so validation never depends on network access at runtime.
  */
+import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Ajv, type ValidateFunction } from "ajv";
+
 // `ajv-formats` is CJS-only and its default export doesn't resolve cleanly under
 // NodeNext/esModuleInterop from an ESM file — `require` it directly instead.
-import { createRequire } from "node:module";
-const addFormats = createRequire(import.meta.url)("ajv-formats") as (ajvInstance: Ajv) => Ajv;
+const require = createRequire(import.meta.url);
+const addFormats = require("ajv-formats") as (ajvInstance: Ajv) => Ajv;
+
+// --- Vendored schema loading -------------------------------------------------
 
 const SCHEMA_BASE_URL = "https://analyticalgraphicsinc.github.io/czml-writer/Schema/";
 const VENDORED_SCHEMA_DIR = path.join(
@@ -28,14 +32,20 @@ async function readVendoredSchema(relativePath: string): Promise<object> {
   return JSON.parse(contents);
 }
 
+/** Resolves a schema's `$ref` URI to its vendored local copy instead of fetching over the network. */
 function loadSchema(uri: string): Promise<object> {
   return readVendoredSchema(uri.replace(SCHEMA_BASE_URL, ""));
 }
 
+// --- Ajv setup ----------------------------------------------------------------
+
 const ajv = new Ajv({ allErrors: true, strict: false, loadSchema });
+
 // Ajv core only ships a handful of built-in formats; without this, "date-time" (used by
 // InterpolatableProperty.json's `epoch`) is silently ignored rather than actually validated.
 addFormats(ajv);
+
+// --- Public API -----------------------------------------------------------------
 
 // `compileAsync` recursively resolves every `$ref` via `loadSchema` above; compiled once and
 // reused, since ajv validators are stateful/reusable and recompiling per call is wasted work.

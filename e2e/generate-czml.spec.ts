@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { expandToolCard } from "./helpers/tool-card";
+import { expandToolCard, readGenerateCzmlResult } from "./helpers/tool-card";
 
 const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 
@@ -18,8 +18,10 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
  *
  * `generateCzml` IS `needsApproval`-gated (see `backend/src/app.ts`'s `resolveToolApproval`), so
  * every scenario here clicks Approve before reading the result. Successful results render metadata
- * separately from the formatted, copyable CZML document; error results remain in the metadata
- * block, so all three outcomes below can read their status consistently.
+ * separately from the formatted, copyable CZML document; error results (both a generation failure
+ * and a later load failure) render in their own `[data-testid="czml-error-panel"]`, read via
+ * `readGenerateCzmlResult` (see `helpers/tool-card.ts`) rather than parsed out of the generic
+ * result JSON block.
  */
 
 const VALID_CZML = [
@@ -90,13 +92,18 @@ async function gotoAndWaitForInput(page: Page): Promise<void> {
   await page.waitForSelector(INPUT_SELECTOR, { timeout: 30_000 });
 }
 
-/** Submits the standard prompt and returns the settled `generateCzml` tool card's JSON result. */
-async function submitAndReadGenerateCzmlResult(page: Page): Promise<Record<string, unknown>> {
+/** Submits the standard prompt, approves the call, and waits for the tool card to appear. */
+async function submitAndWaitForGenerateCzmlToolCard(page: Page): Promise<void> {
   await page.locator(INPUT_SELECTOR).fill("Add a marker using CZML");
   await page.locator(INPUT_SELECTOR).press("Enter");
 
   await expect(page.getByText(/\[tool\]\s*generateCzml/)).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "Approve" }).click();
+}
+
+/** Submits the standard prompt and returns the settled `generateCzml` tool card's JSON result. */
+async function submitAndReadGenerateCzmlResult(page: Page): Promise<Record<string, unknown>> {
+  await submitAndWaitForGenerateCzmlToolCard(page);
 
   const toolCard = await expandToolCard(page, "generateCzml");
   const resultBlock = toolCard.locator('pre[class*="toolResult"]');
@@ -152,9 +159,15 @@ test.describe("generateCzml tool — stubbed result handling", () => {
     await gotoAndWaitForInput(page);
     const before = await getViewerSnapshot(page);
 
-    const result = await submitAndReadGenerateCzmlResult(page);
+    await submitAndWaitForGenerateCzmlToolCard(page);
+    const toolCard = await expandToolCard(page, "generateCzml");
+    await expect(
+      toolCard.locator('xpath=following-sibling::*[@data-testid="czml-error-panel"][1]'),
+    ).toBeVisible({ timeout: 10_000 });
+    const result = await readGenerateCzmlResult(toolCard);
 
     expect(result.error).toBe("Generated CZML failed verification after all attempts.");
+    expect(result.hasCzml).toBe(false);
     const after = await getViewerSnapshot(page);
     expect(after.dataSources).toBe(before.dataSources);
     await expect(page.locator('[data-testid="error-text"]')).toHaveCount(0);
@@ -167,7 +180,12 @@ test.describe("generateCzml tool — stubbed result handling", () => {
     await gotoAndWaitForInput(page);
     const before = await getViewerSnapshot(page);
 
-    const result = await submitAndReadGenerateCzmlResult(page);
+    await submitAndWaitForGenerateCzmlToolCard(page);
+    const toolCard = await expandToolCard(page, "generateCzml");
+    await expect(
+      toolCard.locator('xpath=following-sibling::*[@data-testid="czml-error-panel"][1]'),
+    ).toBeVisible({ timeout: 10_000 });
+    const result = await readGenerateCzmlResult(toolCard);
 
     expect(result.error).toBe("Malformed generateCzml result.");
     const after = await getViewerSnapshot(page);

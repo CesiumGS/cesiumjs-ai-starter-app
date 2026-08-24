@@ -13,6 +13,16 @@ import { z } from "zod";
 import { getCzmlDocumentValidator } from "./czml-official-schema.js";
 import { DEFAULT_MAX_LENGTH, DEFAULT_MAX_PACKETS } from "./constants.js";
 
+export interface VerifyCzmlOptions {
+  /** Hard cap on packet count. Defaults to {@link DEFAULT_MAX_PACKETS}. */
+  maxPackets?: number;
+  /** Hard cap on serialized CZML size in characters. Defaults to {@link DEFAULT_MAX_LENGTH}. */
+  maxLength?: number;
+}
+
+export type VerifyCzmlResult =
+  { verified: true; entityCount: number } | { verified: false; violations: string[] };
+
 /**
  * `@cesium/engine`'s CzmlDataSource dispatches per-property types through a switch whose case
  * labels include the bare browser `Image` constructor (used only as a type-identity marker for
@@ -70,16 +80,6 @@ export const czmlDocumentShape = z
       seenIds.add(packet.id);
     });
   });
-
-export interface VerifyCzmlOptions {
-  /** Hard cap on packet count. Defaults to {@link DEFAULT_MAX_PACKETS}. */
-  maxPackets?: number;
-  /** Hard cap on serialized CZML size in characters. Defaults to {@link DEFAULT_MAX_LENGTH}. */
-  maxLength?: number;
-}
-
-export type VerifyCzmlResult =
-  { verified: true; entityCount: number } | { verified: false; violations: string[] };
 
 /**
  * Verifies `czml` (untrusted, model-produced input) in four stages: a size cap (defense against

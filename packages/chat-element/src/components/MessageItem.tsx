@@ -5,6 +5,7 @@ import type { Message } from "../chat-client";
 import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import { spanVariantMapping } from "../utils/ui-constants";
 import { ToolCard, type PendingApprovalHandlers } from "./ToolCard";
+import type { StructuredResultRenderer } from "./StructuredResult";
 import styles from "./AiChatPanel.module.css";
 
 export type { PendingApprovalHandlers } from "./ToolCard";
@@ -12,18 +13,15 @@ export type { PendingApprovalHandlers } from "./ToolCard";
 export function MessageItem({
   message,
   approval,
-  codeResultToolName,
-  czmlResultToolName,
+  structuredResultByToolName,
   mcpAppByToolName,
   mcpAppApiBase,
   mcpAppSandboxUrl,
 }: {
   message: Message;
   approval?: PendingApprovalHandlers;
-  /** Forwarded straight through to {@link ToolCard} — see its prop doc. */
-  codeResultToolName?: string;
-  /** Forwarded straight through to {@link ToolCard} — see its prop doc. */
-  czmlResultToolName?: string;
+  /** Forwarded straight through to {@link ToolCard} — structured-result config lookup, keyed by tool name. */
+  structuredResultByToolName?: ReadonlyMap<string, StructuredResultRenderer>;
   /** Forwarded straight through to {@link ToolCard} — MCP Apps widget lookup, keyed by namespaced tool name. */
   mcpAppByToolName?: ReadonlyMap<string, RegisteredToolMcpApp>;
   /** Forwarded straight through to {@link ToolCard} — see its `mcpAppApiBase` prop. */
@@ -67,8 +65,7 @@ export function MessageItem({
           isPendingApproval={approval?.pendingApprovalToolCallId === inv.toolCallId}
           onApprove={approval?.onApprove}
           onReject={approval?.onReject}
-          codeResultToolName={codeResultToolName}
-          czmlResultToolName={czmlResultToolName}
+          structuredResult={structuredResultByToolName?.get(inv.toolName)}
           mcpApp={mcpAppByToolName?.get(inv.toolName)}
           mcpAppApiBase={mcpAppApiBase}
           mcpAppSandboxUrl={mcpAppSandboxUrl}

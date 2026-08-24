@@ -83,3 +83,30 @@ export async function readExecuteCesiumCodeResult(
     hasCode,
   };
 }
+
+export interface GenerateCzmlResultInfo {
+  /** Present on either a generation failure or a later `CzmlDataSource` load failure. */
+  error?: string;
+  /** True once the `.codeBlock` `<pre>` (formatted, copyable CZML JSON) is rendered. */
+  hasCzml: boolean;
+}
+
+/**
+ * Reads a resolved `generateCzml` tool result off an already-expanded tool card (see
+ * {@link expandToolCard}), mirroring {@link readExecuteCesiumCodeResult}: `GenerateCzmlResult`
+ * (`ToolCard.tsx`) renders a `czml` array as its own `.codeBlock` `<pre>`, and excludes `error`
+ * from the generic metadata dump — it instead renders in its own error-styled
+ * `[data-testid="czml-error-panel"]`, a SIBLING of the tool card's `<details>` (not nested
+ * inside it), titled "Generation error" (no `czml` document) or "Load error" (`czml` present
+ * alongside `error`).
+ */
+export async function readGenerateCzmlResult(toolCard: Locator): Promise<GenerateCzmlResultInfo> {
+  const codeBlock = toolCard.locator('pre[class*="codeBlock"]');
+  const errorPanel = toolCard.locator(
+    'xpath=following-sibling::*[@data-testid="czml-error-panel"][1]',
+  );
+  const hasCzml = (await codeBlock.count()) > 0;
+  const errorText =
+    (await errorPanel.count()) > 0 ? await errorPanel.locator("pre").innerText() : undefined;
+  return { error: errorText, hasCzml };
+}

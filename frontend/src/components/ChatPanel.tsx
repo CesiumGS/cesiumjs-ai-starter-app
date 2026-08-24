@@ -13,13 +13,46 @@ import { handleGenerateCzmlResult, isGenerateCzmlTool } from "../tools/generate-
 import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import { createFrontendLogger, frontendLogger } from "../utils/telemetry";
-import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
+import type { StructuredResultRenderer, ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
 }
 
 const chatElementLogger = createFrontendLogger("@cesium-ai/chat-element");
+
+/**
+ * Dedicated `ToolCard` rendering for this app's two codegen tools (see
+ * `AiChatPanel`'s `structuredResults` prop / `StructuredResult.tsx`): each gets its generated
+ * content in a copyable `.codeBlock` panel, plus its own error field(s) broken out into distinct
+ * error-styled panels instead of the generic result view.
+ */
+const STRUCTURED_RESULTS: StructuredResultRenderer[] = [
+  {
+    toolName: CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
+    field: "code",
+    copyLabel: "Copy code",
+    errorFields: [
+      { field: "error", title: "Generation error", testId: "generation-error-panel" },
+      { field: "executionError", title: "Execution error", testId: "execution-error-panel" },
+    ],
+  },
+  {
+    toolName: CODEGEN_CZML_TOOL_NAMES.generateCzml,
+    field: "czml",
+    copyLabel: "Copy CZML",
+    errorFields: [
+      {
+        field: "error",
+        // `czml` is only present alongside `error` when generation succeeded but the frontend's
+        // later `CzmlDataSource` load failed (see `generate-czml.ts`'s `handleGenerateCzmlResult`)
+        // — absent, the failure happened during generation itself.
+        title: (result) => (Array.isArray(result.czml) ? "Load error" : "Generation error"),
+        testId: "czml-error-panel",
+      },
+    ],
+  },
+];
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
@@ -112,8 +145,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       apiBase={config.apiBase}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
-      codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}
-      czmlResultToolName={CODEGEN_CZML_TOOL_NAMES.generateCzml}
+      structuredResults={STRUCTURED_RESULTS}
       logger={chatElementLogger}
     />
   );

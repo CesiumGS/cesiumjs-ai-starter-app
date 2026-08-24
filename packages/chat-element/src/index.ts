@@ -1,5 +1,9 @@
 export { AiChatPanel } from "./components/AiChatPanel";
 export type { AiChatPanelProps } from "./components/AiChatPanel";
+export type {
+  StructuredResultErrorField,
+  StructuredResultRenderer,
+} from "./components/StructuredResult";
 export { ChatClient } from "./chat-client";
 export type { Message, ToolExecutionOutcome, ToolInvocation } from "./chat-client";
 export { RegisteredTools } from "./components/RegisteredTools";

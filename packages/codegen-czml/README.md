@@ -8,26 +8,49 @@ Intent-to-verified-CZML generation pipeline, plus the `generateCzml` tool defini
 
 ## Architecture
 
+Two checkpoints stand between a model's output and the live globe: **GATE 1** (this package) rejects anything structurally or semantically invalid before it ever leaves the backend, and **GATE 2** (the host app's frontend) is the real `CzmlDataSource` load into the `Viewer` — the only step that actually renders anything.
+
 ```mermaid
-%%{init: {"themeVariables": {"fontSize": "18px"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 65, "padding": 12}}}%%
+%%{init: {"themeVariables": {"fontSize": "18px", "fontFamily": "'Segoe UI', Helvetica, Arial, sans-serif"}, "flowchart": {"nodeSpacing": 45, "rankSpacing": 65, "padding": 12}}}%%
 graph TD
-    A["🧑 User Intent"] -->|input| C["Prompt Building<br/>buildCzmlPrompt"]
-    C -->|grounded prompt| D["Model Generation<br/>generateObject (caller-supplied model)"]
-    D -->|"{ czml, description }"| E["Verification<br/>verifyCzml (zod + CzmlDataSource.load)"]
-    E -->|violations?| E_retry["Retry (up to 3 attempts)"]
-    E_retry -->|feedback| D
-    E -->|verified| F["✅ GATE 1: Structural + semantic verification<br/>No rendering"]
-    F --> BOUNDARY["@cesium-ai/codegen-czml boundary<br/>Nothing above touches a live Viewer"]
-    BOUNDARY --> G["Backend Tool Execution"]
-    G -->|stream to browser| H["🌐 GATE 2: Frontend CzmlDataSource load"]
-    H --> I["Output: entities added to the Viewer"]
-    E -->|fails| REJECT["❌ Return violations"]
+    A["🧑 User Intent"]
+
+    subgraph FRONTEND["Frontend"]
+        A
+    end
+
+    subgraph BACKEND["Backend"]
+        A --> B["Skill Matching<br/>matchBestSkills"]
+
+        subgraph BOUNDARY["This package's pipeline (generation + verification only)"]
+            B --> C["Prompt Building<br/>buildCzmlPrompt"]
+            C --> D["Model Generation<br/>generateObject"]
+            D --> E{"Verify<br/>zod + ajv + CzmlDataSource.load"}
+            E -- "rejected, retries left" --> D
+            E -- "verified" --> F["✅ GATE 1 passed"]
+        end
+
+        E -- "rejected, no retries left" --> REJECT["❌ Return violations"]
+    end
+
+    subgraph FRONTEND2["Frontend"]
+        F --> H["🌐 GATE 2<br/>loads { czml } via CzmlDataSource"]
+        H --> I["Entities added to the Viewer"]
+    end
 
     style F fill:#20B2AA,stroke:#008B8B,color:#fff
     style H fill:#9370DB,stroke:#6A0DAD,color:#fff
+    style A fill:#FFE4B5,stroke:#CD853F,color:#000
+    style B fill:#E0F7FA,stroke:#00838F,color:#000
+    style C fill:#E0F7FA,stroke:#00838F,color:#000
+    style D fill:#E0F7FA,stroke:#00838F,color:#000
+    style E fill:#FFF3CD,stroke:#FFC107,color:#000
+    style I fill:#D4EDDA,stroke:#28A745,color:#000
     style BOUNDARY fill:#E6E6FA,stroke:#9370DB,stroke-dasharray: 5 5
-    style E_retry fill:#FFA500,stroke:#FF8C00,color:#000
     style REJECT fill:#FF6B6B,stroke:#CC0000,color:#fff
+    style FRONTEND fill:#FFF8DC,stroke:#DAA520
+    style FRONTEND2 fill:#FFF8DC,stroke:#DAA520
+    style BACKEND fill:#F0F8FF,stroke:#4682B4
 ```
 
 Unlike `@cesium-ai/codegen-cesium`'s `executeCesiumCode` (arbitrary JavaScript, needing AST verification and a runtime sandbox), CZML is declarative data Cesium already knows how to parse safely — so GATE 1 doubles as both the structural check and the real semantic parse (via `CzmlDataSource`, headless, no `Viewer` needed), and GATE 2 is just loading the already-verified document into the live `Viewer`.
@@ -77,6 +100,8 @@ A host application wraps this in its own executable AI SDK tool (see this repo's
 ## Security
 
 - **GATE 1 — Verification (this package):** `verifyCzml` caps document size/packet count, structurally validates via zod (document packet first, unique ids), validates every packet against the official CZML JSON Schema via ajv, then parses the document with Cesium's own `CzmlDataSource.load` — catching anything Cesium itself would reject before it ever reaches the client. This never constructs a `Viewer` or renders anything.
+  - The ajv/official-schema step isn't redundant with the final `CzmlDataSource.load` parse: `CzmlDataSource.load` only throws a single generic parse error, while ajv reports one message per violated schema property (`instancePath` + `message`). That per-property detail is what gets fed back to the model as retry feedback — dropping ajv would still catch bad CZML at the `CzmlDataSource.load` step, but with much weaker guidance on what to fix on the next attempt.
+  - The official CZML schema is vendored locally under `schema/czml/` (see [`czml-official-schema.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/codegen-czml/src/pipeline/czml-official-schema.ts)), not fetched from GitHub at runtime — validation never depends on network access.
 - **GATE 2 — Frontend load:** The host application loads the already-verified CZML into the live `Viewer` via `CzmlDataSource` and reports the real entity count/any load error back to the agent loop.
 - Verified CZML is still attacker-influenceable model output until the frontend actually loads it — treat a `{ czml }` result as "passed verification", not "is on the globe", exactly like `executeCesiumCode`'s `{ code }` result.
 - **Not enforced by verification:** the prompt instructs the model not to invent external image/model/tileset URLs; explicit model requests may use a small allowlist of Cesium-hosted sample assets documented in the model skill when the intent supplies no URL. Neither GATE enforces that policy — a verified `{ czml }` result can still contain an attacker- or model-supplied URI that the browser will fetch once loaded. Likewise, a packet's `description` is raw HTML rendered in Cesium's `InfoBox` when that entity is clicked; verification only checks it's a valid CZML string, not that it's benign markup. Host applications with stricter requirements should add their own allowlist/sanitization on `{ czml }` before loading it.
