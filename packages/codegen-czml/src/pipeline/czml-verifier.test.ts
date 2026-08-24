@@ -11,11 +11,13 @@ const MINIMAL_VALID_CZML = [
 ];
 
 describe("verifyCzml", () => {
+  // `CzmlDataSource.load`'s first call in the process is slow (schema/ajv compile cold start),
+  // well past vitest's default 5s test timeout — bumped here rather than lowered globally.
   it("verifies a minimal valid CZML document and counts entities (excluding the document packet)", async () => {
     const result = await verifyCzml(MINIMAL_VALID_CZML);
 
     expect(result).toEqual({ verified: true, entityCount: 1 });
-  });
+  }, 60000);
 
   it("verifies a static flight-path document (polyline + label) with two entities", async () => {
     const result = await verifyCzml([
@@ -36,7 +38,7 @@ describe("verifyCzml", () => {
     ]);
 
     expect(result).toEqual({ verified: true, entityCount: 2 });
-  });
+  }, 60000);
 
   it("rejects a document missing the leading document packet", async () => {
     const result = await verifyCzml([{ id: "pt-1", point: { pixelSize: 8 } }]);
@@ -132,7 +134,7 @@ describe("verifyCzml", () => {
 
       expect(result.verified).toBe(true);
       if (result.verified) expect(result.entityCount).toBe(1);
-    });
+    }, 60000);
 
     it("verifies the Billboard.json example's billboard block once given an id and position", async () => {
       const result = await verifyCzml([
@@ -169,7 +171,7 @@ describe("verifyCzml", () => {
 
       expect(result.verified).toBe(true);
       if (result.verified) expect(result.entityCount).toBe(1);
-    });
+    }, 60000);
 
     it("verifies a real time-dynamic satellite scene built from the TimeVaryingPosition.json, OrientationSampled.json and DocumentPacket.json examples", async () => {
       // Mirrors e2e/generate-czml-live.spec.ts's "satellite orbiting Earth" intent, but assembled
