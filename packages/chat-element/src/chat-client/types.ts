@@ -1,3 +1,5 @@
+import type { Logger } from "@cesium-ai/observability";
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
@@ -5,19 +7,6 @@ export interface Message {
   toolInvocations?: ToolInvocation[];
   /** Marks an assistant message that carries an error, for distinct styling. */
   error?: boolean;
-}
-
-/**
- * A small, console-shaped logging interface so a host can plug in its own
- * implementation (e.g. one wired into its own OTEL telemetry). Entirely
- * optional — errors are always still surfaced to the transcript and via
- * {@link ChatClientOptions.onError} regardless of whether a logger is set.
- */
-export interface ChatLogger {
-  debug(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
 }
 
 export interface ToolInvocation {
@@ -106,7 +95,7 @@ export interface ChatClientOptions {
    * regardless of whether this is set — this is purely an additional
    * observability hook. Omit to log nothing.
    */
-  logger?: ChatLogger;
+  logger?: Logger;
 }
 
 export type EnsureAssistantMessage = () => Message;

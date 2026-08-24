@@ -6,7 +6,7 @@ import { initializeBackendTelemetry } from "./utils/telemetry.js";
 
 const telemetry = initializeBackendTelemetry(env);
 const appLogger = telemetry.createLogger("backend");
-const mcpLogger = telemetry.createMcpToolsLogger("@cesium-ai/mcp-tools");
+const mcpLogger = telemetry.createLogger("@cesium-ai/mcp-tools");
 
 const provider = createProviderConfig(env);
 const model = isProviderConfigured(provider) ? await createModel(provider) : undefined;

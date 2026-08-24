@@ -1,4 +1,4 @@
-import type { McpToolsLogger } from "../../logger.js";
+import type { Logger } from "@cesium-ai/observability";
 
 /**
  * Builds the RFC 9728 OAuth Protected Resource Metadata well-known URL(s) to
@@ -51,7 +51,7 @@ function extractScope(body: unknown): string | undefined {
  */
 export async function discoverProtectedResourceScope(
   serverUrl: string,
-  logger: McpToolsLogger,
+  logger: Logger,
   fetchFn: typeof fetch = fetch,
 ): Promise<string | undefined> {
   for (const metadataUrl of buildProtectedResourceMetadataUrls(serverUrl)) {

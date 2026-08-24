@@ -7,11 +7,11 @@
  */
 import { newAsyncContext, shouldInterruptAfterDeadline } from "quickjs-emscripten";
 import type { Viewer } from "cesium";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import type { SceneCollectionCapOptions } from "./execution-guards.js";
 import { SandboxHandles } from "./cesium-bindings.js";
 import { buildCesiumGuestPrelude } from "./bindings/guest-prelude.js";
 import { registerHostBindings, type PendingHostWorkTracker } from "./bindings/host-bridge.js";
-import { noopLogger, type SandboxLogger } from "./logger.js";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
@@ -47,11 +47,10 @@ export interface RunCesiumCodeOptions extends SceneCollectionCapOptions {
   /**
    * Logger used to report sandbox lifecycle events (run start/success/failure) and individual
    * host-bridge calls (property get/set, function apply/construct, async factory calls) crossing
-   * the guest/host boundary. Defaults to a no-op logger — logging is entirely opt-in; pass
-   * {@link createConsoleLogger} or {@link createSandboxLogger} (or your own {@link SandboxLogger})
-   * to enable it.
+   * the guest/host boundary. Defaults to a no-op logger; pass any {@link Logger}, such as
+   * `@cesium-ai/observability`'s console logger, to enable it.
    */
-  logger?: SandboxLogger;
+  logger?: Logger;
   /**
    * Bounded grace window (in milliseconds), after the guest script's own top-level `async`
    * function has settled, to let any still-pending dynamically bridged Promise the script called

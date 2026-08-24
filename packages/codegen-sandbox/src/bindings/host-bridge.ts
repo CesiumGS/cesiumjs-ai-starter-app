@@ -1,7 +1,7 @@
 import { newAsyncContext } from "quickjs-emscripten";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import { assertSandboxPropertyAllowed } from "./guarded-viewer-proxy.js";
 import type { SandboxHandles } from "./sandbox-handles.js";
-import { noopLogger, type SandboxLogger } from "../logger.js";
 import {
   assertNetworkUrlsAllowed,
   createNetworkUrlPolicy,
@@ -26,7 +26,7 @@ export interface PendingHostWorkTracker {
 
 export interface RegisterHostBindingsOptions {
   /** Reports individual guest/host boundary crossings. Defaults to {@link noopLogger}. */
-  logger?: SandboxLogger;
+  logger?: Logger;
   /**
    * Incremented for every dynamically bridged Promise created by `registerHostApply` and
    * decremented once it settles. Defaults to a private, unobserved counter if omitted.
@@ -54,11 +54,7 @@ function toEnvelopeString(ctx: QuickJSAsyncContext, envelope: HostCallEnvelope) 
   return ctx.newString(JSON.stringify(envelope));
 }
 
-function registerHostGet(
-  ctx: QuickJSAsyncContext,
-  handles: SandboxHandles,
-  logger: SandboxLogger,
-): void {
+function registerHostGet(ctx: QuickJSAsyncContext, handles: SandboxHandles, logger: Logger): void {
   const hostFunction = ctx.newFunction(
     "__cesiumSandboxHostGetSync__",
     (handleIdHandle, propHandle) => {
@@ -92,7 +88,7 @@ function registerHostGet(
 function registerHostSet(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
-  logger: SandboxLogger,
+  logger: Logger,
   networkUrlPolicy: NetworkUrlPolicy,
 ): void {
   const hostFunction = ctx.newFunction(
@@ -124,7 +120,7 @@ function registerHostSet(
 function registerHostApply(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
-  logger: SandboxLogger,
+  logger: Logger,
   pendingWork: PendingHostWorkTracker,
   networkUrlPolicy: NetworkUrlPolicy,
 ): void {
@@ -195,7 +191,7 @@ function registerHostApply(
 function registerHostConstruct(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
-  logger: SandboxLogger,
+  logger: Logger,
   networkUrlPolicy: NetworkUrlPolicy,
 ): void {
   const hostFunction = ctx.newFunction(
@@ -236,7 +232,7 @@ function registerHostConstruct(
 function registerHostInstanceOf(
   ctx: QuickJSAsyncContext,
   handles: SandboxHandles,
-  logger: SandboxLogger,
+  logger: Logger,
 ): void {
   const hostFunction = ctx.newFunction(
     "__cesiumSandboxHostInstanceOfSync__",

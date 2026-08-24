@@ -1,5 +1,5 @@
 import type { Tool } from "ai";
-import type { McpToolsLogger } from "./logger.js";
+import type { Logger } from "@cesium-ai/observability";
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return typeof value === "object" && value !== null && Symbol.asyncIterator in value;
@@ -15,7 +15,7 @@ export function withTimeout<T extends Tool>(
   tool: T,
   timeoutMs: number,
   describe: string,
-  logger: McpToolsLogger,
+  logger: Logger,
 ): T {
   const originalExecute = tool.execute;
   if (!originalExecute) return tool;

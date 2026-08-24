@@ -38,6 +38,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@cesium-ai/observability": "*",
     "ai": "^7.0.0",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

@@ -1,7 +1,7 @@
 import type { MCPClient } from "@ai-sdk/mcp";
 import { connectMcpServer } from "./connect-mcp-server.js";
 import { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "../constants.js";
-import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import type { McpTool } from "../mcp-app-meta.js";
 import { withTimeout } from "../tool-timeout.js";
 import type { McpServerConfig } from "../types.js";
@@ -16,8 +16,8 @@ export interface CreateMcpToolsOptions {
    * stall the agent loop past this. Defaults to {@link DEFAULT_MCP_TOOL_TIMEOUT_MS}.
    */
   timeoutMs?: number;
-  /** Structured logger. Defaults to a no-op logger (see `createConsoleMcpToolsLogger` to enable). */
-  logger?: McpToolsLogger;
+  /** Structured logger. Defaults to `@cesium-ai/observability`'s `noopLogger`. */
+  logger?: Logger;
 }
 
 /** Per-server outcome of a `createMcpTools` call — which servers connected and which didn't. */
@@ -67,7 +67,7 @@ export interface McpToolsHandle {
 /** Connects one server and builds its timeout-wrapped, namespaced tool set — the unit of work `createMcpTools` fans out over. */
 async function registerServer(
   server: McpServerConfig,
-  logger: McpToolsLogger,
+  logger: Logger,
   timeoutMs: number,
 ): Promise<{
   status: McpServerStatus;
@@ -124,7 +124,7 @@ async function registerServer(
  *   process.on("SIGTERM", () => mcp.close());
  */
 export async function createMcpTools(options: CreateMcpToolsOptions): Promise<McpToolsHandle> {
-  const { servers, timeoutMs = DEFAULT_MCP_TOOL_TIMEOUT_MS, logger = noopMcpToolsLogger } = options;
+  const { servers, timeoutMs = DEFAULT_MCP_TOOL_TIMEOUT_MS, logger = noopLogger } = options;
 
   const clientsByServer = new Map<string, MCPClient>();
   const statuses: McpServerStatus[] = [];

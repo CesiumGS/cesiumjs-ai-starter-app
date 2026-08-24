@@ -181,7 +181,7 @@ const mcp =
     ? await createMcpTools({
         servers: env.mcpServers,
         timeoutMs: env.MCP_TOOL_TIMEOUT_MS,
-        logger: createConsoleMcpToolsLogger("info"),
+        logger: createConsoleLogger({ scope: "mcp-tools", level: "info" }),
       })
     : undefined;
 
@@ -192,7 +192,7 @@ const sessionMcp =
         servers: mcp.authRequiredServers,
         buildRedirectUrl: () => new URL("/api/mcp/callback", env.PUBLIC_URL).href,
         timeoutMs: env.MCP_TOOL_TIMEOUT_MS,
-        logger: createConsoleMcpToolsLogger("info"),
+        logger: createConsoleLogger({ scope: "mcp-tools", level: "info" }),
       })
     : undefined;
 ```
@@ -343,7 +343,8 @@ model, see [MCP Apps Architecture](../architectures/architecture-mcp-apps.md).
   LLM API key — never build it from user/chat input.
 - **Prefer `allowedTools` over a full, unreviewed catalogue** — especially for a third-party server
   you don't operate yourself.
-- **Use `createConsoleMcpToolsLogger("info")` (already the default in `index.ts`)** and re-review
+- **Use `createConsoleLogger({ scope: "mcp-tools", level: "info" })` from
+  `@cesium-ai/observability`** and re-review
   the logged tool names/descriptions whenever a server's catalogue might have changed — an MCP
   server can silently reword a tool's description at any time
   ([tool poisoning](https://owasp.org/www-community/attacks/MCP_Tool_Poisoning)).

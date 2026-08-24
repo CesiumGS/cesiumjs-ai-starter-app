@@ -17,11 +17,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { env } from "../src/utils/env.js";
 import { createModel, createProviderConfig, isProviderConfigured } from "../src/utils/providers.js";
-import {
-  generateVerifiedCzml,
-  type CodegenLogger,
-  type CodegenMetrics,
-} from "@cesium-ai/codegen-czml";
+import { generateVerifiedCzml } from "@cesium-ai/codegen-czml";
+import type { CodegenMetrics, Logger } from "@cesium-ai/observability";
 import { CZML_EVAL_CASES, exampleUrl, type CzmlEvalCase } from "./czml-eval-cases.js";
 
 /** Per-case generation stats useful for comparing skill-grounding strategies (BM25 vs. dynamic `loadSkill` tool loading), not just pass/fail. */
@@ -37,7 +34,7 @@ interface GenerationStats {
 /** Builds a fresh `{ metrics, logger, stats }` trio that captures {@link GenerationStats} for one `generateVerifiedCzml` call via its existing metrics/logger seams — no pipeline changes needed. */
 function createStatsCollector(): {
   metrics: CodegenMetrics;
-  logger: CodegenLogger;
+  logger: Logger;
   stats: GenerationStats;
 } {
   const stats: GenerationStats = { totalTokens: 0, attempts: 0, skillsLoaded: [] };
@@ -51,7 +48,7 @@ function createStatsCollector(): {
       if (attempt > stats.attempts) stats.attempts = attempt;
     },
   };
-  const logger: CodegenLogger = {
+  const logger: Logger = {
     debug: (message, meta) => {
       if (
         message === "Model loaded a CZML skill via loadSkill tool" &&

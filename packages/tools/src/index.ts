@@ -18,7 +18,7 @@ import {
   globeSetLighting,
 } from "./tools/animation.js";
 import { imageryAdd, imageryList, imageryRemove } from "./tools/imagery.js";
-import type { ToolsLogger } from "./logger.js";
+import type { Logger } from "@cesium-ai/observability";
 import type { CesiumToolExecutorOverrides, CesiumToolExecutors, ToolExecutor } from "./types.js";
 
 export type {
@@ -27,13 +27,6 @@ export type {
   CesiumToolExecutors,
   CesiumToolExecutorOverrides,
 } from "./types.js";
-
-export {
-  noopToolsLogger,
-  createConsoleToolsLogger,
-  type ToolsLogger,
-  type ToolsLogLevel,
-} from "./logger.js";
 
 export {
   createFlyToExecutor,
@@ -137,7 +130,7 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
 };
 
 /** Wraps an executor so its resolved `{ error }` (or a thrown rejection) is reported to `logger`. */
-function withLogging(toolName: string, executor: ToolExecutor, logger: ToolsLogger): ToolExecutor {
+function withLogging(toolName: string, executor: ToolExecutor, logger: Logger): ToolExecutor {
   return async (viewer, rawArgs) => {
     try {
       const result = await executor(viewer, rawArgs);
@@ -170,16 +163,14 @@ function withLogging(toolName: string, executor: ToolExecutor, logger: ToolsLogg
  * `duration`/`easingFunction` — see the package README) — without forking the
  * rest of the registry.
  *
- * Pass `logger` (e.g. {@link createConsoleToolsLogger} or your own OTEL-wired
- * {@link ToolsLogger}) to have every executor's outcome — success, a resolved
+ * Pass a {@link Logger} to have every executor's outcome — success, a resolved
  * `{ error }`, or a thrown rejection — reported through it. Omitted by
  * default, in which case executors are returned unwrapped (this package has
- * zero logging of its own unless you opt in) — a `noopToolsLogger` is also
- * available if you want the wrapping without the console/OTEL output.
+ * zero logging of its own unless you opt in).
  */
 export function createCesiumToolExecutors(
   overrides: CesiumToolExecutorOverrides = {},
-  logger?: ToolsLogger,
+  logger?: Logger,
 ): CesiumToolExecutors {
   const merged = { ...DEFAULT_CESIUM_TOOL_EXECUTORS, ...overrides };
   if (!logger) return merged;

@@ -8,12 +8,6 @@ export { DEFAULT_MCP_TOOL_TIMEOUT_MS } from "./constants.js";
 export { namespacedToolName, type SelectedMcpTool } from "./connection/connect-mcp-server.js";
 export { getMcpAppToolMeta, type McpAppToolMeta, type McpTool } from "./mcp-app-meta.js";
 export {
-  createConsoleMcpToolsLogger,
-  noopMcpToolsLogger,
-  type McpToolsLogger,
-  type McpToolsLogLevel,
-} from "./logger.js";
-export {
   McpServerConfigsSchema,
   type McpOAuthConfig,
   type McpServerConfig,

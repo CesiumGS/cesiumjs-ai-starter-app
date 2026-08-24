@@ -17,6 +17,7 @@
     "@cesium-ai/codegen-cesium": "*",
     "@cesium-ai/codegen-czml": "*",
     "@cesium-ai/mcp-tools": "*",
+    "@cesium-ai/observability": "*",
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/server": "*",
     "@cesium-ai/tools-schemas": "*",

@@ -7,8 +7,6 @@
  * needs this generation pipeline rather than a live `Viewer`, unlike the tools in
  * `@cesium-ai/tools-schemas` (reserved for viewer-specific tools like `flyTo`).
  */
-export { noopCodegenLogger, type CodegenLogger } from "./logger.js";
-export { noopCodegenMetrics, type CodegenMetrics, type CodegenTokenUsage } from "./metrics.js";
 export { CZML_REFERENCE } from "./pipeline/czml-reference.js";
 export { loadCzmlSkills, type CzmlSkill } from "./pipeline/skills-loader.js";
 export {

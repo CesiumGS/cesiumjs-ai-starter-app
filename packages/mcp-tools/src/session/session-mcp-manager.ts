@@ -1,6 +1,6 @@
 import type { MCPClient } from "@ai-sdk/mcp";
 import type { McpTool } from "../mcp-app-meta.js";
-import { noopMcpToolsLogger, type McpToolsLogger } from "../logger.js";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import {
   toConnectedMcpConnectionDescriptor,
   toPendingMcpConnectionDescriptor,
@@ -85,7 +85,7 @@ export interface SessionMcpManagerOptions {
    * Omit to skip cross-process status entirely.
    */
   pendingDescriptorRepository?: McpConnectionRepository<PendingMcpConnectionDescriptor>;
-  logger?: McpToolsLogger;
+  logger?: Logger;
 }
 
 export interface SessionMcpManager {
@@ -174,7 +174,7 @@ export function createSessionMcpManager(options: SessionMcpManagerOptions): Sess
     connectedRepository = createInMemoryConnectedRepository(),
     connectedDescriptorRepository,
     pendingDescriptorRepository,
-    logger = noopMcpToolsLogger,
+    logger = noopLogger,
   } = options;
   const serverByName = new Map(servers.map((server) => [server.name, server]));
   /**

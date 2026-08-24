@@ -11,6 +11,12 @@
  * caller and never selects a provider or reads API keys itself.
  */
 import { generateObject, type LanguageModel } from "ai";
+import {
+  noopCodegenMetrics,
+  noopLogger,
+  type CodegenMetrics,
+  type Logger,
+} from "@cesium-ai/observability";
 import { z } from "zod";
 import { buildCzmlPrompt } from "./prompt-builder.js";
 import { verifyCzml, czmlPacketShape } from "./czml-verifier.js";
@@ -19,8 +25,6 @@ import {
   matchSkillsForIntent,
   DEFAULT_SKILL_MATCH_THRESHOLD,
 } from "./domain-matcher.js";
-import { noopCodegenLogger, type CodegenLogger } from "../logger.js";
-import { noopCodegenMetrics, type CodegenMetrics } from "../metrics.js";
 import { DEFAULT_MAX_ATTEMPTS, DEFAULT_SKILL_MATCH_LIMIT } from "./constants.js";
 
 /** The structured object the model is asked to produce for one generation attempt. */
@@ -47,7 +51,7 @@ export interface GenerateVerifiedCzmlOptions {
   /** Optional extra instructions appended to the generation prompt's output rules. */
   extraInstructions?: string;
   /** Structured logger for generation attempts/failures. Defaults to a no-op (silent) logger. */
-  logger?: CodegenLogger;
+  logger?: Logger;
   /** Metrics sink for token usage, skill-match scores, and generation duration. Defaults to a no-op. */
   metrics?: CodegenMetrics;
 }
@@ -69,7 +73,7 @@ export async function generateVerifiedCzml(
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const maxSkills = options.maxSkills ?? DEFAULT_SKILL_MATCH_LIMIT;
   const threshold = options.threshold ?? DEFAULT_SKILL_MATCH_THRESHOLD;
-  const logger = options.logger ?? noopCodegenLogger;
+  const logger = options.logger ?? noopLogger;
   const metrics = options.metrics ?? noopCodegenMetrics;
 
   logger.debug("Generating CZML", { intent, maxAttempts, maxSkills });

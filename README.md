@@ -70,6 +70,7 @@ Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://de
 
 | Package                                                   | Role                                                                                                                                                                                                                                |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@cesium-ai/observability`](packages/observability/)     | Canonical logger and metrics contracts, no-op defaults, and a configurable console logger; host applications provide integrations such as OpenTelemetry                                                                             |
 | [`@cesium-ai/server`](packages/server/)                   | [Express](https://expressjs.com) router — mounts `POST /api/chat`, runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop                                                                 |
 | [`@cesium-ai/tools-schemas`](packages/tools-schemas/)     | [Zod](https://zod.dev)-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute`                                                                                                                 |
 | [`@cesium-ai/tools`](packages/tools/)                     | Default client-side executors for every tool in `tools-schemas` — a host app can override or extend any single tool without forking the rest                                                                                        |
@@ -176,6 +177,7 @@ cesiumjs-ai-starter-app/
 ├── backend/               # Thin Express host (provider selection, tool registry, API key)
 ├── packages/
 │   ├── server/            # @cesium-ai/server — chat router + agent loop
+│   ├── observability/     # @cesium-ai/observability — shared logging and metrics contracts
 │   ├── tools-schemas/     # @cesium-ai/tools-schemas — viewer tool schemas
 │   ├── tools/             # @cesium-ai/tools — default client-side tool executors
 │   ├── codegen-cesium/    # @cesium-ai/codegen-cesium — codegen pipeline + executeCesiumCode tool

@@ -4,7 +4,8 @@ import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "../chat-client";
-import type { ChatLogger, ToolExecutionOutcome } from "../chat-client";
+import type { Logger } from "@cesium-ai/observability";
+import type { ToolExecutionOutcome } from "../chat-client";
 import { MessageItem } from "./MessageItem";
 import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
 import { RegisteredTools } from "./RegisteredTools";
@@ -116,7 +117,7 @@ export interface AiChatPanelProps {
    * `logger` option. Omit to log nothing (errors still always reach the
    * transcript regardless).
    */
-  logger?: ChatLogger;
+  logger?: Logger;
 }
 
 /**

@@ -2,9 +2,8 @@ import {
   generateVerifiedCzml,
   DEFAULT_GENERATE_CZML_DESCRIPTION,
   defaultGenerateCzmlInputSchema,
-  type CodegenLogger,
-  type CodegenMetrics,
 } from "@cesium-ai/codegen-czml";
+import type { CodegenMetrics, Logger } from "@cesium-ai/observability";
 import { tool, type LanguageModel, type Tool } from "ai";
 
 /**
@@ -27,7 +26,7 @@ export interface CreateGenerateCzmlToolOptions {
   /** Extra instructions appended to the generation prompt. Passed through to `generateVerifiedCzml`. */
   extraInstructions?: string;
   /** Structured logger for generation attempts/failures. Passed through to `generateVerifiedCzml`. */
-  logger?: CodegenLogger;
+  logger?: Logger;
   /** Metrics sink for token usage and generation duration. Passed through to `generateVerifiedCzml`. */
   metrics?: CodegenMetrics;
 }

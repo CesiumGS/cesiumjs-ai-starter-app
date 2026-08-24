@@ -13,25 +13,13 @@ import { handleGenerateCzmlResult, isGenerateCzmlTool } from "../tools/generate-
 import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import { createFrontendLogger, frontendLogger } from "../utils/telemetry";
-import type { ToolExecutionOutcome, ChatLogger } from "@cesium-ai/chat-element";
+import type { ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
 }
 
-/**
- * Adapts the frontend's variadic-`meta` telemetry logger to `@cesium-ai/chat-element`'s
- * fixed-shape `ChatLogger`, mirroring the same pattern the backend uses for
- * `createMcpToolsLogger` in `backend/src/utils/telemetry.ts`. Module-level (not per-render)
- * since it's stateless.
- */
-const chatElementLoggerSource = createFrontendLogger("@cesium-ai/chat-element");
-const chatElementLogger: ChatLogger = {
-  debug: (message, meta) => chatElementLoggerSource.debug(message, meta),
-  info: (message, meta) => chatElementLoggerSource.info(message, meta),
-  warn: (message, meta) => chatElementLoggerSource.warn(message, meta),
-  error: (message, meta) => chatElementLoggerSource.error(message, meta),
-};
+const chatElementLogger = createFrontendLogger("@cesium-ai/chat-element");
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {

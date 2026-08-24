@@ -16,6 +16,7 @@
     "typecheck:test": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@cesium-ai/observability": "*",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mcp-ui/client": "^7.1.1",

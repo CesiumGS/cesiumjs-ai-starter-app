@@ -1,28 +1,20 @@
-// Console+OTel `AppLogger` implementation, split out of telemetry.ts (distinct concern from
+// Console+OTel `Logger` implementation, split out of telemetry.ts (distinct concern from
 // metrics/trace provider setup).
 import {
   SeverityNumber,
   type LogAttributes,
   type Logger as OtelLogger,
 } from "@opentelemetry/api-logs";
+import type { Logger, LogLevel } from "@cesium-ai/observability";
 
-export type AppLogLevel = "debug" | "info" | "warn" | "error" | "silent";
-
-export interface AppLogger {
-  debug(message: string, meta?: Record<string, unknown>): void;
-  info(message: string, meta?: Record<string, unknown>): void;
-  warn(message: string, meta?: Record<string, unknown>): void;
-  error(message: string, meta?: Record<string, unknown>): void;
-}
-
-const LEVEL_ORDER: Record<Exclude<AppLogLevel, "silent">, number> = {
+const LEVEL_ORDER: Record<Exclude<LogLevel, "silent">, number> = {
   debug: 0,
   info: 1,
   warn: 2,
   error: 3,
 };
 
-const SEVERITY_MAP: Record<Exclude<AppLogLevel, "silent">, SeverityNumber> = {
+const SEVERITY_MAP: Record<Exclude<LogLevel, "silent">, SeverityNumber> = {
   debug: SeverityNumber.DEBUG,
   info: SeverityNumber.INFO,
   warn: SeverityNumber.WARN,
@@ -58,16 +50,16 @@ function toOtelAttributes(meta?: Record<string, unknown>): LogAttributes {
 
 export function createConsoleAndOtelLogger(
   scope: string,
-  level: AppLogLevel,
+  level: LogLevel,
   otelLogger: OtelLogger | undefined,
-): AppLogger {
-  const enabled = (candidate: Exclude<AppLogLevel, "silent">): boolean => {
+): Logger {
+  const enabled = (candidate: Exclude<LogLevel, "silent">): boolean => {
     if (level === "silent") return false;
     return LEVEL_ORDER[candidate] >= LEVEL_ORDER[level];
   };
 
   const emit = (
-    methodLevel: Exclude<AppLogLevel, "silent">,
+    methodLevel: Exclude<LogLevel, "silent">,
     consoleMethod: (...args: unknown[]) => void,
     message: string,
     meta?: Record<string, unknown>,

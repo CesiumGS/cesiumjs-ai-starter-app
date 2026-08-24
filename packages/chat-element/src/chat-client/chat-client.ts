@@ -13,9 +13,9 @@ import {
   toRequestParts,
   type ChatError,
 } from "./protocol";
+import type { Logger } from "@cesium-ai/observability";
 import type {
   ChatClientOptions,
-  ChatLogger,
   EnsureAssistantMessage,
   Message,
   StreamToolCall,
@@ -51,7 +51,7 @@ export class ChatClient {
   private onServerToolResult: ChatClientOptions["onServerToolResult"];
   private onApprovalRequired: ChatClientOptions["onApprovalRequired"];
   private maxToolCallRounds: number;
-  private logger: ChatLogger | undefined;
+  private logger: Logger | undefined;
   private abortController: AbortController | null = null;
   private nextId = 0;
   private toolCallRound = 0;

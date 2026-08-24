@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
 import type { Viewer } from "cesium";
 import { CESIUM_TOOL_NAMES } from "@cesium-ai/tools-schemas/names";
+import type { Logger } from "@cesium-ai/observability";
 import { createCesiumToolExecutors, DEFAULT_CESIUM_TOOL_EXECUTORS } from "./index.js";
-import type { ToolsLogger } from "./logger.js";
 
 describe("DEFAULT_CESIUM_TOOL_EXECUTORS", () => {
   test("has exactly one executor per CESIUM_TOOL_NAMES entry", () => {
@@ -66,7 +66,7 @@ describe("createCesiumToolExecutors", () => {
 });
 
 describe("createCesiumToolExecutors's logger option", () => {
-  function fakeLogger(): ToolsLogger {
+  function fakeLogger(): Logger {
     return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
   }
 

@@ -11,12 +11,10 @@ import {
   type SessionMcpManager,
 } from "@cesium-ai/mcp-tools";
 import type { LanguageModel, ToolApprovalConfiguration, ToolSet } from "ai";
-import type { ServerMetrics } from "@cesium-ai/server";
-import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
+import type { CodegenMetrics, Logger, ServerMetrics } from "@cesium-ai/observability";
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
-import type { AppLogger } from "./utils/telemetry.js";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
@@ -72,7 +70,7 @@ export interface BackendAppOptions {
    * `./utils/telemetry.js`'s `BackendTelemetry.createLogger`). Omit to run with
    * every package's logging silenced (its own no-op default).
    */
-  createLogger?: (scope: string) => AppLogger;
+  createLogger?: (scope: string) => Logger;
   /**
    * Builds a scoped `@cesium-ai/server`-shaped metrics sink — passed straight through to
    * `createChatRouter` so `/api/chat`'s token usage and request duration flow into this app's
@@ -111,8 +109,11 @@ export function createBackendApp({
   const app = express();
   const serverLogger = createLogger?.("@cesium-ai/server");
   const codegenLogger = createLogger?.("@cesium-ai/codegen-cesium");
+  const codegenCzmlLogger = createLogger?.("@cesium-ai/codegen-czml");
+
   const serverMetrics = createServerMetrics?.("@cesium-ai/server");
   const codegenMetrics = createCodegenMetrics?.("@cesium-ai/codegen-cesium");
+  const codegenCzmlMetrics = createCodegenMetrics?.("@cesium-ai/codegen-czml");
 
   app.use(cors({ origin: env.ALLOWED_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "256kb" }));
@@ -172,8 +173,8 @@ export function createBackendApp({
             maxPackets: env.CODEGEN_CZML_MAX_PACKETS,
             maxLength: env.CODEGEN_CZML_MAX_LENGTH,
             extraInstructions: env.CODEGEN_CZML_EXTRA_INSTRUCTIONS,
-            logger: codegenLogger,
-            metrics: codegenMetrics,
+            logger: codegenCzmlLogger,
+            metrics: codegenCzmlMetrics,
           }),
         }
       : {}),

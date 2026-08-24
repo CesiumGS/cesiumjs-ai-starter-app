@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@cesium/cesiumjs-skills": "github:CesiumGS/cesiumjs-skills#feat/npm-skills-support",
+    "@cesium-ai/observability": "*",
     "acorn": "^8.0.0",
     "acorn-walk": "^8.0.0",
     "ai": "^7.0.0",

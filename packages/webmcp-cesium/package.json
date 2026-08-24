@@ -22,6 +22,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@cesium-ai/observability": "*",
     "@cesium-ai/tools": "*",
     "@cesium-ai/tools-schemas": "*",
     "cesium": "^1.127.0",
