@@ -216,7 +216,8 @@ CesiumJS automatically as it evolves.
 ## Usage
 
 ```ts
-import { createConsoleLogger, runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
+import { runCesiumCodeInSandbox } from "@cesium-ai/codegen-sandbox";
+import { createConsoleLogger } from "@cesium-ai/observability";
 
 const result = await runCesiumCodeInSandbox({
   code: verifiedSnippet,
@@ -227,7 +228,7 @@ const result = await runCesiumCodeInSandbox({
   // Override the default 200-item-per-collection ceiling for this run.
   maxItemsPerCollection: 50,
   // Opt-in logging (off by default) — see Logging below.
-  logger: createConsoleLogger("debug"),
+  logger: createConsoleLogger({ scope: "codegen-sandbox", level: "debug" }),
 });
 
 if (!result.success) {
@@ -279,8 +280,8 @@ start/completion plus every host-bridge call crossing the guest/host boundary �
 diagnosing "sandbox reports success but nothing visibly changed" bugs. `logger.warn` reports
 blocked property access and other per-call failures; `logger.error` reports a run's overall
 failure. `createConsoleLogger(level)` builds a `console`-backed logger with a given minimum level
-(`"debug" | "info" | "warn" | "error" | "silent"`); omitting `logger` (or `createSandboxLogger({
-enabled: false })`) returns the no-op `noopLogger`.
+(`"debug" | "info" | "warn" | "error" | "silent"`); omitting `logger` uses
+`@cesium-ai/observability`'s no-op logger.
 
 ## Trade-offs
 
@@ -301,7 +302,6 @@ pre-verified before it ever reaches the browser.
 | `createProxiedViewer`                                                                                                   | Wraps a live `Viewer` with collection caps and a guard policy that blocks lifecycle, DOM, private, and bulk-removal properties.                      |
 | `buildCesiumHostBridgeGuestPrelude`, `buildCesiumValueTypeGuestPrelude`                                                 | The generic remote-proxy bridge and guest-side prelude generators — see `src/bindings/`.                                                             |
 | `assertEntityCapNotExceeded`, `DEFAULT_MAX_ITEMS_PER_COLLECTION`, `SceneCollectionCapOptions`, `EntityCapExceededError` | Configures the ceiling applied independently to guarded scene collections. `maxItemsPerCollection` falls back to `DEFAULT_MAX_ITEMS_PER_COLLECTION`. |
-| `createSandboxLogger`, `createConsoleLogger`, `noopLogger`, `SandboxLogger`, `SandboxLoggerOptions`, `LogLevel`         | Configurable logging for sandbox runs and host-bridge calls, off by default. See [Logging](#logging).                                                |
 
 ## Why this isn't part of `@cesium-ai/tools-cesium` or `@cesium-ai/codegen-cesium`
 

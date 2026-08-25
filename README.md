@@ -56,6 +56,8 @@ For requests that don't fit a single tool call, try something like **`add 3D bui
 
 ![executeCesiumCode generating and running verified code that adds 3D buildings over New York](docs/assets/codegen-new-york.gif)
 
+For a time-dynamic scene — e.g. **`animate a satellite orbit over Europe for 24 hours`** — the `generateCzml` tool generates and verifies a [CZML](https://github.com/CesiumGS/cesium/wiki/CZML-Guide) document (declarative data, not code, so no sandbox is needed) behind the same human-in-the-loop approval checkpoint, and the frontend loads it via `CzmlDataSource`.
+
 If no provider key is configured, the globe still runs as a plain viewer, with a banner noting that AI chat needs a provider API key.
 
 ---
@@ -68,10 +70,12 @@ Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://de
 
 | Package                                                   | Role                                                                                                                                                                                                                                |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`@cesium-ai/observability`](packages/observability/)     | Canonical logger and metrics contracts, no-op defaults, and a configurable console logger; host applications provide integrations such as OpenTelemetry                                                                             |
 | [`@cesium-ai/server`](packages/server/)                   | [Express](https://expressjs.com) router — mounts `POST /api/chat`, runs the [`streamText`](https://sdk.vercel.ai/docs/reference/ai-sdk-core/stream-text) agent loop                                                                 |
 | [`@cesium-ai/tools-schemas`](packages/tools-schemas/)     | [Zod](https://zod.dev)-schemed viewer tool definitions (`flyTo`, entities, imagery, …) — schemas only, no `execute`                                                                                                                 |
 | [`@cesium-ai/tools`](packages/tools/)                     | Default client-side executors for every tool in `tools-schemas` — a host app can override or extend any single tool without forking the rest                                                                                        |
 | [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/)   | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                                                                                    |
+| [`@cesium-ai/codegen-czml`](packages/codegen-czml/)       | Intent → verified [CZML](https://github.com/CesiumGS/cesium/wiki/CZML-Guide) generation pipeline; owns the `generateCzml` tool definition                                                                                           |
 | [`@cesium-ai/codegen-sandbox`](packages/codegen-sandbox/) | [QuickJS](https://bellard.org/quickjs/) + WASM runtime isolation for executing verified CesiumJS snippets in the browser                                                                                                            |
 | [`@cesium-ai/mcp-tools`](packages/mcp-tools/)             | Optional [Model Context Protocol](https://modelcontextprotocol.io) client bridge — opt-in via `mcp.config.json`, exposes allowlisted MCP tools to the agent                                                                         |
 | [`@cesium-ai/webmcp-cesium`](packages/webmcp-cesium/)     | Registers viewer tools on `document.modelContext`, the browser-native [WebMCP](https://developer.chrome.com/docs/ai/webmcp) standard — a different, in-browser counterpart to `@cesium-ai/mcp-tools`' server-side MCP client bridge |
@@ -173,9 +177,11 @@ cesiumjs-ai-starter-app/
 ├── backend/               # Thin Express host (provider selection, tool registry, API key)
 ├── packages/
 │   ├── server/            # @cesium-ai/server — chat router + agent loop
+│   ├── observability/     # @cesium-ai/observability — shared logging and metrics contracts
 │   ├── tools-schemas/     # @cesium-ai/tools-schemas — viewer tool schemas
 │   ├── tools/             # @cesium-ai/tools — default client-side tool executors
 │   ├── codegen-cesium/    # @cesium-ai/codegen-cesium — codegen pipeline + executeCesiumCode tool
+│   ├── codegen-czml/      # @cesium-ai/codegen-czml — CZML generation pipeline + generateCzml tool
 │   ├── codegen-sandbox/   # @cesium-ai/codegen-sandbox — frontend sandbox for generated code
 │   ├── mcp-tools/         # @cesium-ai/mcp-tools — optional MCP client bridge
 │   ├── webmcp-cesium/     # @cesium-ai/webmcp-cesium — registers viewer tools on document.modelContext

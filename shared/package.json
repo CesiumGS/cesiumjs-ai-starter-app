@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@cesium-ai/codegen-cesium": "*",
+    "@cesium-ai/codegen-czml": "*",
     "@cesium-ai/tools-schemas": "*",
     "zod": "^4.0.0"
   },

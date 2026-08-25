@@ -92,6 +92,21 @@ const EnvSchema = z.object({
   // style preferences. Unset/blank appends nothing.
   CODEGEN_EXTRA_INSTRUCTIONS: z.preprocess(blankToUndefined, z.string().optional()),
 
+  // Max regeneration attempts if a generated generateCzml document fails verification.
+  CODEGEN_CZML_MAX_ATTEMPTS: z.coerce.number().int().positive().default(3),
+
+  // Hard cap on generated generateCzml packet count, passed through to `verifyCzml`'s
+  // `maxPackets`. Matches that function's own default of 200.
+  CODEGEN_CZML_MAX_PACKETS: z.coerce.number().int().positive().default(200),
+
+  // Hard cap on generated generateCzml document size in characters, passed through to
+  // `verifyCzml`'s `maxLength`. Matches that function's own default of 20000.
+  CODEGEN_CZML_MAX_LENGTH: z.coerce.number().int().positive().default(20_000),
+
+  // Optional extra instructions appended to the generateCzml generation prompt's output rules
+  // (`buildCzmlPrompt`'s `extraInstructions`). Unset/blank appends nothing.
+  CODEGEN_CZML_EXTRA_INSTRUCTIONS: z.preprocess(blankToUndefined, z.string().optional()),
+
   TELEMETRY_ENABLED: boolEnv(false),
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: z.preprocess(blankToUndefined, z.url().optional()),

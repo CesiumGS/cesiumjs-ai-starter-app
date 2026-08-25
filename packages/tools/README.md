@@ -28,12 +28,14 @@ const result = await executors.flyTo(viewer, rawArgsFromTheModel);
 This package has no logging of its own by default — every executor just resolves a plain `{ success, error? }` result, so a caller that never reads `error` never finds out a tool call failed. Pass a `logger` as `createCesiumToolExecutors`'s second argument to have every executor's outcome (success, a resolved `{ error }`, or a thrown rejection) reported through it:
 
 ```ts
-import { createCesiumToolExecutors, createConsoleToolsLogger } from "@cesium-ai/tools";
+import { createCesiumToolExecutors } from "@cesium-ai/tools";
+import { createConsoleLogger } from "@cesium-ai/observability";
 
-const executors = createCesiumToolExecutors({}, createConsoleToolsLogger("warn"));
+const logger = createConsoleLogger({ scope: "cesium-tools", level: "warn" });
+const executors = createCesiumToolExecutors({}, logger);
 ```
 
-Implement your own `ToolsLogger` (e.g. backed by an OTEL-wired app logger — see this repo's `frontend/src/tools/cesium-tool-executors.ts` for the worked example) to route this package's logging through your own telemetry instead of `console`.
+Pass any `Logger` from `@cesium-ai/observability` (e.g. one backed by your app's OTEL telemetry) to route logging through your own provider.
 
 ## Customizing a tool: two mechanisms
 
@@ -165,7 +167,6 @@ Executors are grouped by domain rather than one file per tool (unlike `@cesium-a
 - [`src/utils/cesium-values.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/cesium-values.ts) — small conversions from schema-shaped plain data (a `{longitude, latitude, height?}` position, a CSS color string) into real Cesium types (`Cartesian3`, `Color`, ...).
 - [`src/utils/animation-registry.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/animation-registry.ts), [`src/utils/imagery-registry.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/imagery-registry.ts) — per-`Viewer` `WeakMap`-based bookkeeping the animation and imagery tools need (which entity ids/imagery layers this package itself created), so `animationListActive`/`imageryList`/etc. only ever report on state they created.
 - [`src/utils/create-entity-add-executor.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/utils/create-entity-add-executor.ts) — `createEntityAddExecutor`, the generic validate/build/add/error-handling plumbing every `entityAdd*` tool's own `createXExecutor` (in `entities.ts`) is built from.
-- [`src/logger.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/logger.ts) — `ToolsLogger`, `noopToolsLogger`, `createConsoleToolsLogger` — see "Logging" above.
 - [`src/index.ts`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools/src/index.ts) — `DEFAULT_CESIUM_TOOL_EXECUTORS`, `createCesiumToolExecutors`.
 
 ## Exports
@@ -189,7 +190,3 @@ Executors are grouped by domain rather than one file per tool (unlike `@cesium-a
 | `createEntityAddExecutor`                                               | The lower-level generic every `createEntityAddXExecutor` above is built from — only needed if you're building a brand-new `entityAdd*`-shaped tool from scratch.                       |
 | `EntityAddExecutorConfig`                                               | Type: an `entityAdd*` factory's config (`shape`, `extendEntityOptions`).                                                                                                               |
 | `flyTo`, `cameraSetView`, ...                                           | Every individual default executor, exported by name (one per tool).                                                                                                                    |
-| `ToolsLogger`                                                           | Type: the console-shaped logger interface (`debug`/`info`/`warn`/`error`) `createCesiumToolExecutors`'s `logger` argument accepts. See "Logging" above.                                |
-| `ToolsLogLevel`                                                         | Type: `"debug" \| "info" \| "warn" \| "error" \| "silent"`, accepted by `createConsoleToolsLogger`.                                                                                    |
-| `createConsoleToolsLogger`                                              | Builds a `console`-backed `ToolsLogger`, prefixed `[cesium-tools]`, filtered by level (default `"warn"`).                                                                              |
-| `noopToolsLogger`                                                       | A `ToolsLogger` whose methods are all no-ops — pass explicitly if you want `createCesiumToolExecutors`'s wrapping without any actual output.                                           |

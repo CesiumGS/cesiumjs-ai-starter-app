@@ -4,9 +4,9 @@ import {
   resolveMcpClient,
   type McpScope,
 } from "@cesium-ai/mcp-tools";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import { createHash } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import { noopServerLogger, type ServerLogger } from "../logger.js";
 // Type-only: pulls in express-session's ambient augmentation of Express's
 // `Request` (adds `sessionID`/`session`) without adding a runtime import —
 // every route below keys off `req.sessionID`, but the host app owns
@@ -19,7 +19,7 @@ export interface McpAppRouterOptions extends McpScope {
   /** Maximum resource fingerprints retained for drift detection. */
   maxTrackedResources?: number;
   /** Structured logger for resource-drift warnings and proxied-call failures. Defaults to a no-op (silent) logger. */
-  logger?: ServerLogger;
+  logger?: Logger;
 }
 
 const DEFAULT_MAX_TRACKED_RESOURCES = 256;
@@ -35,7 +35,7 @@ const DEFAULT_MAX_TRACKED_RESOURCES = 256;
  * `@ai-sdk/mcp`'s `readMCPAppResource`) so this never costs a second round
  * trip to the MCP server.
  */
-function createResourceDriftTracker(maxEntries: number, logger: ServerLogger) {
+function createResourceDriftTracker(maxEntries: number, logger: Logger) {
   const baselines = new Map<string, string>();
   return function checkDrift(key: string, result: unknown): void {
     const fingerprint = createHash("sha256").update(JSON.stringify(result)).digest("base64url");
@@ -66,7 +66,7 @@ async function handleResourceRequest(
   options: McpAppRouterOptions,
   timeoutMs: number,
   checkDrift: (key: string, result: unknown) => void,
-  logger: ServerLogger,
+  logger: Logger,
 ): Promise<void> {
   const server = typeof req.query.server === "string" ? req.query.server : undefined;
   const uri = typeof req.query.uri === "string" ? req.query.uri : undefined;
@@ -104,7 +104,7 @@ async function handleToolCallRequest(
   res: Response,
   options: McpAppRouterOptions,
   timeoutMs: number,
-  logger: ServerLogger,
+  logger: Logger,
 ): Promise<void> {
   const {
     server,
@@ -186,7 +186,7 @@ export function createMcpAppRouter(options: McpAppRouterOptions): Router {
     1,
     options.maxTrackedResources ?? DEFAULT_MAX_TRACKED_RESOURCES,
   );
-  const logger = options.logger ?? noopServerLogger;
+  const logger = options.logger ?? noopLogger;
   const checkDrift = createResourceDriftTracker(maxTrackedResources, logger);
 
   router.get("/api/mcp-app/resource", (req, res) =>

@@ -4,7 +4,6 @@ import { ENABLED_CESIUM_TOOLS } from "@cesium-ai/sample-config";
 import {
   registerCesiumWebMcpTools,
   type RegisteredCesiumWebMcpTools,
-  type WebMcpToolsLogger,
 } from "@cesium-ai/webmcp-cesium";
 import { createFrontendLogger } from "../utils/telemetry";
 import { flyToLocation } from "./camera";
@@ -18,20 +17,7 @@ const ENABLED_WEBMCP_TOOLS = ENABLED_CESIUM_TOOLS.filter(
   (name): name is CesiumToolName => name in CESIUM_TOOL_NAMES,
 );
 
-/**
- * Adapts the frontend's variadic-`meta` telemetry logger to `@cesium-ai/webmcp-cesium`'s
- * fixed-shape `WebMcpToolsLogger`, mirroring the same pattern used for `@cesium-ai/tools`'s
- * `ToolsLogger` in `cesium-tool-executors.ts`. Routes WebMCP registration/tool-call logs through
- * this app's OTEL-wired telemetry in both dev and prod, instead of console-only in dev and silent
- * in prod.
- */
-const webMcpLoggerSource = createFrontendLogger("@cesium-ai/webmcp-cesium");
-const webMcpLogger: WebMcpToolsLogger = {
-  debug: (message, meta) => webMcpLoggerSource.debug(message, meta),
-  info: (message, meta) => webMcpLoggerSource.info(message, meta),
-  warn: (message, meta) => webMcpLoggerSource.warn(message, meta),
-  error: (message, meta) => webMcpLoggerSource.error(message, meta),
-};
+const webMcpLogger = createFrontendLogger("@cesium-ai/webmcp-cesium");
 
 /**
  * Registers this app's viewer tools on `document.modelContext` (the WebMCP Imperative API) so an

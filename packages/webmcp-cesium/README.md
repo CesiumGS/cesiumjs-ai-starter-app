@@ -25,6 +25,8 @@ unregister();
 ### Options
 
 ```ts
+import { createConsoleLogger } from "@cesium-ai/observability";
+
 await registerCesiumWebMcpTools(viewer, {
   // Only register these tools (default: every CESIUM_TOOL_NAMES entry).
   enabled: ["flyTo", "entityAdd", "entityList"],
@@ -32,7 +34,7 @@ await registerCesiumWebMcpTools(viewer, {
   executors: { flyTo: myCustomFlyToExecutor },
   // Override a tool's description/input schema, or set `false` to exclude it.
   toolConfig: { flyTo: { description: "Custom description." } },
-  logger: createConsoleWebMcpToolsLogger("info"),
+  logger: createConsoleLogger({ scope: "webmcp-cesium", level: "info" }),
 });
 ```
 
@@ -66,16 +68,15 @@ This repo also has the _opposite_-direction bridge already, unrelated to WebMCP:
 
 ## Exports
 
-| Export                                                                         | Description                                                                               |
-| ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| `registerCesiumWebMcpTools`                                                    | Registers enabled tools on `document.modelContext`. Resolves `{ toolNames, unregister }`. |
-| `buildCesiumWebMcpTools`                                                       | Builds the same tool payloads without registering them.                                   |
-| `isWebMcpSupported`                                                            | Feature-detects `document.modelContext`.                                                  |
-| `RegisterCesiumWebMcpToolsOptions`                                             | Type: `{ enabled?, executors?, toolConfig?, logger?, document? }`.                        |
-| `RegisteredCesiumWebMcpTools`                                                  | Type: `{ toolNames: string[]; unregister: () => void }`.                                  |
-| `CesiumWebMcpToolConfig`                                                       | Type: per-tool `{ description?, inputSchema? }` override.                                 |
-| `WebMcpToolsLogger`, `noopWebMcpToolsLogger`, `createConsoleWebMcpToolsLogger` | Same opt-in logging convention as every other package in this repo.                       |
-| `WebMcpTool`, `WebMcpModelContext`, ...                                        | Minimal ambient types for the WebMCP Imperative API (not yet in TypeScript's DOM lib).    |
+| Export                                  | Description                                                                               |
+| --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `registerCesiumWebMcpTools`             | Registers enabled tools on `document.modelContext`. Resolves `{ toolNames, unregister }`. |
+| `buildCesiumWebMcpTools`                | Builds the same tool payloads without registering them.                                   |
+| `isWebMcpSupported`                     | Feature-detects `document.modelContext`.                                                  |
+| `RegisterCesiumWebMcpToolsOptions`      | Type: `{ enabled?, executors?, toolConfig?, logger?, document? }`.                        |
+| `RegisteredCesiumWebMcpTools`           | Type: `{ toolNames: string[]; unregister: () => void }`.                                  |
+| `CesiumWebMcpToolConfig`                | Type: per-tool `{ description?, inputSchema? }` override.                                 |
+| `WebMcpTool`, `WebMcpModelContext`, ... | Minimal ambient types for the WebMCP Imperative API (not yet in TypeScript's DOM lib).    |
 
 ## Security
 

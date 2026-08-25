@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { noopMcpToolsLogger } from "../../logger.js";
+import { noopLogger as noopMcpToolsLogger } from "@cesium-ai/observability";
 import { discoverProtectedResourceScope } from "./discover-protected-resource-scope.js";
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
