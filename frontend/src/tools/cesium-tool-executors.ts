@@ -1,27 +1,15 @@
 import type { Viewer } from "cesium";
 import { ENABLED_CESIUM_TOOLS, type EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
-import { createCesiumToolExecutors, type ToolsLogger } from "@cesium-ai/tools";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml/names";
+import { createCesiumToolExecutors } from "@cesium-ai/tools";
 import { createFrontendLogger } from "../utils/telemetry";
 import { flyToLocation } from "./camera";
 
 /** A client-side executor: runs one tool call against the live Viewer. */
 export type ToolExecutor = (viewer: Viewer, args: unknown) => Promise<unknown>;
 
-/**
- * Adapts the frontend's variadic-`meta` telemetry logger to `@cesium-ai/tools`'s fixed-shape
- * `ToolsLogger`, mirroring the same pattern used for `@cesium-ai/chat-element`'s `ChatLogger` in
- * `ChatPanel.tsx`. Passed to `createCesiumToolExecutors` so every executor's outcome (success, a
- * resolved `{ error }`, or a thrown rejection) is reported through this app's OTEL-wired
- * telemetry instead of vanishing silently whenever nothing reads the result's `error` field.
- */
-const toolsLoggerSource = createFrontendLogger("@cesium-ai/tools");
-const toolsLogger: ToolsLogger = {
-  debug: (message, meta) => toolsLoggerSource.debug(message, meta),
-  info: (message, meta) => toolsLoggerSource.info(message, meta),
-  warn: (message, meta) => toolsLoggerSource.warn(message, meta),
-  error: (message, meta) => toolsLoggerSource.error(message, meta),
-};
+const toolsLogger = createFrontendLogger("@cesium-ai/tools");
 
 /**
  * `@cesium-ai/tools`'s default executor for every `@cesium-ai/tools-schemas` tool,
@@ -36,6 +24,12 @@ export const TOOL_EXECUTORS: Record<EnabledCesiumTool, ToolExecutor> = {
     Promise.resolve({
       success: false,
       error: "executeCesiumCode is resolved server-side; no client-side executor runs for it.",
+    }),
+  // generateCzml is server-resolved (intent -> verified CZML); stub serves as defense-in-depth.
+  [CODEGEN_CZML_TOOL_NAMES.generateCzml]: () =>
+    Promise.resolve({
+      success: false,
+      error: "generateCzml is resolved server-side; no client-side executor runs for it.",
     }),
 } as Record<EnabledCesiumTool, ToolExecutor>;
 

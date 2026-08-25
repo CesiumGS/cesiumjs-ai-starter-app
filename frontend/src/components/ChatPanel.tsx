@@ -3,33 +3,56 @@ import type { Viewer } from "cesium";
 import { AiChatPanel } from "@cesium-ai/chat-element/react";
 import type { EnabledCesiumTool } from "@cesium-ai/sample-config";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium/names";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml/names";
 import { ENABLED_TOOLS, TOOL_EXECUTORS } from "../tools/cesium-tool-executors";
 import {
   handleExecuteCesiumCodeResult,
   isExecuteCesiumCodeTool,
 } from "../tools/execute-cesium-code";
+import { handleGenerateCzmlResult, isGenerateCzmlTool } from "../tools/generate-czml";
 import { DEFAULT_RATE_LIMIT, SandboxCallRateLimiter } from "../utils/sandbox-call-rate-limiter";
 import { config } from "../utils/config";
 import { createFrontendLogger, frontendLogger } from "../utils/telemetry";
-import type { ToolExecutionOutcome, ChatLogger } from "@cesium-ai/chat-element";
+import type { StructuredResultRenderer, ToolExecutionOutcome } from "@cesium-ai/chat-element";
 
 interface ChatPanelProps {
   viewerRef: React.RefObject<Viewer | null>;
 }
 
+const chatElementLogger = createFrontendLogger("@cesium-ai/chat-element");
+
 /**
- * Adapts the frontend's variadic-`meta` telemetry logger to `@cesium-ai/chat-element`'s
- * fixed-shape `ChatLogger`, mirroring the same pattern the backend uses for
- * `createMcpToolsLogger` in `backend/src/utils/telemetry.ts`. Module-level (not per-render)
- * since it's stateless.
+ * Dedicated `ToolCard` rendering for this app's two codegen tools (see
+ * `AiChatPanel`'s `structuredResults` prop / `StructuredResult.tsx`): each gets its generated
+ * content in a copyable `.codeBlock` panel, plus its own error field(s) broken out into distinct
+ * error-styled panels instead of the generic result view.
  */
-const chatElementLoggerSource = createFrontendLogger("@cesium-ai/chat-element");
-const chatElementLogger: ChatLogger = {
-  debug: (message, meta) => chatElementLoggerSource.debug(message, meta),
-  info: (message, meta) => chatElementLoggerSource.info(message, meta),
-  warn: (message, meta) => chatElementLoggerSource.warn(message, meta),
-  error: (message, meta) => chatElementLoggerSource.error(message, meta),
-};
+const STRUCTURED_RESULTS: StructuredResultRenderer[] = [
+  {
+    toolName: CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
+    field: "code",
+    copyLabel: "Copy code",
+    errorFields: [
+      { field: "error", title: "Generation error", testId: "generation-error-panel" },
+      { field: "executionError", title: "Execution error", testId: "execution-error-panel" },
+    ],
+  },
+  {
+    toolName: CODEGEN_CZML_TOOL_NAMES.generateCzml,
+    field: "czml",
+    copyLabel: "Copy CZML",
+    errorFields: [
+      {
+        field: "error",
+        // `czml` is only present alongside `error` when generation succeeded but the frontend's
+        // later `CzmlDataSource` load failed (see `generate-czml.ts`'s `handleGenerateCzmlResult`)
+        // — absent, the failure happened during generation itself.
+        title: (result) => (Array.isArray(result.czml) ? "Load error" : "Generation error"),
+        testId: "czml-error-panel",
+      },
+    ],
+  },
+];
 
 /** Executes tool calls against the live Viewer; handles unknown tools gracefully. */
 export default function ChatPanel({ viewerRef }: ChatPanelProps) {
@@ -72,6 +95,13 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
    * this follow-up. `continueConversation` must therefore always be `true`
    * here, whether the outcome is success, a runtime execution failure, or a
    * verification failure the tool itself already reported as `{ error }`.
+   *
+   * `generateCzml` follows the same "stop the agent loop, report the real
+   * outcome in a follow-up" shape (see `backend/src/app.ts`'s
+   * `stopAfterTools`), and is likewise approval-gated: unlike executeCesiumCode
+   * this app's `AiChatPanel` requires no extra wiring here for that gate — the
+   * Approve/Reject UI is generic (see `ToolCard.tsx`), driven entirely by the
+   * backend's `resolveToolApproval`.
    */
   const handleServerToolResult = useCallback(
     async (toolCall: {
@@ -79,20 +109,33 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       toolName: string;
       output: unknown;
     }): Promise<ToolExecutionOutcome | undefined> => {
-      if (!isExecuteCesiumCodeTool(toolCall.toolName)) return undefined;
+      if (isExecuteCesiumCodeTool(toolCall.toolName)) {
+        const errorMessage = await handleExecuteCesiumCodeResult(
+          viewerRef.current,
+          toolCall.output,
+          () => sandboxRateLimiterRef.current?.checkAndRecord(),
+        );
 
-      const errorMessage = await handleExecuteCesiumCodeResult(
-        viewerRef.current,
-        toolCall.output,
-        () => sandboxRateLimiterRef.current?.checkAndRecord(),
-      );
+        return {
+          result: errorMessage
+            ? { ...(toolCall.output as object), executionError: errorMessage }
+            : toolCall.output,
+          continueConversation: true,
+        };
+      }
 
-      return {
-        result: errorMessage
-          ? { ...(toolCall.output as object), executionError: errorMessage }
-          : toolCall.output,
-        continueConversation: true,
-      };
+      if (isGenerateCzmlTool(toolCall.toolName)) {
+        const outcome = await handleGenerateCzmlResult(viewerRef.current, toolCall.output);
+
+        return {
+          result: outcome.success
+            ? { ...(toolCall.output as object), entityCount: outcome.entityCount }
+            : { ...(toolCall.output as object), error: outcome.error },
+          continueConversation: true,
+        };
+      }
+
+      return undefined;
     },
     [viewerRef],
   );
@@ -102,7 +145,7 @@ export default function ChatPanel({ viewerRef }: ChatPanelProps) {
       apiBase={config.apiBase}
       onToolCall={handleToolCall}
       onServerToolResult={handleServerToolResult}
-      codeResultToolName={CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode}
+      structuredResults={STRUCTURED_RESULTS}
       logger={chatElementLogger}
     />
   );

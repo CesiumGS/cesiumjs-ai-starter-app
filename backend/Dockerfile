@@ -4,8 +4,8 @@
 # `docker build -f backend/Dockerfile .` — this is what compose.yaml uses.
 #
 # This app's workspace packages (@cesium-ai/server, @cesium-ai/tools-schemas,
-# @cesium-ai/codegen-cesium, @cesium-ai/mcp-tools, @cesium-ai/turf-tools,
-# @cesium-ai/sample-config)
+# @cesium-ai/observability, @cesium-ai/codegen-cesium, @cesium-ai/codegen-czml,
+# @cesium-ai/mcp-tools, @cesium-ai/turf-tools, @cesium-ai/sample-config)
 # are resolved via npm workspaces from the repo root, so the backend image
 # can't be built from the backend/ folder alone. Only manifests for
 # workspaces the backend actually depends on are copied — npm ci is fine with
@@ -20,17 +20,21 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY backend/package.json backend/package.json
 COPY shared/package.json shared/package.json
+COPY packages/observability/package.json packages/observability/package.json
 COPY packages/server/package.json packages/server/package.json
 COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY packages/codegen-cesium/package.json packages/codegen-cesium/package.json
+COPY packages/codegen-czml/package.json packages/codegen-czml/package.json
 COPY packages/mcp-tools/package.json packages/mcp-tools/package.json
 COPY packages/turf-tools/package.json packages/turf-tools/package.json
 RUN npm ci
 
 COPY shared shared
+COPY packages/observability packages/observability
 COPY packages/server packages/server
 COPY packages/tools-schemas packages/tools-schemas
 COPY packages/codegen-cesium packages/codegen-cesium
+COPY packages/codegen-czml packages/codegen-czml
 COPY packages/mcp-tools packages/mcp-tools
 COPY packages/turf-tools packages/turf-tools
 COPY backend backend
@@ -56,12 +60,18 @@ COPY --from=build /app/backend/package.json backend/package.json
 COPY --from=build /app/backend/dist backend/dist
 COPY --from=build /app/shared/package.json shared/package.json
 COPY --from=build /app/shared/dist shared/dist
+COPY --from=build /app/packages/observability/package.json packages/observability/package.json
+COPY --from=build /app/packages/observability/dist packages/observability/dist
 COPY --from=build /app/packages/server/package.json packages/server/package.json
 COPY --from=build /app/packages/server/dist packages/server/dist
 COPY --from=build /app/packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY --from=build /app/packages/tools-schemas/dist packages/tools-schemas/dist
 COPY --from=build /app/packages/codegen-cesium/package.json packages/codegen-cesium/package.json
 COPY --from=build /app/packages/codegen-cesium/dist packages/codegen-cesium/dist
+COPY --from=build /app/packages/codegen-czml/package.json packages/codegen-czml/package.json
+COPY --from=build /app/packages/codegen-czml/dist packages/codegen-czml/dist
+COPY --from=build /app/packages/codegen-czml/schema packages/codegen-czml/schema
+COPY --from=build /app/packages/codegen-czml/skills packages/codegen-czml/skills
 COPY --from=build /app/packages/mcp-tools/package.json packages/mcp-tools/package.json
 COPY --from=build /app/packages/mcp-tools/dist packages/mcp-tools/dist
 COPY --from=build /app/packages/turf-tools/package.json packages/turf-tools/package.json

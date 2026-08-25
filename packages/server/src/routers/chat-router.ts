@@ -7,11 +7,15 @@ import {
   type UIMessage,
   type UIMessageChunk,
 } from "ai";
+import {
+  noopLogger,
+  noopServerMetrics,
+  type Logger,
+  type ServerMetrics,
+} from "@cesium-ai/observability";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { runAgent } from "../agent.js";
-import { noopServerLogger, type ServerLogger } from "../logger.js";
-import { noopServerMetrics, type ServerMetrics } from "../metrics.js";
 
 /** Default cap on the number of messages accepted in a single request. */
 const DEFAULT_MAX_MESSAGES = 100;
@@ -160,7 +164,7 @@ export interface ChatRouterOptions {
   /** Tool names to stop the loop after — see {@link RunAgentOptions.stopAfterTools}. */
   stopAfterTools?: readonly string[];
   /** Structured logger for agent-loop failures. Defaults to a no-op (silent) logger. */
-  logger?: ServerLogger;
+  logger?: Logger;
   /** Metrics sink for `/api/chat`'s token usage and request duration. Defaults to a no-op. */
   metrics?: ServerMetrics;
 }
@@ -185,7 +189,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
     toolApproval,
     resolveToolApproval,
     stopAfterTools,
-    logger = noopServerLogger,
+    logger = noopLogger,
     metrics = noopServerMetrics,
   } = options;
 

@@ -11,7 +11,7 @@ import {
   selectToolEntries,
   type SelectedMcpTool,
 } from "../connection/connect-mcp-server.js";
-import type { McpToolsLogger } from "../logger.js";
+import type { Logger } from "@cesium-ai/observability";
 import { discoverProtectedResourceScope } from "./oauth/discover-protected-resource-scope.js";
 import { createOAuthClientProvider } from "./oauth/oauth-client-provider.js";
 import type { McpServerConfig } from "../types.js";
@@ -36,7 +36,7 @@ export interface PendingSessionOAuth {
 export async function beginSessionOAuthConnect(options: {
   server: McpServerConfig;
   redirectUrl: string;
-  logger: McpToolsLogger;
+  logger: Logger;
 }): Promise<{ authorizationUrl: string; pending: PendingSessionOAuth } | { error: string }> {
   const { server, redirectUrl, logger } = options;
   // Every server passed here is inherently OAuth-gated, so `oauth` is just an
@@ -94,7 +94,7 @@ export async function completeSessionOAuthConnect(
   pending: PendingSessionOAuth,
   code: string,
   state: string | undefined,
-  logger: McpToolsLogger,
+  logger: Logger,
 ): Promise<{ client: MCPClient; toolEntries: SelectedMcpTool[] } | { error: string }> {
   const { provider, server } = pending;
   try {

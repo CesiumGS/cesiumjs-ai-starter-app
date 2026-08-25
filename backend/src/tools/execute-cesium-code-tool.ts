@@ -4,9 +4,8 @@ import {
   defaultExecuteCesiumCodeInputSchema,
   CODEGEN_CESIUM_TOOL_NAMES,
   type RuntimeCodegenFeedback,
-  type CodegenLogger,
-  type CodegenMetrics,
 } from "@cesium-ai/codegen-cesium";
+import type { CodegenMetrics, Logger } from "@cesium-ai/observability";
 import { tool, type LanguageModel, type ModelMessage, type Tool } from "ai";
 
 /**
@@ -35,7 +34,7 @@ export interface CreateExecuteCesiumCodeToolOptions {
   /** Extra instructions appended to the generation prompt. Passed through to `generateVerifiedCesiumCode`. */
   extraInstructions?: string;
   /** Structured logger for generation attempts/failures. Passed through to `generateVerifiedCesiumCode`. */
-  logger?: CodegenLogger;
+  logger?: Logger;
   /** Metrics sink for token usage, skill-match scores, and generation duration. Passed through to `generateVerifiedCesiumCode`. */
   metrics?: CodegenMetrics;
 }

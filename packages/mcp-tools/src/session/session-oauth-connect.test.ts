@@ -26,7 +26,7 @@ vi.mock("./oauth/discover-protected-resource-scope.js", () => ({
 
 const { beginSessionOAuthConnect, completeSessionOAuthConnect } =
   await import("./session-oauth-connect.js");
-const { noopMcpToolsLogger } = await import("../logger.js");
+const { noopLogger: noopMcpToolsLogger } = await import("@cesium-ai/observability");
 
 function fakeTool(): Tool {
   return {

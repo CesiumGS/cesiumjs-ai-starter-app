@@ -4,9 +4,10 @@ import { Icon } from "@stratakit/mui";
 import svgDismiss from "@stratakit/icons/dismiss.svg";
 import svgAiSparkle from "@stratakit/icons/ai-sparkle.svg";
 import { ChatClient } from "../chat-client";
-import type { ChatLogger, ToolExecutionOutcome } from "../chat-client";
+import type { Logger } from "@cesium-ai/observability";
+import type { ToolExecutionOutcome } from "../chat-client";
 import { MessageItem } from "./MessageItem";
-import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
+import type { StructuredResultRenderer } from "./StructuredResult";
 import { RegisteredTools } from "./RegisteredTools";
 import { useRegisteredTools } from "../mcp/use-registered-tools";
 import { spanVariantMapping } from "../utils/ui-constants";
@@ -96,22 +97,23 @@ export interface AiChatPanelProps {
    */
   maxToolCallRounds?: number;
   /**
-   * Name of a tool whose result gets a dedicated code/error rendering in its
-   * `ToolCard` (see `ToolCard.tsx`'s `codeResultToolName` prop) instead of the
-   * generic result view — this app's `executeCesiumCode` tool, in this repo's
-   * case. `chat-element` has no dependency on `@cesium-ai/codegen-cesium`, so
-   * the host passes its canonical `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`
-   * value here rather than the panel importing or hardcoding it. Omitted means
-   * every tool call renders with the generic result view.
+   * Configures dedicated rendering for one or more tools' results — a `.codeBlock` panel with a
+   * copy button for a chosen result field, plus distinct error-styled panels for any of that
+   * tool's error fields — instead of the generic result view (see {@link StructuredResultRenderer}
+   * in `StructuredResult.tsx`). `chat-element` has no dependency on `@cesium-ai/codegen-cesium` or
+   * `@cesium-ai/codegen-czml`, so the host builds this array itself (e.g. keyed by
+   * `CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode`/`CODEGEN_CZML_TOOL_NAMES.generateCzml`) rather
+   * than the panel importing or hardcoding those tool names. Omitted means every tool call renders
+   * with the generic result view.
    */
-  codeResultToolName?: string;
+  structuredResults?: StructuredResultRenderer[];
   /**
    * Structured logger for stream/tool/approval errors the underlying
    * {@link ChatClient} encounters — passed straight through to its
    * `logger` option. Omit to log nothing (errors still always reach the
    * transcript regardless).
    */
-  logger?: ChatLogger;
+  logger?: Logger;
 }
 
 /**
@@ -122,6 +124,24 @@ export interface AiChatPanelProps {
 interface PendingApproval {
   toolCallId: string;
   resolve: (decision: { approved: boolean; reason?: string }) => void;
+}
+
+/**
+ * Builds a lookup `Map` from an array, keyed and valued by callback (e.g. `registeredTools` keyed
+ * by `name` but valued by its `mcpApp`, or `structuredResults` keyed and valued by `toolName`/
+ * itself). Entries whose `valueOf` returns `undefined` are omitted.
+ */
+function byKey<T, K, V>(
+  items: readonly T[] | undefined,
+  keyOf: (item: T) => K,
+  valueOf: (item: T) => V | undefined,
+): ReadonlyMap<K, V> {
+  const map = new Map<K, V>();
+  for (const item of items ?? []) {
+    const value = valueOf(item);
+    if (value !== undefined) map.set(keyOf(item), value);
+  }
+  return map;
 }
 
 function useChatClient(
@@ -198,7 +218,7 @@ export function AiChatPanel({
   onServerToolResult,
   onApprovalRequired,
   maxToolCallRounds,
-  codeResultToolName,
+  structuredResults,
   logger,
 }: AiChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
@@ -212,13 +232,24 @@ export function AiChatPanel({
     mcpConnectApiBase ?? (apiBase ? `${apiBase}/api/mcp` : undefined);
   const resolvedMcpAppApiBase = mcpAppApiBase ?? (apiBase ? `${apiBase}/api/mcp-app` : undefined);
   const { tools: registeredTools, refetchTools } = useRegisteredTools(resolvedToolsApiEndpoint);
-  const mcpAppByToolName = useMemo(() => {
-    const map = new Map<string, RegisteredToolMcpApp>();
-    for (const tool of registeredTools) {
-      if (tool.mcpApp) map.set(tool.name, tool.mcpApp);
-    }
-    return map;
-  }, [registeredTools]);
+  const mcpAppByToolName = useMemo(
+    () =>
+      byKey(
+        registeredTools,
+        (tool) => tool.name,
+        (tool) => tool.mcpApp,
+      ),
+    [registeredTools],
+  );
+  const structuredResultByToolName = useMemo(
+    () =>
+      byKey(
+        structuredResults,
+        (config) => config.toolName,
+        (config) => config,
+      ),
+    [structuredResults],
+  );
   const { client, forceUpdate } = useChatClient(
     resolvedApiEndpoint,
     onToolCall,
@@ -350,7 +381,7 @@ export function AiChatPanel({
                 onApprove: handleApprove,
                 onReject: handleReject,
               }}
-              codeResultToolName={codeResultToolName}
+              structuredResultByToolName={structuredResultByToolName}
               mcpAppByToolName={mcpAppByToolName}
               mcpAppApiBase={resolvedMcpAppApiBase}
               mcpAppSandboxUrl={mcpAppSandboxUrl}

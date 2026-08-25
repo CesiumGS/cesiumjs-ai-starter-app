@@ -1,4 +1,4 @@
-import type { LogLevel } from "@cesium-ai/codegen-sandbox";
+import type { LogLevel } from "@cesium-ai/observability";
 
 /**
  * Base URL the backend chat API is reachable at. Defaults to the local backend

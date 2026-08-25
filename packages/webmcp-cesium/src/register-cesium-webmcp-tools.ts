@@ -1,4 +1,5 @@
 import type { Viewer } from "cesium";
+import { noopLogger, type Logger } from "@cesium-ai/observability";
 import { z } from "zod";
 import { CESIUM_TOOL_NAMES, type CesiumToolName } from "@cesium-ai/tools-schemas/names";
 import { toolInputJsonSchema } from "@cesium-ai/tools-schemas/json-schema";
@@ -11,7 +12,6 @@ import {
   CESIUM_WEBMCP_TOOL_DEFINITIONS,
   READ_ONLY_CESIUM_WEBMCP_TOOLS,
 } from "./tool-definitions.js";
-import { noopWebMcpToolsLogger, type WebMcpToolsLogger } from "./logger.js";
 import type { WebMcpModelContext, WebMcpTool } from "./webmcp-types.js";
 
 /** Per-tool override for {@link registerCesiumWebMcpTools} / {@link buildCesiumWebMcpTools}. */
@@ -37,7 +37,7 @@ export interface RegisterCesiumWebMcpToolsOptions {
   executors?: CesiumToolExecutorOverrides;
   /** Per-tool description/schema overrides, or `false` to exclude a tool. */
   toolConfig?: CesiumWebMcpToolConfigs;
-  logger?: WebMcpToolsLogger;
+  logger?: Logger;
   /** Defaults to the global `document` — override for tests or non-default documents/iframes. */
   document?: Document;
   /**
@@ -123,7 +123,7 @@ export async function registerCesiumWebMcpTools(
   viewer: Viewer,
   options: RegisterCesiumWebMcpToolsOptions = {},
 ): Promise<RegisteredCesiumWebMcpTools> {
-  const logger = options.logger ?? noopWebMcpToolsLogger;
+  const logger = options.logger ?? noopLogger;
   const doc = options.document ?? document;
   const modelContext = getModelContext(doc);
 

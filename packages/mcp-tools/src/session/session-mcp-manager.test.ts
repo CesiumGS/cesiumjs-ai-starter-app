@@ -13,7 +13,7 @@ vi.mock("./session-oauth-connect.js", () => ({
 }));
 
 const { createSessionMcpManager } = await import("./session-mcp-manager.js");
-const { noopMcpToolsLogger } = await import("../logger.js");
+const { noopLogger: noopMcpToolsLogger } = await import("@cesium-ai/observability");
 
 const REDIRECT_URL = "https://backend.example.com/api/mcp/callback";
 

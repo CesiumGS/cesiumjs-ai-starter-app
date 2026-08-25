@@ -2,8 +2,7 @@
 // telemetry.ts since this is the largest and most self-contained (provider-agnostic) concern.
 import type { Meter } from "@opentelemetry/api";
 import { AggregationType, InstrumentType, type ViewOptions } from "@opentelemetry/sdk-metrics";
-import type { ServerMetrics } from "@cesium-ai/server";
-import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
+import type { CodegenMetrics, ServerMetrics } from "@cesium-ai/observability";
 
 // OTel's default histogram buckets (`0, 5, 10, ..., 10000`) are tuned for millisecond latencies,
 // not token counts — nearly every real token value pools into the last bucket, so a dashboard's

@@ -38,7 +38,7 @@ Parsed and validated by [`src/utils/env.ts`](https://github.com/CesiumGS/cesiumj
 
 Backend logging can be exported to any OTLP-compatible telemetry provider by setting `TELEMETRY_ENABLED=true` and either `OTEL_EXPORTER_OTLP_ENDPOINT` (base endpoint) or `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` (explicit logs endpoint). Optional headers/resource attributes/service identity fields are also supported (`OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_SERVICE_NAME`, `OTEL_SERVICE_NAMESPACE`, `OTEL_RESOURCE_ATTRIBUTES`, `OTEL_LOG_LEVEL`).
 
-`src/index.ts` builds one scoped logger per package via `telemetry.createLogger(scope)`/`telemetry.createMcpToolsLogger(scope)` and threads it through every package that accepts one, so a single `TELEMETRY_ENABLED=true` covers this app's own logs plus `@cesium-ai/mcp-tools`, `@cesium-ai/codegen-cesium` (code generation attempts/failures), and `@cesium-ai/server` (agent-loop and MCP Apps proxy failures) — each log line carries a `log.scope` attribute identifying its package.
+`src/index.ts` builds one scoped logger per package via `telemetry.createLogger(scope)` and threads it through every package that accepts one, so a single `TELEMETRY_ENABLED=true` covers this app's own logs plus `@cesium-ai/mcp-tools`, `@cesium-ai/codegen-cesium` (code generation attempts/failures), and `@cesium-ai/server` (agent-loop and MCP Apps proxy failures) — each log line carries a `log.scope` attribute identifying its package.
 
 ## Session middleware (MCP OAuth "Connect" flow)
 

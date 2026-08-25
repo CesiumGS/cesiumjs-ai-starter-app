@@ -4,7 +4,7 @@ import svgChevronRight from "@stratakit/icons/chevron-right.svg";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { ToolInvocation } from "../chat-client";
 import { formatToolPayload } from "../utils/format-tool-payload";
-import { ExecuteCesiumCodeResult } from "./ExecuteCesiumCodeResult";
+import { StructuredResult, type StructuredResultRenderer } from "./StructuredResult";
 import { McpAppWidget } from "./McpAppWidget";
 import { parseMcpToolName } from "../mcp/mcp-tool-name";
 import type { RegisteredToolMcpApp } from "../mcp/registered-tools";
@@ -29,12 +29,46 @@ export interface PendingApprovalHandlers {
  */
 export const AUTO_EXPAND_THRESHOLD = 300;
 
+interface ErrorPanelInfo {
+  testId: string;
+  title: string;
+  message: string;
+}
+
+/**
+ * Pure derivation of a resolved invocation's structured-result state: whether `config`'s `field`
+ * applies to this result, and which of its `errorFields` (if any) have a string message to show
+ * in their own panel (see `ToolResultErrorPanel`). Kept separate from `ToolCard`'s render body so
+ * the data derivation reads independently of the JSX, and can be unit-tested on its own.
+ */
+function resolveStructuredResult(
+  invocation: ToolInvocation,
+  config: StructuredResultRenderer | undefined,
+): { hasResult: boolean; isStructuredResult: boolean; errorPanels: ErrorPanelInfo[] } {
+  const hasResult = invocation.state === "result" && invocation.result !== undefined;
+  const isStructuredResult = hasResult && config !== undefined;
+  const record =
+    isStructuredResult && invocation.result && typeof invocation.result === "object"
+      ? (invocation.result as Record<string, unknown>)
+      : undefined;
+  const errorPanels = (config?.errorFields ?? [])
+    .map((errorField): ErrorPanelInfo | undefined => {
+      const message = record?.[errorField.field];
+      if (typeof message !== "string") return undefined;
+      const title =
+        typeof errorField.title === "function" ? errorField.title(record ?? {}) : errorField.title;
+      return { testId: errorField.testId, title, message };
+    })
+    .filter((panel): panel is ErrorPanelInfo => panel !== undefined);
+  return { hasResult, isStructuredResult, errorPanels };
+}
+
 export function ToolCard({
   invocation,
   isPendingApproval,
   onApprove,
   onReject,
-  codeResultToolName,
+  structuredResult,
   mcpApp,
   mcpAppApiBase,
   mcpAppSandboxUrl,
@@ -44,12 +78,14 @@ export function ToolCard({
   onApprove?: () => void;
   onReject?: () => void;
   /**
-   * Tool name that gets the dedicated code/error rendering (see
-   * {@link ExecuteCesiumCodeResult} and `ToolResultErrorPanel` below) instead
-   * of the generic result view.
-   * Omitted means no tool call gets this special-cased treatment.
+   * Config for this invocation's tool, already resolved by toolName (see `AiChatPanel`'s
+   * `structuredResults` prop and `MessageItem`'s `structuredResultByToolName` lookup) — when set,
+   * its `field` renders via {@link StructuredResult} (a dedicated `.codeBlock` panel) instead of
+   * the generic result view, and each of its `errorFields` renders in its own error-styled panel
+   * (see `ToolResultErrorPanel` below). Undefined means this tool call gets no special-cased
+   * treatment.
    */
-  codeResultToolName?: string;
+  structuredResult?: StructuredResultRenderer;
   /**
    * MCP Apps widget metadata for THIS invocation's tool, if it declared one
    * (see `RegisteredTool.mcpApp` / `AiChatPanel`'s tools lookup). When set
@@ -63,28 +99,13 @@ export function ToolCard({
   mcpAppSandboxUrl?: URL;
 }) {
   const argsText = JSON.stringify(invocation.args, null, 2);
-  const hasResult = invocation.state === "result" && invocation.result !== undefined;
-  const isCodeResult =
-    hasResult && codeResultToolName !== undefined && invocation.toolName === codeResultToolName;
-  const resultText = hasResult && !isCodeResult ? formatToolPayload(invocation.result) : "";
-  const generationError =
-    isCodeResult && invocation.result && typeof invocation.result === "object"
-      ? (invocation.result as Record<string, unknown>).error
-      : undefined;
-  const generationErrorText = typeof generationError === "string" ? generationError : undefined;
-  const executionError =
-    isCodeResult && invocation.result && typeof invocation.result === "object"
-      ? (invocation.result as Record<string, unknown>).executionError
-      : undefined;
-  const executionErrorText = typeof executionError === "string" ? executionError : undefined;
-  const codeLength =
-    isCodeResult && invocation.result && typeof invocation.result === "object"
-      ? Object.values(invocation.result as Record<string, unknown>).reduce<number>(
-          (total, value) => total + (typeof value === "string" ? value.length : 0),
-          0,
-        )
-      : 0;
-  const combinedLength = argsText.length + resultText.length + codeLength;
+  const { hasResult, isStructuredResult, errorPanels } = resolveStructuredResult(
+    invocation,
+    structuredResult,
+  );
+  const resultText = hasResult && !isStructuredResult ? formatToolPayload(invocation.result) : "";
+  const structuredLength = isStructuredResult ? formatToolPayload(invocation.result).length : 0;
+  const combinedLength = argsText.length + resultText.length + structuredLength;
   const defaultOpen = isPendingApproval || combinedLength <= AUTO_EXPAND_THRESHOLD;
   const parsedMcpName = parseMcpToolName(invocation.toolName);
 
@@ -108,8 +129,8 @@ export function ToolCard({
           />
         )}
         {hasResult &&
-          (isCodeResult ? (
-            <ExecuteCesiumCodeResult result={invocation.result} />
+          (isStructuredResult && structuredResult ? (
+            <StructuredResult result={invocation.result} config={structuredResult} />
           ) : (
             <pre className={styles.toolResult}>{resultText}</pre>
           ))}
@@ -144,34 +165,25 @@ export function ToolCard({
           </div>
         )}
       </details>
-      {generationErrorText && (
+      {errorPanels.map((panel) => (
         <ToolResultErrorPanel
-          testId="generation-error-panel"
-          title="Generation error"
-          message={generationErrorText}
+          key={panel.testId}
+          testId={panel.testId}
+          title={panel.title}
+          message={panel.message}
         />
-      )}
-      {executionErrorText && (
-        <ToolResultErrorPanel
-          testId="execution-error-panel"
-          title="Execution error"
-          message={executionErrorText}
-        />
-      )}
+      ))}
     </>
   );
 }
 
 /**
- * A distinct, error-styled panel shown as a SIBLING of `executeCesiumCode`'s
- * `ToolCard` (not nested inside it), used for BOTH failure modes the tool can
- * report: `result.error` (the generated code was rejected by static AST
- * verification, or generation itself failed) and `result.executionError`
- * (the code passed verification but threw at runtime). Kept as its own panel
- * — rather than folded into the tool card's result output — so either kind of
- * failure reads as clearly distinct from a successful tool call, similar to
- * how a top-level `error-text` message bubble is visually separated from a
- * normal assistant message.
+ * A distinct, error-styled panel shown as a SIBLING of a `structuredResult`-configured tool's
+ * `ToolCard` (not nested inside it) for one of its `errorFields` (see `StructuredResult.tsx`'s
+ * `StructuredResultErrorField`). Kept as its own panel — rather than folded into the tool card's
+ * result output — so a failure reads as clearly distinct from a successful tool call, similar to
+ * how a top-level `error-text` message bubble is visually separated from a normal assistant
+ * message.
  */
 function ToolResultErrorPanel({
   testId,

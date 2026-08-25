@@ -1,6 +1,4 @@
-import type { McpToolsLogger } from "@cesium-ai/mcp-tools";
-import type { ServerMetrics } from "@cesium-ai/server";
-import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
+import type { CodegenMetrics, Logger, ServerMetrics } from "@cesium-ai/observability";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { logs } from "@opentelemetry/api-logs";
 import { trace, metrics as otelMetrics, type Tracer, type Meter } from "@opentelemetry/api";
@@ -13,25 +11,16 @@ import { MeterProvider, PeriodicExportingMetricReader } from "@opentelemetry/sdk
 import { OpenTelemetry } from "@ai-sdk/otel";
 import { registerTelemetry } from "ai";
 import type { Env } from "./env.js";
-import {
-  type AppLogLevel,
-  type AppLogger,
-  createConsoleAndOtelLogger,
-} from "./telemetry-logger.js";
+import { createConsoleAndOtelLogger } from "./telemetry-logger.js";
 import {
   METRIC_VIEWS,
   createServerMetricsFromMeter,
   createCodegenMetricsFromMeter,
 } from "./telemetry-metrics.js";
 
-// Re-exported so existing consumers (e.g. `app.ts`) can keep importing these from telemetry.js,
-// their original home, even though the implementation now lives in telemetry-logger.ts.
-export type { AppLogLevel, AppLogger };
-
 export interface BackendTelemetry {
   enabled: boolean;
-  createLogger(scope: string): AppLogger;
-  createMcpToolsLogger(scope: string): McpToolsLogger;
+  createLogger(scope: string): Logger;
   /**
    * Returns an OTel `Tracer` scoped to the given instrumentation name (e.g. a
    * package name). Safe to call regardless of `enabled` — when telemetry is
@@ -161,19 +150,14 @@ export function initializeBackendTelemetry(env: Env): BackendTelemetry {
     otelMetrics.setGlobalMeterProvider(meterProvider);
   }
 
-  const createLogger = (scope: string): AppLogger => {
+  const createLogger = (scope: string): Logger => {
     const otelLogger = provider?.getLogger(scope);
     return createConsoleAndOtelLogger(scope, env.OTEL_LOG_LEVEL, otelLogger);
   };
 
-  // `McpToolsLogger` is structurally identical to `AppLogger` (same debug/info/warn/error
-  // shape), so the underlying logger object is reused as-is instead of re-wrapped.
-  const createMcpToolsLogger = (scope: string): McpToolsLogger => createLogger(scope);
-
   return {
     enabled: env.TELEMETRY_ENABLED,
     createLogger,
-    createMcpToolsLogger,
     createTracer: (scope: string): Tracer => trace.getTracer(scope),
     createMeter: (scope: string): Meter => otelMetrics.getMeter(scope),
     createServerMetrics: (scope: string): ServerMetrics =>

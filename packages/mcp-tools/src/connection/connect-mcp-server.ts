@@ -4,7 +4,7 @@ import {
   type MCPClient,
   type OAuthClientProvider,
 } from "@ai-sdk/mcp";
-import type { McpToolsLogger } from "../logger.js";
+import type { Logger } from "@cesium-ai/observability";
 import { isUnauthorizedMcpError } from "./mcp-error.js";
 import { getMcpAppToolMeta, type McpTool } from "../mcp-app-meta.js";
 import type { McpServerConfig, McpTransportConfig } from "../types.js";
@@ -39,7 +39,7 @@ export interface SelectedMcpTool {
 export function selectToolEntries(
   discovered: Awaited<ReturnType<MCPClient["tools"]>>,
   server: McpServerConfig,
-  logger: McpToolsLogger,
+  logger: Logger,
 ): SelectedMcpTool[] {
   const allowed = server.allowedTools ? new Set(server.allowedTools) : undefined;
 
@@ -102,7 +102,7 @@ export function buildTransport(transport: McpTransportConfig, authProvider?: OAu
  */
 export async function connectMcpServer(
   server: McpServerConfig,
-  logger: McpToolsLogger,
+  logger: Logger,
 ): Promise<
   { client: MCPClient; toolEntries: SelectedMcpTool[] } | { error: string; authRequired?: boolean }
 > {

@@ -12,12 +12,6 @@ export {
   READ_ONLY_CESIUM_WEBMCP_TOOLS,
   type CesiumWebMcpToolDefinition,
 } from "./tool-definitions.js";
-export {
-  noopWebMcpToolsLogger,
-  createConsoleWebMcpToolsLogger,
-  type WebMcpToolsLogger,
-  type WebMcpToolsLogLevel,
-} from "./logger.js";
 export type {
   WebMcpTool,
   WebMcpToolAnnotations,

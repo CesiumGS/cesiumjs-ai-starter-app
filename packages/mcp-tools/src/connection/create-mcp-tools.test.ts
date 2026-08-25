@@ -14,7 +14,7 @@ vi.mock("@ai-sdk/mcp", () => ({
 }));
 
 const { createMcpTools, DEFAULT_MCP_TOOL_TIMEOUT_MS } = await import("./create-mcp-tools.js");
-const { noopMcpToolsLogger } = await import("../logger.js");
+const { noopLogger: noopMcpToolsLogger } = await import("@cesium-ai/observability");
 
 function fakeTool(overrides: Partial<Tool> = {}): Tool {
   return {

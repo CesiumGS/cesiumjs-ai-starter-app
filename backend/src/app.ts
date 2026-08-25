@@ -3,6 +3,7 @@ import { createChatRouter, createToolsRouter } from "@cesium-ai/server";
 import { createMcpAppRouter, createMcpSessionRouter } from "@cesium-ai/server/mcp";
 import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
+import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml";
 import {
   createTurfDatasetStore,
   createTurfTools,
@@ -15,16 +16,15 @@ import {
   type SessionMcpManager,
 } from "@cesium-ai/mcp-tools";
 import type { LanguageModel, ToolApprovalConfiguration, ToolSet } from "ai";
-import type { ServerMetrics } from "@cesium-ai/server";
-import type { CodegenMetrics } from "@cesium-ai/codegen-cesium";
+import type { CodegenMetrics, Logger, ServerMetrics } from "@cesium-ai/observability";
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
 import { randomBytes } from "node:crypto";
-import type { AppLogger } from "./utils/telemetry.js";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
+import { createGenerateCzmlTool } from "./tools/generate-czml-tool.js";
 import { flyToInputSchema } from "./tools/flyto-tool.js";
 import { rateLimiter } from "./utils/rate-limit.js";
 import { createSessionMiddleware } from "./utils/session.js";
@@ -77,7 +77,7 @@ export interface BackendAppOptions {
    * `./utils/telemetry.js`'s `BackendTelemetry.createLogger`). Omit to run with
    * every package's logging silenced (its own no-op default).
    */
-  createLogger?: (scope: string) => AppLogger;
+  createLogger?: (scope: string) => Logger;
   /**
    * Builds a scoped `@cesium-ai/server`-shaped metrics sink — passed straight through to
    * `createChatRouter` so `/api/chat`'s token usage and request duration flow into this app's
@@ -116,8 +116,11 @@ export function createBackendApp({
   const app = express();
   const serverLogger = createLogger?.("@cesium-ai/server");
   const codegenLogger = createLogger?.("@cesium-ai/codegen-cesium");
+  const codegenCzmlLogger = createLogger?.("@cesium-ai/codegen-czml");
+
   const serverMetrics = createServerMetrics?.("@cesium-ai/server");
   const codegenMetrics = createCodegenMetrics?.("@cesium-ai/codegen-cesium");
+  const codegenCzmlMetrics = createCodegenMetrics?.("@cesium-ai/codegen-czml");
 
   app.use(cors({ origin: env.ALLOWED_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "256kb" }));
@@ -187,6 +190,19 @@ export function createBackendApp({
           }),
         }
       : {}),
+    ...(model && ENABLED_CESIUM_TOOLS.includes(CODEGEN_CZML_TOOL_NAMES.generateCzml)
+      ? {
+          [CODEGEN_CZML_TOOL_NAMES.generateCzml]: createGenerateCzmlTool({
+            model,
+            maxAttempts: env.CODEGEN_CZML_MAX_ATTEMPTS,
+            maxPackets: env.CODEGEN_CZML_MAX_PACKETS,
+            maxLength: env.CODEGEN_CZML_MAX_LENGTH,
+            extraInstructions: env.CODEGEN_CZML_EXTRA_INSTRUCTIONS,
+            logger: codegenCzmlLogger,
+            metrics: codegenCzmlMetrics,
+          }),
+        }
+      : {}),
     // MCP tools run arbitrary server-side code owned by a third party (the MCP
     // server), never the browser — see @cesium-ai/mcp-tools. Unlike flyTo/
     // executeCesiumCode, these are never streamed as client tool calls.
@@ -236,6 +252,10 @@ export function createBackendApp({
         // non-deprecated replacement for setting `needsApproval` directly on the
         // tool object (see `./tools/execute-cesium-code-tool.ts`).
         [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode]: "user-approval",
+        // generateCzml is approval-gated too: even though the generated CZML is verified
+        // declarative data (not arbitrary code), it's still model-authored content the user
+        // hasn't seen yet before it's loaded into the live Viewer.
+        [CODEGEN_CZML_TOOL_NAMES.generateCzml]: "user-approval",
         // Every MCP tool is approval-gated too, for the same reason: it's
         // third-party code this app doesn't control. Unlike executeCesiumCode,
         // an MCP tool's `execute()` result is already the real, final outcome,
@@ -259,7 +279,16 @@ export function createBackendApp({
       // see `handleServerToolResult`/`continueConversation` in the frontend).
       // Stop the agent loop right after that tool call so the model can't
       // generate a premature "done!" reply before the real outcome is known.
-      stopAfterTools: [CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode],
+      // generateCzml needs the exact same treatment: its server-side result only
+      // means the generated CZML passed verification, not that it has actually
+      // loaded into the live Viewer yet. It's also approval-gated (see above) —
+      // that approval happens BEFORE this tool call is executed at all, so this
+      // `stopAfterTools` entry is purely about the separate post-execution
+      // "report the real load outcome" follow-up, same as executeCesiumCode.
+      stopAfterTools: [
+        CODEGEN_CESIUM_TOOL_NAMES.executeCesiumCode,
+        CODEGEN_CZML_TOOL_NAMES.generateCzml,
+      ],
       logger: serverLogger,
       metrics: serverMetrics,
     }),

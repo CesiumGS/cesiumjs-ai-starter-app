@@ -26,6 +26,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
+    "@cesium-ai/observability": "*",
     "cesium": "1.142.0",
     "quickjs-emscripten": "^0.32.0"
   },

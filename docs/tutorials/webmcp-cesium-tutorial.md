@@ -46,7 +46,9 @@ export function registerAppWebMcpTools(viewer: Viewer) {
   return registerCesiumWebMcpTools(viewer, {
     enabled: ENABLED_WEBMCP_TOOLS,
     executors: { flyTo: flyToLocation },
-    logger: import.meta.env.DEV ? createConsoleWebMcpToolsLogger("info") : undefined,
+    logger: import.meta.env.DEV
+      ? createConsoleLogger({ scope: "webmcp-cesium", level: "info" })
+      : undefined,
   });
 }
 ```
