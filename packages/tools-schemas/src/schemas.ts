@@ -124,3 +124,11 @@ export {
   imageryListInputShape,
   type ImageryListInput,
 } from "./tools/imageryList/imageryList.schema.js";
+export {
+  geoJsonAddInputShape,
+  type GeoJsonAddInput,
+} from "./tools/geoJsonAdd/geoJsonAdd.schema.js";
+export {
+  geoJsonRemoveInputShape,
+  type GeoJsonRemoveInput,
+} from "./tools/geoJsonRemove/geoJsonRemove.schema.js";

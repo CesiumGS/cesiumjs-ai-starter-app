@@ -14,6 +14,7 @@ cesiumjs-ai-starter-app/
 │   ├── codegen-cesium/   @cesium-ai/codegen-cesium    — intent-to-code generation pipeline (server only)
 │   ├── codegen-sandbox/  @cesium-ai/codegen-sandbox   — QuickJS-wasm execution sandbox (frontend only)
 │   ├── mcp-tools/        @cesium-ai/mcp-tools          — optional MCP client tool bridge (server only)
+│   ├── turf-tools/       @cesium-ai/turf-tools         — server-only Turf.js spatial-analysis tools
 │   ├── server/           @cesium-ai/server             — Express chat router + agent loop
 │   └── chat-element/     @cesium-ai/chat-element       — React chat panel UI component
 ├── shared/                @cesium-ai/sample-config     — this app's tool selection/config
@@ -35,6 +36,7 @@ flowchart TD
     codegen["@cesium-ai/codegen-cesium"]
     sandbox["@cesium-ai/codegen-sandbox"]
     mcp["@cesium-ai/mcp-tools"]
+    turf["@cesium-ai/turf-tools"]
     server["@cesium-ai/server"]
     chatel["@cesium-ai/chat-element"]
     shared["@cesium-ai/sample-config"]
@@ -45,6 +47,7 @@ flowchart TD
     backend --> tools_schemas
     backend --> codegen
     backend --> mcp
+    backend --> turf
     backend --> shared
     frontend --> tools_schemas
     frontend --> tools
@@ -68,20 +71,23 @@ ready-to-use client-side executor implementation (frontend-only, depends only on
   (intent-to-code generation + static verification) and `mcp-tools`
   (optional MCP client bridge) are server-only dependencies (never bundled into the client);
   `codegen-sandbox` (execution of already-verified code against a live `Viewer`) is frontend-only
-  (depends on `cesium` + `quickjs-emscripten`) and never imported server-side; `backend` and
+  (depends on `cesium` + `quickjs-emscripten`) and never imported server-side; `turf-tools`
+  (Turf.js spatial-analysis tools backed by a session-scoped GeoJSON dataset store) is also
+  server-only, with no dependency on `tools-schemas` or a live `Viewer` — its tools run entirely
+  in-process on the backend; `backend` and
   `frontend` are leaves — they depend on everything and nothing depends on them.
 
 ## Build order
 
 Because of the graph above, packages must be built before the apps that depend on them:
 
-| Command                  | What it does                                                                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run build:packages` | Builds `tools-schemas` → `tools` → `webmcp-cesium` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `sample-config` → `server` in dependency order |
-| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                                                   |
-| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                                              |
-| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                                                         |
-| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                                           |
+| Command                  | What it does                                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run build:packages` | Builds `tools-schemas` → `tools` → `webmcp-cesium` → `codegen-cesium` → `codegen-sandbox` → `mcp-tools` → `turf-tools` → `sample-config` → `server` in dependency order |
+| `npm run build`          | `build:packages`, then builds `frontend` and `backend`                                                                                                                  |
+| `npm run dev`            | Builds packages once, then runs all dev processes concurrently (watch mode)                                                                                             |
+| `npm test`               | Runs the [Vitest](https://vitest.dev) suite across the workspace                                                                                                        |
+| `npm run test:e2e`       | Runs the [Playwright](https://playwright.dev) end-to-end suite                                                                                                          |
 
 ## Packages
 
@@ -91,6 +97,7 @@ Because of the graph above, packages must be built before the apps that depend o
 - [codegen-cesium](codegen-cesium/index.md) — intent-to-code generation pipeline
 - [codegen-sandbox](codegen-sandbox/index.md) — QuickJS-wasm execution sandbox for generated code
 - [mcp-tools](mcp-tools/index.md) — optional Model Context Protocol client tool bridge
+- [turf-tools](turf-tools/index.md) — server-only Turf.js spatial-analysis tools + session-scoped dataset store
 - [server](server/index.md) — Express chat router and agent loop
 - [chat-element](chat-element/index.md) — React chat panel component
 - [sample-config](sample-config/index.md) — this app's tool selection and config

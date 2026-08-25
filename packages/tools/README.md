@@ -1,6 +1,6 @@
 # @cesium-ai/tools
 
-Default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue (`flyTo`, camera tools, `entityAdd`, animation tools, and imagery tools). Each executor validates the model's tool-call args against the tool's shared structural shape (from `@cesium-ai/tools-schemas/schemas`) and runs the corresponding action against a live CesiumJS `Viewer`.
+Default, ready-to-use **client-side executors** for every tool in `@cesium-ai/tools-schemas`'s `CESIUM_TOOL_NAMES` catalogue (`flyTo`, camera tools, `entityAdd`, animation tools, imagery tools, and GeoJSON tools). Each executor validates the model's tool-call args against the tool's shared structural shape (from `@cesium-ai/tools-schemas/schemas`) and runs the corresponding action against a live CesiumJS `Viewer`.
 
 This package is the missing "other half" of `@cesium-ai/tools-schemas`: that package only ever defines _what a tool call looks like_ (schema + description, model-facing) — it deliberately has no `execute`, since the AI SDK streams every one of these tool calls to the browser to run against the real `Viewer`. This package is the default implementation of that browser-side half, so a host app doesn't have to hand-write an executor for all model-facing tools before it can turn one on.
 
@@ -8,7 +8,7 @@ This package is the missing "other half" of `@cesium-ai/tools-schemas`: that pac
 
 ### Default model-facing executors
 
-`DEFAULT_CESIUM_TOOL_EXECUTORS` provides one executor per `CESIUM_TOOL_NAMES` entry — every tool in the [Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) (camera, entity, animation, and imagery tools) has a matching, identically-named executor here out of the box.
+`DEFAULT_CESIUM_TOOL_EXECUTORS` provides one executor per `CESIUM_TOOL_NAMES` entry — every tool in the [Tool Catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/) (camera, entity, animation, imagery, and GeoJSON tools) has a matching, identically-named executor here out of the box.
 
 ## Usage
 

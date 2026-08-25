@@ -40,6 +40,9 @@ export const CESIUM_TOOL_NAMES = {
   imageryAdd: "imageryAdd",
   imageryRemove: "imageryRemove",
   imageryList: "imageryList",
+  // geoJSON
+  geoJsonAdd: "geoJsonAdd",
+  geoJsonRemove: "geoJsonRemove",
 } as const;
 
 /** Union of every CesiumJS tool name. */

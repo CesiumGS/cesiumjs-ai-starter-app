@@ -74,6 +74,7 @@ Viewer tools (camera, entities) are streamed via [Server-Sent Events](https://de
 | [`@cesium-ai/codegen-cesium`](packages/codegen-cesium/)   | Intent → [AST](https://en.wikipedia.org/wiki/Abstract_syntax_tree)-verified CesiumJS code pipeline; owns the `executeCesiumCode` tool definition                                                                                    |
 | [`@cesium-ai/codegen-sandbox`](packages/codegen-sandbox/) | [QuickJS](https://bellard.org/quickjs/) + WASM runtime isolation for executing verified CesiumJS snippets in the browser                                                                                                            |
 | [`@cesium-ai/mcp-tools`](packages/mcp-tools/)             | Optional [Model Context Protocol](https://modelcontextprotocol.io) client bridge — opt-in via `mcp.config.json`, exposes allowlisted MCP tools to the agent                                                                         |
+| [`@cesium-ai/turf-tools`](packages/turf-tools/)           | Server-only [Turf.js](https://turfjs.org/) spatial-analysis tools (buffer, points-within-polygon, intersect, area, hex grid), backed by a session-scoped GeoJSON dataset store — no `Viewer` dependency                             |
 | [`@cesium-ai/webmcp-cesium`](packages/webmcp-cesium/)     | Registers viewer tools on `document.modelContext`, the browser-native [WebMCP](https://developer.chrome.com/docs/ai/webmcp) standard — a different, in-browser counterpart to `@cesium-ai/mcp-tools`' server-side MCP client bridge |
 | [`@cesium-ai/chat-element`](packages/chat-element/)       | Reusable React chat panel component that renders streamed assistant/tool activity and the tool-approval UX                                                                                                                          |
 | [`@cesium-ai/sample-config`](shared/)                     | App-level tool allowlist and shared `flyTo` args contract                                                                                                                                                                           |
@@ -129,16 +130,17 @@ Separately from the MCP client bridge above, this app also registers its viewer 
 
 The most commonly configured variables:
 
-| Variable                       | Required | Description                                                                                                                              |
-| ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `VITE_CESIUM_ION_ACCESS_TOKEN` | No       | Cesium Ion token, baked into the client bundle at build time. Improves terrain/imagery quality.                                          |
-| `AI_PROVIDER`                  | No       | `openai` (default) \| `anthropic` \| `google`                                                                                            |
-| `OPENAI_API_KEY`               | Yes\*    | Required when `AI_PROVIDER=openai`.                                                                                                      |
-| `ANTHROPIC_API_KEY`            | Yes\*    | Required when `AI_PROVIDER=anthropic`.                                                                                                   |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes\*    | Required when `AI_PROVIDER=google`.                                                                                                      |
-| `AI_MODEL`                     | No       | Override the default model for the selected provider.                                                                                    |
-| `RATE_LIMIT_RPM`               | No       | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                   |
-| `VITE_API_BASE_URL`            | No       | Dev default `http://localhost:3001`. Built as `""` under `docker compose`, so the frontend calls relative `/api/chat`, proxied by nginx. |
+| Variable                       | Required | Description                                                                                                                                       |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_CESIUM_ION_ACCESS_TOKEN` | No       | Cesium Ion token, baked into the client bundle at build time. Improves terrain/imagery quality.                                                   |
+| `AI_PROVIDER`                  | No       | `openai` (default) \| `anthropic` \| `google`                                                                                                     |
+| `OPENAI_API_KEY`               | Yes\*    | Required when `AI_PROVIDER=openai`.                                                                                                               |
+| `ANTHROPIC_API_KEY`            | Yes\*    | Required when `AI_PROVIDER=anthropic`.                                                                                                            |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes\*    | Required when `AI_PROVIDER=google`.                                                                                                               |
+| `AI_MODEL`                     | No       | Override the default model for the selected provider.                                                                                             |
+| `RATE_LIMIT_RPM`               | No       | Per-IP requests/minute for `/api/chat` (default `20`).                                                                                            |
+| `ENABLE_TURF_TOOLS`            | No       | Registers the Turf.js spatial-analysis tools (default `true`). No `SESSION_SECRET` required. See [`@cesium-ai/turf-tools`](packages/turf-tools/). |
+| `VITE_API_BASE_URL`            | No       | Dev default `http://localhost:3001`. Built as `""` under `docker compose`, so the frontend calls relative `/api/chat`, proxied by nginx.          |
 
 \* Only the key matching your chosen `AI_PROVIDER` is required — the rest can stay blank.
 
@@ -178,6 +180,7 @@ cesiumjs-ai-starter-app/
 │   ├── codegen-cesium/    # @cesium-ai/codegen-cesium — codegen pipeline + executeCesiumCode tool
 │   ├── codegen-sandbox/   # @cesium-ai/codegen-sandbox — frontend sandbox for generated code
 │   ├── mcp-tools/         # @cesium-ai/mcp-tools — optional MCP client bridge
+│   ├── turf-tools/        # @cesium-ai/turf-tools — server-only Turf.js spatial-analysis tools
 │   ├── webmcp-cesium/     # @cesium-ai/webmcp-cesium — registers viewer tools on document.modelContext
 │   └── chat-element/      # @cesium-ai/chat-element — reusable chat panel component
 ├── shared/                # @cesium-ai/sample-config — enabled tools + flyTo args contract

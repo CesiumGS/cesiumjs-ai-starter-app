@@ -14,8 +14,7 @@ import styles from "./AiChatPanel.module.css";
 /**
  * Groups MCP tools by their originating server, preserving first-seen order.
  * Each tool's `name` is rewritten to just its bare, un-namespaced form (e.g.
- * `list_actively_monitored_assets` instead of
- * `mcp__itwiniotai__list_actively_monitored_assets`) — the `MCP: <server>`
+ * `list_assets` instead of `mcp__ion__list_assets`) — the `MCP: <server>`
  * group heading already conveys which server it came from, so repeating
  * that server name inside every single tool row is pure noise.
  */

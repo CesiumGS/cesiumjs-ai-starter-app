@@ -263,7 +263,21 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         (stopAfterTools?.length ?? 0) > 0 &&
         hasPendingApprovedToolCall(parsed.data.messages, stopAfterTools!);
 
-      const uiMessageStream = toUIMessageStream({ stream: result.stream });
+      const uiMessageStream = toUIMessageStream({
+        stream: result.stream,
+        // `toUIMessageStream`'s default onError hides the real message from the client (to avoid
+        // leaking server error details) but also means a mid-stream failure (e.g. a malformed
+        // tool call the model emits after seeing a tool's error result) was previously logged
+        // nowhere — the outer try/catch below only ever sees errors thrown before streaming
+        // starts. Log the real error here so it isn't silent; the client still only ever sees
+        // the SDK's generic "An error occurred." text.
+        onError: (error) => {
+          logger.error("Agent stream failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return "An error occurred.";
+        },
+      });
 
       pipeUIMessageStreamToResponse({
         response: res,
