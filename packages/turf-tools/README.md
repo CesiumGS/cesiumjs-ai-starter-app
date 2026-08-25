@@ -113,6 +113,8 @@ to the fire origin with flyTo, then slowly orbit around it with cameraOrbit so a
 are visible.
 ```
 
+![Turf.js tools running spatial analysis in the chat panel](../../docs/assets/turf.js.gif)
+
 ## Wiring into an app
 
 ```ts
