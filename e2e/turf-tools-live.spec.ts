@@ -188,3 +188,113 @@ test.describe("Turf.js tools — end-to-end against the live backend", () => {
     expect(geojson.properties?.name).toBe("test-point");
   });
 });
+
+/**
+ * Regression coverage for a real bug: `geoJsonAdd` (a client-side `@cesium-ai/tools-schemas` tool,
+ * not a Turf tool) crashed with an opaque "Cannot read properties of undefined (reading 'length')"
+ * when the model passed it a structurally-loose GeoJSON object missing `features`/`geometry` —
+ * exactly the shape a model can end up constructing when relaying a Turf tool's dataset back out
+ * (see `packages/tools-schemas/src/tools/geoJsonAdd/geoJsonAdd.schema.ts`'s fix and this repo's
+ * `resolve-geojson.ts` for the identical, earlier-fixed bug class in Turf tools themselves).
+ *
+ * These tests exercise the full real-world chain this app is meant to support end-to-end against
+ * the live backend AND the live CesiumJS `Viewer` (unlike the tests above, which only assert on
+ * tool-result JSON): a Turf tool produces/stores a dataset, `turf_get_dataset` fetches its full
+ * GeoJSON back into the conversation, and `geoJsonAdd` renders that GeoJSON on the globe. Viewer
+ * state is read via the dev-only `window.__cesiumViewerForE2E` seam, same convention as
+ * `cesium-viewer-tools-live.spec.ts`.
+ */
+test.describe("Turf.js output rendered on the globe via geoJsonAdd", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.waitForSelector(INPUT_SELECTOR, { timeout: 30_000 });
+  });
+
+  async function getDataSourceCount(page: Page): Promise<number> {
+    return page.evaluate(() => {
+      const viewer = (window as unknown as { __cesiumViewerForE2E?: any }).__cesiumViewerForE2E;
+      if (!viewer) {
+        throw new Error(
+          "window.__cesiumViewerForE2E is undefined — is the app running in dev mode " +
+            "(`npm run dev:frontend`), and has CesiumGlobe finished mounting?",
+        );
+      }
+      return viewer.dataSources.length as number;
+    });
+  }
+
+  test("turf_buffer dataset -> turf_get_dataset -> geoJsonAdd renders a new data source", async ({
+    page,
+  }) => {
+    test.setTimeout(3 * 60_000);
+
+    const before = await getDataSourceCount(page);
+
+    const buffered = await runToolStep(page, {
+      prompt:
+        "Using the turf_buffer tool, buffer this GeoJSON point by 500 meters (do not register it " +
+        'first, pass it directly): {"type":"Feature","properties":{},"geometry":{"type":"Point",' +
+        '"coordinates":[-0.1278,51.5074]}}',
+      toolName: "turf_buffer",
+    });
+    const datasetId = buffered.dataset_id as string;
+    expect(typeof datasetId).toBe("string");
+
+    await runToolStep(page, {
+      prompt: `Using the turf_get_dataset tool, fetch the full GeoJSON for dataset_id "${datasetId}".`,
+      toolName: "turf_get_dataset",
+    });
+
+    const rendered = await runToolStep(page, {
+      prompt:
+        "Now using the geoJsonAdd tool, render the exact GeoJSON returned by the previous " +
+        'turf_get_dataset call on the globe. Name it "turf-buffer-zone" and use a red stroke color.',
+      toolName: "geoJsonAdd",
+    });
+
+    expect(rendered.success).toBe(true);
+    expect(rendered.name).toBe("turf-buffer-zone");
+    expect(typeof rendered.entityCount).toBe("number");
+    expect(rendered.entityCount as number).toBeGreaterThan(0);
+
+    const after = await getDataSourceCount(page);
+    expect(after).toBe(before + 1);
+  });
+
+  test("turf_hex_grid dataset -> turf_get_dataset -> geoJsonAdd renders a new data source", async ({
+    page,
+  }) => {
+    test.setTimeout(3 * 60_000);
+
+    const before = await getDataSourceCount(page);
+
+    const hexGrid = await runToolStep(page, {
+      prompt:
+        "Using the turf_hex_grid tool, generate a hexagonal grid (no point aggregation) over the " +
+        "bounding box west -0.5, south 51.3, east 0.2, north 51.7, with a cell side of 5 kilometers.",
+      toolName: "turf_hex_grid",
+    });
+    const datasetId = hexGrid.dataset_id as string;
+    expect(typeof datasetId).toBe("string");
+
+    await runToolStep(page, {
+      prompt: `Using the turf_get_dataset tool, fetch the full GeoJSON for dataset_id "${datasetId}".`,
+      toolName: "turf_get_dataset",
+    });
+
+    const rendered = await runToolStep(page, {
+      prompt:
+        "Now using the geoJsonAdd tool, render the exact GeoJSON returned by the previous " +
+        'turf_get_dataset call on the globe. Name it "turf-hex-grid".',
+      toolName: "geoJsonAdd",
+    });
+
+    expect(rendered.success).toBe(true);
+    expect(rendered.name).toBe("turf-hex-grid");
+    expect(typeof rendered.entityCount).toBe("number");
+    expect(rendered.entityCount as number).toBeGreaterThan(0);
+
+    const after = await getDataSourceCount(page);
+    expect(after).toBe(before + 1);
+  });
+});

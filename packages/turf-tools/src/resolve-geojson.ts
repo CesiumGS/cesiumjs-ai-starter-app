@@ -28,7 +28,9 @@ const inlineFeatureShape = z
     geometry: z
       .object({ type: z.string() })
       .catchall(z.unknown())
-      .describe("REQUIRED: the feature's GeoJSON geometry, e.g. { type: 'Point', coordinates: [...] }."),
+      .describe(
+        "REQUIRED: the feature's GeoJSON geometry, e.g. { type: 'Point', coordinates: [...] }.",
+      ),
     properties: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .catchall(z.unknown())

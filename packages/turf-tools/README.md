@@ -3,7 +3,7 @@
 Server-only [Turf.js](https://turfjs.org/) spatial-analysis tools for the AI SDK agent loop, backed
 by a session-scoped GeoJSON dataset store.
 
-Unlike the viewer tools in [`@cesium-ai/tools-schemas`](../tools-schemas/README.md) (schema-only,
+Unlike the viewer tools in [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/README.md) (schema-only,
 executed client-side against a live `Viewer`), these tools have **no `Viewer` dependency at all** —
 each one runs a Turf.js operation entirely in-process on the backend and returns a plain JSON
 result. Reference implementation reviewed:
@@ -92,6 +92,26 @@ loads it via `Cesium.GeoJsonDataSource.load`) — e.g. `turf_buffer` → `turf_g
 `geoJsonAdd`. `geoJsonRemove` removes a previously added GeoJSON data source by name, or all of
 them at once. See the [tool catalogue](https://cesiumgs.github.io/cesiumjs-ai-starter-app/packages/tools-schemas/tools/)
 for both tools' full schemas.
+
+### Example prompt: wildfire evacuation zones
+
+A single prompt chaining `entityAdd` → `turf_buffer` (x3) → `geoJsonAdd` (x3) →
+`turf_points_within_polygon` → `globeSetLighting` → `flyTo` → `cameraOrbit` — concentric colored
+risk zones around a fire origin, checked against real evacuation-center points, with lighting and
+an orbiting camera for a visually compelling recording:
+
+```
+A wildfire has started at latitude 34.1341, longitude -118.3215 (near the Hollywood Hills, LA).
+Mark the origin with entityAdd, labeled "Fire Origin". Using turf_buffer three times, create a
+2km "danger zone", a 5km "warning zone", and a 10km "watch zone" around it. Render them with
+geoJsonAdd as three separate layers: danger zone in red, warning zone in orange, watch zone in
+yellow, each with some transparency so the rings are visible through each other. Then, using
+turf_points_within_polygon, check which of these evacuation centers fall inside the danger zone:
+Griffith Observatory (-118.3004, 34.1184), Hollywood Bowl (-118.3390, 34.1122), and Universal
+Studios (-118.3538, 34.1381). Enable realistic sun lighting with globeSetLighting, fly the camera
+to the fire origin with flyTo, then slowly orbit around it with cameraOrbit so all three zones
+are visible.
+```
 
 ## Wiring into an app
 

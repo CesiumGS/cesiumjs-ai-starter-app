@@ -29,6 +29,7 @@ const INPUT_SELECTOR = '[data-testid="chat-input-wrapper"] input';
 interface ViewerSnapshot {
   entities: number;
   imageryLayers: number;
+  dataSources: number;
   cameraPosition: { x: number; y: number; z: number };
   enableLighting: boolean;
   clockMultiplier: number;
@@ -48,6 +49,7 @@ async function getViewerSnapshot(page: Page): Promise<ViewerSnapshot> {
     return {
       entities: viewer.entities.values.length,
       imageryLayers: viewer.imageryLayers.length,
+      dataSources: viewer.dataSources.length,
       cameraPosition: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
       enableLighting: viewer.scene.globe.enableLighting,
       clockMultiplier: viewer.clock.multiplier,
@@ -683,6 +685,62 @@ test.describe("Cesium viewer tools — end-to-end against the live backend", () 
         timeout: 10_000,
       })
       .toBe(0);
+  });
+
+  // ---- geoJson tools ---------------------------------------------------------------------------
+
+  const GEO_JSON_ADD_PROMPT =
+    "Using the geoJsonAdd tool, render this GeoJSON polygon on the globe (pass it directly, do " +
+    'not use any other tool first): {"type":"Feature","properties":{},"geometry":{"type":' +
+    '"Polygon","coordinates":[[[-0.5,51.3],[0.2,51.3],[0.2,51.7],[-0.5,51.7],[-0.5,51.3]]]}}. ' +
+    'Name it "geojson-test-zone".';
+
+  test("geoJsonAdd", async ({ page }) => {
+    test.setTimeout(3 * 60_000);
+
+    const before = await getViewerSnapshot(page);
+
+    const result = await runToolStep(page, { prompt: GEO_JSON_ADD_PROMPT, toolName: "geoJsonAdd" });
+
+    expect(result.name).toBe("geojson-test-zone");
+    expect(typeof result.entityCount, "expected result.entityCount to be a number").toBe("number");
+    expect(result.entityCount as number).toBeGreaterThan(0);
+
+    // The tool result carries no view-state confirmation beyond entityCount — cross-check against
+    // the live Viewer's own dataSources/entities collections, not just the reported success.
+    await expect
+      .poll(async () => (await getViewerSnapshot(page)).dataSources, {
+        message: "expected a new GeoJSON data source to be added",
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(before.dataSources);
+  });
+
+  test("geoJsonRemove", async ({ page }) => {
+    test.setTimeout(5 * 60_000);
+
+    const before = await getViewerSnapshot(page);
+
+    await runToolStep(page, { prompt: GEO_JSON_ADD_PROMPT, toolName: "geoJsonAdd" });
+
+    await expect
+      .poll(async () => (await getViewerSnapshot(page)).dataSources, {
+        message: "expected the GeoJSON data source to be added",
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(before.dataSources);
+
+    await runToolStep(page, {
+      prompt: 'Using geoJsonRemove, remove the GeoJSON data source named "geojson-test-zone".',
+      toolName: "geoJsonRemove",
+    });
+
+    await expect
+      .poll(async () => (await getViewerSnapshot(page)).dataSources, {
+        message: "expected the GeoJSON data source to be removed",
+        timeout: 10_000,
+      })
+      .toBe(before.dataSources);
   });
 
   // ---- flyTo ----------------------------------------------------------------------------------
