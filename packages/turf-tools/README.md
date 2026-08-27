@@ -6,9 +6,7 @@ by a session-scoped GeoJSON dataset store.
 Unlike the viewer tools in [`@cesium-ai/tools-schemas`](https://github.com/CesiumGS/cesiumjs-ai-starter-app/blob/main/packages/tools-schemas/README.md) (schema-only,
 executed client-side against a live `Viewer`), these tools have **no `Viewer` dependency at all** —
 each one runs a Turf.js operation entirely in-process on the backend and returns a plain JSON
-result. Reference implementation reviewed:
-[`iTwin/cesium-ai-agentic-workflows`'s `sample_apps/turf-test`](https://github.com/iTwin/cesium-ai-agentic-workflows/tree/main/sample_apps/turf-test)
-— this package fixes a couple of real bugs found there (see below).
+result.
 
 ## Tools
 
@@ -32,10 +30,10 @@ render it (see below).
 ## Session-scoped dataset store
 
 `createTurfDatasetStore()` returns a `TurfDatasetStore` keyed `sessionId -> datasetId -> GeoJSON`,
-with idle datasets evicted after a configurable TTL (default 30 minutes). This directly fixes a
-real bug in the reference implementation, whose `dataset-store.ts` was an **unscoped global
-singleton** — a single `Map` + incrementing counter shared by every request, never cleared. That
-leaks datasets across concurrent users/sessions and grows unbounded for the life of the process.
+with idle datasets evicted after a configurable TTL (default 30 minutes). Datasets are scoped
+per-session rather than held in a single unscoped global `Map` + incrementing counter shared by
+every request — that alternative would leak datasets across concurrent users/sessions and grow
+unbounded for the life of the process.
 
 `createTurfTools(store, sessionId)` binds one session's worth of tools — call it once per request
 with that request's own session id (mirroring this repo's `createExecuteCesiumCodeTool` per-request
@@ -71,8 +69,7 @@ untrusted or unbounded input.
 
 ## Guardrails
 
-The reference implementation was missing size caps on a couple of operations that can blow up
-quadratically or silently misreport:
+A couple of operations can blow up quadratically or silently misreport without upfront size caps:
 
 - `turf_intersect` rejects a request whose `features1.length * features2.length` exceeds
   `MAX_INTERSECT_FEATURE_PAIRS` (10,000) before running any `turf.intersect` calls.

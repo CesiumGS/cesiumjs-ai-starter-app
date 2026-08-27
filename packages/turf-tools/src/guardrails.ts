@@ -1,15 +1,13 @@
 /**
- * Guardrails the reference implementation (`sample_apps/turf-test`) was
- * missing — cheap upfront checks that reject pathological input before an
- * expensive Turf operation runs, rather than letting the process hang or run
- * away on memory.
+ * Cheap upfront checks that reject pathological input before an expensive
+ * Turf operation runs, rather than letting the process hang or run away on
+ * memory.
  */
 
 /**
  * `turf_intersect` naively calls `turf.intersect` once per (polygon-in-A,
- * polygon-in-B) pair — an O(n·m) nested loop with no size cap in the
- * reference app. Reject a request whose pair count would exceed this before
- * running any of it.
+ * polygon-in-B) pair — an O(n·m) nested loop with no size cap. Reject a
+ * request whose pair count would exceed this before running any of it.
  */
 export const MAX_INTERSECT_FEATURE_PAIRS = 10_000;
 

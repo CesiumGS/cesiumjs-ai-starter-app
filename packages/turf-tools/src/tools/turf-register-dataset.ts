@@ -1,21 +1,10 @@
-import { z } from "zod";
 import { tool, type Tool } from "ai";
 import type { TurfDatasetStore } from "../dataset-store.js";
-import {
-  geoJsonOrDatasetRefShape,
-  InvalidGeoJsonError,
-  resolveGeoJson,
-  UnknownDatasetError,
-} from "../resolve-geojson.js";
+import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
 import { TURF_TOOL_NAMES } from "../tool-names.js";
+import { turfRegisterDatasetInputSchema } from "./turf-register-dataset.schema.js";
 
-const inputShape = z.object({
-  geojson: geoJsonOrDatasetRefShape.describe(
-    "The GeoJSON Feature or FeatureCollection to register, or a `dataset_id` to re-register (no-op, returns the same data under a new id).",
-  ),
-});
-
-export const turfRegisterDatasetInputSchema = z.object(inputShape.shape);
+export { turfRegisterDatasetInputSchema } from "./turf-register-dataset.schema.js";
 
 /**
  * `turf_register_dataset` — stores a GeoJSON Feature/FeatureCollection in this

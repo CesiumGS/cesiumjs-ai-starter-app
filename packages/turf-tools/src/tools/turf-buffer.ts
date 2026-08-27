@@ -1,23 +1,10 @@
-import { z } from "zod";
 import { tool, type Tool } from "ai";
 import * as turf from "@turf/turf";
 import type { TurfDatasetStore } from "../dataset-store.js";
-import {
-  geoJsonOrDatasetRefShape,
-  InvalidGeoJsonError,
-  resolveGeoJson,
-  UnknownDatasetError,
-} from "../resolve-geojson.js";
+import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
+import { turfBufferInputSchema } from "./turf-buffer.schema.js";
 
-const unitsEnum = z.enum(["meters", "kilometers", "miles"]);
-
-export const turfBufferInputSchema = z.object({
-  geojson: geoJsonOrDatasetRefShape.describe(
-    "The Feature/FeatureCollection to buffer, or a dataset_id from a prior tool call.",
-  ),
-  radius: z.number().positive().describe("Buffer distance, in `units`."),
-  units: unitsEnum.default("meters").describe("Unit for `radius`. Defaults to meters."),
-});
+export { turfBufferInputSchema } from "./turf-buffer.schema.js";
 
 /**
  * `turf_buffer` — generates a buffer polygon around every feature in

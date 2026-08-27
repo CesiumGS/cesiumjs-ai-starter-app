@@ -3,23 +3,12 @@ import { tool, type Tool } from "ai";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, Geometry } from "geojson";
 import type { TurfDatasetStore } from "../dataset-store.js";
-import {
-  geoJsonOrDatasetRefShape,
-  InvalidGeoJsonError,
-  resolveGeoJson,
-  UnknownDatasetError,
-} from "../resolve-geojson.js";
+import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
+import { turfAreaInputSchema, turfAreaUnitsEnum } from "./turf-area.schema.js";
 
-const unitsEnum = z.enum(["square_meters", "square_kilometers", "acres"]);
+export { turfAreaInputSchema } from "./turf-area.schema.js";
 
-export const turfAreaInputSchema = z.object({
-  geojson: geoJsonOrDatasetRefShape.describe(
-    "The polygon Feature/FeatureCollection (or dataset_id) to measure.",
-  ),
-  units: unitsEnum.default("square_meters").describe("Unit for the returned area."),
-});
-
-const SQUARE_METERS_PER_UNIT: Record<z.infer<typeof unitsEnum>, number> = {
+const SQUARE_METERS_PER_UNIT: Record<z.infer<typeof turfAreaUnitsEnum>, number> = {
   square_meters: 1,
   square_kilometers: 1_000_000,
   acres: 4046.8564224,
@@ -30,11 +19,10 @@ function hasPolygonGeometry(feature: Feature<Geometry>): boolean {
 }
 
 /**
- * `turf_area` — total area of the polygon features in `geojson`. The
- * reference implementation silently returned `0` when the input had no
- * polygon features at all (e.g. a Point-only FeatureCollection) — indistinguishable
- * from "a real, but zero-area, polygon". This flags that case explicitly
- * instead.
+ * `turf_area` — total area of the polygon features in `geojson`. Returns an
+ * explicit `{ error }` when the input has no Polygon/MultiPolygon features at
+ * all (e.g. a Point-only FeatureCollection), rather than silently returning
+ * `0` — indistinguishable from "a real, but zero-area, polygon".
  */
 export function createTurfAreaTool(store: TurfDatasetStore, sessionId: string): Tool {
   return tool({

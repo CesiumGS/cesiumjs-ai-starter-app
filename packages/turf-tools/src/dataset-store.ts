@@ -5,21 +5,22 @@ export type StoredGeoJson = Feature | FeatureCollection<Geometry>;
 
 interface StoredDataset {
   data: StoredGeoJson;
-  createdAt: number;
+  lastAccessedAt: number;
 }
 
 /**
  * A GeoJSON dataset store, scoped per-session so concurrent users/conversations
- * never see each other's data. This directly fixes a real bug found in the
- * reference implementation (`sample_apps/turf-test`'s `dataset-store.ts`),
- * which used a single unscoped process-wide `Map` + incrementing counter that
- * was never cleared — leaking datasets across users and growing unbounded for
- * the life of the process.
+ * never see each other's data — never a single unscoped process-wide `Map`
+ * shared by every request, which would leak datasets across users and grow
+ * unbounded for the life of the process.
  *
  * Every dataset is also evicted after {@link TurfDatasetStoreOptions.ttlMs}
- * (default 30 minutes) of inactivity, swept lazily on each call rather than a
- * background timer — this package has no reason to keep a process alive on
- * its own.
+ * (default 30 minutes) of inactivity — `get()` refreshes a dataset's idle
+ * timer, so only genuinely-idle data is dropped, not anything still being
+ * actively chained through tool calls. Eviction is swept lazily on each call
+ * rather than a background timer, since this package has no reason to keep a
+ * process alive on its own; a session that's never called again after its
+ * data goes idle keeps a small residual entry until the process restarts.
  */
 export interface TurfDatasetStore {
   /** Stores `data` under a new id scoped to `sessionId`, returning that id. */
@@ -48,7 +49,7 @@ export function createTurfDatasetStore(options: TurfDatasetStoreOptions = {}): T
   function sweepExpired(datasets: Map<string, StoredDataset>): void {
     const now = Date.now();
     for (const [id, entry] of datasets) {
-      if (now - entry.createdAt > ttlMs) datasets.delete(id);
+      if (now - entry.lastAccessedAt > ttlMs) datasets.delete(id);
     }
   }
 
@@ -62,7 +63,7 @@ export function createTurfDatasetStore(options: TurfDatasetStoreOptions = {}): T
       sweepExpired(datasets);
 
       const datasetId = `ds_${nextId++}`;
-      datasets.set(datasetId, { data, createdAt: Date.now() });
+      datasets.set(datasetId, { data, lastAccessedAt: Date.now() });
       return datasetId;
     },
 
@@ -70,9 +71,18 @@ export function createTurfDatasetStore(options: TurfDatasetStoreOptions = {}): T
       const datasets = bySession.get(sessionId);
       if (!datasets) return undefined;
       sweepExpired(datasets);
+      if (datasets.size === 0) {
+        // Nothing left for this session — drop its (now-empty) map too, instead
+        // of leaking one Map per session forever for sessions never revisited.
+        bySession.delete(sessionId);
+        return undefined;
+      }
 
       const entry = datasets.get(datasetId);
-      return entry?.data;
+      if (!entry) return undefined;
+
+      entry.lastAccessedAt = Date.now();
+      return entry.data;
     },
 
     clear(sessionId) {

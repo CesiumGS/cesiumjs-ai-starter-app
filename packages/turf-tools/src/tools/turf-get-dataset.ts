@@ -1,11 +1,9 @@
-import { z } from "zod";
 import { tool, type Tool } from "ai";
 import type { TurfDatasetStore } from "../dataset-store.js";
 import { TURF_TOOL_NAMES } from "../tool-names.js";
+import { turfGetDatasetInputSchema } from "./turf-get-dataset.schema.js";
 
-export const turfGetDatasetInputSchema = z.object({
-  dataset_id: z.string().min(1).describe("A dataset_id returned by a prior Turf tool call."),
-});
+export { turfGetDatasetInputSchema } from "./turf-get-dataset.schema.js";
 
 /**
  * `turf_get_dataset` — resolves a `dataset_id` back to its full GeoJSON. Every

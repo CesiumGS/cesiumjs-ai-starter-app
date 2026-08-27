@@ -1,24 +1,13 @@
-import { z } from "zod";
 import { tool, type Tool } from "ai";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
 import type { TurfDatasetStore } from "../dataset-store.js";
-import {
-  geoJsonOrDatasetRefShape,
-  InvalidGeoJsonError,
-  resolveGeoJson,
-  UnknownDatasetError,
-} from "../resolve-geojson.js";
+import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
+import { findDisallowedGeometryTypes } from "../geometry-checks.js";
 import { MAX_INTERSECT_FEATURE_PAIRS } from "../guardrails.js";
+import { turfIntersectInputSchema } from "./turf-intersect.schema.js";
 
-export const turfIntersectInputSchema = z.object({
-  features1: geoJsonOrDatasetRefShape.describe(
-    "First polygon FeatureCollection (or dataset_id), e.g. a zoning layer.",
-  ),
-  features2: geoJsonOrDatasetRefShape.describe(
-    "Second polygon FeatureCollection (or dataset_id) to overlap against, e.g. a flood-risk layer.",
-  ),
-});
+export { turfIntersectInputSchema } from "./turf-intersect.schema.js";
 
 function asPolygonFeatures(value: unknown): Feature<Polygon | MultiPolygon>[] {
   const collection = value as
@@ -31,8 +20,7 @@ function asPolygonFeatures(value: unknown): Feature<Polygon | MultiPolygon>[] {
  * `features1` and every polygon in `features2` (e.g. "which zoning parcels
  * overlap the flood-risk zone").
  *
- * The reference implementation (`sample_apps/turf-test`) ran this as an
- * uncapped O(n·m) nested loop, one `turf.intersect` call per feature pair —
+ * This is an O(n·m) nested loop, one `turf.intersect` call per feature pair —
  * fine for small inputs, but a request with two large layers could run
  * effectively unbounded work. This guards `features1.length * features2.length`
  * against {@link MAX_INTERSECT_FEATURE_PAIRS} up front and rejects with a
@@ -49,6 +37,19 @@ export function createTurfIntersectTool(store: TurfDatasetStore, sessionId: stri
       try {
         const resolved1 = asPolygonFeatures(resolveGeoJson(features1, store, sessionId));
         const resolved2 = asPolygonFeatures(resolveGeoJson(features2, store, sessionId));
+
+        const badTypes1 = findDisallowedGeometryTypes(resolved1, ["Polygon", "MultiPolygon"]);
+        if (badTypes1.length > 0) {
+          return {
+            error: `features1 must contain only Polygon/MultiPolygon features; found: ${badTypes1.join(", ")}.`,
+          };
+        }
+        const badTypes2 = findDisallowedGeometryTypes(resolved2, ["Polygon", "MultiPolygon"]);
+        if (badTypes2.length > 0) {
+          return {
+            error: `features2 must contain only Polygon/MultiPolygon features; found: ${badTypes2.join(", ")}.`,
+          };
+        }
 
         const pairCount = resolved1.length * resolved2.length;
         if (pairCount > MAX_INTERSECT_FEATURE_PAIRS) {

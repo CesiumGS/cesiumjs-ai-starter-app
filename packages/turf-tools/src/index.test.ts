@@ -139,6 +139,30 @@ describe("createTurfTools", () => {
     expect(result.point_count).toBe(1);
   });
 
+  it("turf_points_within_polygon rejects non-Point features passed as points", async () => {
+    const store = createTurfDatasetStore();
+    const tools = createTurfTools(store, "session-1");
+
+    const result = (await callTool(tools, "turf_points_within_polygon", {
+      points: polygonA,
+      polygons: polygonA,
+    })) as { error: string };
+
+    expect(result.error).toMatch(/must be a FeatureCollection of Point features/);
+  });
+
+  it("turf_points_within_polygon rejects non-polygon features passed as polygons", async () => {
+    const store = createTurfDatasetStore();
+    const tools = createTurfTools(store, "session-1");
+
+    const result = (await callTool(tools, "turf_points_within_polygon", {
+      points: pointsInsideAndOutside,
+      polygons: pointsInsideAndOutside,
+    })) as { error: string };
+
+    expect(result.error).toMatch(/must be a FeatureCollection of Polygon\/MultiPolygon features/);
+  });
+
   it("turf_area rejects a Point-only input instead of silently returning 0", async () => {
     const store = createTurfDatasetStore();
     const tools = createTurfTools(store, "session-1");
@@ -229,6 +253,18 @@ describe("createTurfTools", () => {
     expect(result.error).toMatch(/exceeds/);
   });
 
+  it("turf_intersect rejects non-polygon features", async () => {
+    const store = createTurfDatasetStore();
+    const tools = createTurfTools(store, "session-1");
+
+    const result = (await callTool(tools, "turf_intersect", {
+      features1: pointsInsideAndOutside,
+      features2: polygonA,
+    })) as { error: string };
+
+    expect(result.error).toMatch(/features1 must contain only Polygon\/MultiPolygon features/);
+  });
+
   it("turf_hex_grid generates cells covering the bbox", async () => {
     const store = createTurfDatasetStore();
     const tools = createTurfTools(store, "session-1");
@@ -239,6 +275,18 @@ describe("createTurfTools", () => {
     })) as { dataset_id: string; cell_count: number };
 
     expect(result.cell_count).toBeGreaterThan(0);
+  });
+
+  it("turf_hex_grid rejects an oversized grid before generating it", async () => {
+    const store = createTurfDatasetStore();
+    const tools = createTurfTools(store, "session-1");
+
+    const result = (await callTool(tools, "turf_hex_grid", {
+      bbox: { west: -180, south: -90, east: 180, north: 90 },
+      cell_side: 0.01,
+    })) as { error: string };
+
+    expect(result.error).toMatch(/exceeding the \d+-cell limit/);
   });
 
   it("turf_hex_grid aggregates point counts per cell", async () => {

@@ -1,46 +1,18 @@
-import { z } from "zod";
 import { tool, type Tool } from "ai";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, Point, Polygon } from "geojson";
 import type { TurfDatasetStore } from "../dataset-store.js";
-import {
-  geoJsonOrDatasetRefShape,
-  InvalidGeoJsonError,
-  resolveGeoJson,
-  UnknownDatasetError,
-} from "../resolve-geojson.js";
+import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
 import { MAX_HEX_GRID_AGGREGATE_POINTS, MAX_HEX_GRID_CELLS } from "../guardrails.js";
+import { turfHexGridInputSchema } from "./turf-hex-grid.schema.js";
+
+export { turfHexGridInputSchema } from "./turf-hex-grid.schema.js";
 
 // Rough kilometres-per-degree at the equator, used only to size the spatial
 // index's bucket grid (a perf optimization, not a precise cartographic
 // conversion) — good enough since buckets only need to be "about the size of
 // a cell" for the point->candidate-cells lookup below to stay cheap.
 const KM_PER_DEGREE = 111;
-
-export const turfHexGridInputSchema = z.object({
-  bbox: z
-    .object({
-      west: z.number().min(-180).max(180),
-      south: z.number().min(-90).max(90),
-      east: z.number().min(-180).max(180),
-      north: z.number().min(-90).max(90),
-    })
-    .describe("Bounding box to cover with hexagons."),
-  cell_side: z.number().positive().describe("Hexagon cell side length, in kilometers."),
-  points_to_aggregate: geoJsonOrDatasetRefShape
-    .optional()
-    .describe(
-      "Optional FeatureCollection of Points (or dataset_id) to aggregate into each hex cell " +
-        "— e.g. for a density heatmap.",
-    ),
-  aggregate_property: z
-    .string()
-    .optional()
-    .describe(
-      "Optional numeric property name on each point to sum per cell (in addition to point count). " +
-        "Ignored if points_to_aggregate is omitted.",
-    ),
-});
 
 interface CellIndexEntry {
   cellIndex: number;
@@ -93,6 +65,29 @@ function buildCellBucketIndex(
 }
 
 /**
+ * Cheap upper-bound estimate of the hex grid's cell count *before* calling
+ * `turf.hexGrid`, so a huge bbox / tiny `cell_side` (e.g. the whole globe at
+ * meter-scale cells) can be rejected without paying for the — potentially
+ * enormous — generation itself. Deliberately approximate (packing/boundary
+ * effects aren't modeled, and this is plain degree-to-km arithmetic rather
+ * than geodesic distance — `turf.distance` between the bbox's own west/east
+ * edges degenerates to ~0 once the span approaches 360°, since -180°/180°
+ * are the same meridian); the exact post-generation check below remains the
+ * authoritative guard for borderline cases.
+ */
+function estimateHexGridCellCount(
+  bbox: { west: number; south: number; east: number; north: number },
+  cellSideKm: number,
+): number {
+  const midLatRad = ((bbox.south + bbox.north) / 2) * (Math.PI / 180);
+  const widthKm = Math.abs(bbox.east - bbox.west) * KM_PER_DEGREE * Math.cos(midLatRad);
+  const heightKm = Math.abs(bbox.north - bbox.south) * KM_PER_DEGREE;
+  const hexAreaKm2 = (3 * Math.sqrt(3) * cellSideKm ** 2) / 2;
+  if (hexAreaKm2 <= 0) return Infinity;
+  return (widthKm * heightKm) / hexAreaKm2;
+}
+
+/**
  * `turf_hex_grid` — a hexagonal grid over a bounding box, optionally
  * aggregating point density/values per cell (heatmaps). Both the grid size
  * and the optional aggregation input are capped ({@link MAX_HEX_GRID_CELLS},
@@ -107,6 +102,16 @@ export function createTurfHexGridTool(store: TurfDatasetStore, sessionId: string
     inputSchema: turfHexGridInputSchema,
     execute: async ({ bbox, cell_side, points_to_aggregate, aggregate_property }) => {
       try {
+        const estimatedCells = estimateHexGridCellCount(bbox, cell_side);
+        if (estimatedCells > MAX_HEX_GRID_CELLS) {
+          return {
+            error:
+              `Requested hex grid would produce approximately ${Math.round(estimatedCells)} ` +
+              `cells, exceeding the ${MAX_HEX_GRID_CELLS}-cell limit. Increase cell_side or ` +
+              "shrink the bbox.",
+          };
+        }
+
         const grid = turf.hexGrid([bbox.west, bbox.south, bbox.east, bbox.north], cell_side, {
           units: "kilometers",
         }) as FeatureCollection<Polygon>;
