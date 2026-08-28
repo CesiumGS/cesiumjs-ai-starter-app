@@ -18,6 +18,7 @@ import {
   globeSetLighting,
 } from "./tools/animation.js";
 import { imageryAdd, imageryList, imageryRemove } from "./tools/imagery.js";
+import { geoJsonAdd, geoJsonRemove } from "./tools/geojson.js";
 import type { Logger } from "@cesium-ai/observability";
 import type { CesiumToolExecutorOverrides, CesiumToolExecutors, ToolExecutor } from "./types.js";
 
@@ -93,6 +94,7 @@ export {
   imageryRemove,
   IMAGERY_PROVIDER_FACTORIES,
 } from "./tools/imagery.js";
+export { geoJsonAdd, geoJsonRemove } from "./tools/geojson.js";
 
 /**
  * Default, ready-to-use executor for every tool in `@cesium-ai/tools-schemas`'s
@@ -127,6 +129,9 @@ export const DEFAULT_CESIUM_TOOL_EXECUTORS: CesiumToolExecutors = {
   [CESIUM_TOOL_NAMES.imageryAdd]: imageryAdd,
   [CESIUM_TOOL_NAMES.imageryRemove]: imageryRemove,
   [CESIUM_TOOL_NAMES.imageryList]: imageryList,
+  // geoJSON
+  [CESIUM_TOOL_NAMES.geoJsonAdd]: geoJsonAdd,
+  [CESIUM_TOOL_NAMES.geoJsonRemove]: geoJsonRemove,
 };
 
 /** Wraps an executor so its resolved `{ error }` (or a thrown rejection) is reported to `logger`. */

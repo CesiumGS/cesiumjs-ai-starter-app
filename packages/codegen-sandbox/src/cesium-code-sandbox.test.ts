@@ -954,14 +954,14 @@ function fakeViewer() {
     // The real, *private* `Viewer._cesiumWidget` (distinct from the public `cesiumWidget` above)
     // that `Viewer.prototype.trackedEntity`'s real setter delegates to
     // (`this._cesiumWidget.trackedEntity = value`) — needed so the `trackedEntity` accessor
-    // below reproduces the exact real-Cesium shape that trips the "no `set` trap" bug.
+    // below reproduces the exact real-Cesium shape that exercises the proxy's `set` trap.
     _cesiumWidget: {
       trackedEntity: undefined as unknown,
     },
     // Mirrors real Cesium's `Viewer.prototype.trackedEntity` accessor, which internally reads/
     // writes `this._cesiumWidget.trackedEntity` — see `createGuardedProxy`'s `set` trap doc
-    // comment in `guarded-viewer-proxy.ts` for why this specific shape used to throw "Cesium
-    // sandbox access to \"_cesiumWidget\" is not allowed."
+    // comment in `guarded-viewer-proxy.ts` for why this specific shape needs explicit `set` trap
+    // handling to avoid "Cesium sandbox access to \"_cesiumWidget\" is not allowed."
     get trackedEntity(): unknown {
       return (this as { _cesiumWidget: { trackedEntity: unknown } })._cesiumWidget.trackedEntity;
     },
@@ -2023,10 +2023,10 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     expect(result.height).toBe(1000);
   });
 
-  // Regression test: `viewer.camera.positionWC` is a host-originated `Cartesian3` (a real
-  // CesiumJS instance), not one the guest itself constructed via `Cesium.Cartesian3.fromDegrees`
-  // — before this fix, `__reviveRemoteValue__` returned it as a plain tagged data object with no
-  // prototype methods, so `.clone()` failed with "TypeError: not a function".
+  // `viewer.camera.positionWC` is a host-originated `Cartesian3` (a real CesiumJS instance), not
+  // one the guest itself constructed via `Cesium.Cartesian3.fromDegrees` — `__reviveRemoteValue__`
+  // must reconstruct it into a real instance, or `.clone()` fails with "TypeError: not a function"
+  // against a plain tagged data object with no prototype methods.
   test("calls .clone() on a host-originated Cartesian3 (viewer.camera.positionWC)", async () => {
     const viewer = fakeViewer();
 
@@ -2172,12 +2172,11 @@ viewer.scene.camera.flyAround(target, 0.8);`,
     },
   );
 
-  // `viewer.flyTo`/`zoomTo` used to be routed through QuickJS's Asyncify bridge, which imposed a
-  // "one async call per script" guard and reproducibly crashed the interpreter (a native
-  // `Assertion failed: p->ref_count == 0, at free_zero_refcount` abort) the moment a second
-  // Asyncify-backed call actually executed in the same script. Now that they flow through the
-  // same generic, `ctx.newPromise()`-based dynamic Promise bridge as every other Promise-returning
-  // viewer method, that restriction (and the crash) no longer applies to them.
+  // `viewer.flyTo`/`zoomTo` flow through the same generic, `ctx.newPromise()`-based dynamic
+  // Promise bridge as every other Promise-returning viewer method, which supports any number of
+  // concurrent/sequential async calls per script (see `host-bridge.ts`) — this guards against
+  // reintroducing the old Asyncify-bridge's "one async call per script" limit, which crashed the
+  // interpreter on a second call.
   test("allows both viewer.flyTo and viewer.zoomTo in the same script", async () => {
     const viewer = fakeViewer();
     viewer.flyTo.mockResolvedValueOnce(true);

@@ -21,6 +21,7 @@
     "@cesium-ai/sample-config": "*",
     "@cesium-ai/server": "*",
     "@cesium-ai/tools-schemas": "*",
+    "@cesium-ai/turf-tools": "*",
     "@opentelemetry/api-logs": "^0.221.0",
     "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",

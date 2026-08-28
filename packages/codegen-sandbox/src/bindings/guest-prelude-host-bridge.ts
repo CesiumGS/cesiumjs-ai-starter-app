@@ -167,9 +167,8 @@ function guestHostBridgeBody(): void {
   // value-type class (see `guest-prelude-value-types.ts`'s `__CesiumCoreBundle__`) so instance
   // methods like `.clone()`/`.equals()`/`.withAlpha()` work on a host-originated value (e.g.
   // `viewer.camera.positionWC`) exactly as they would on a guest-constructed one (e.g.
-  // `Cesium.Cartesian3.fromDegrees(...)`) — previously this branch returned the tagged plain
-  // object as-is, which silently dropped every prototype method, and everything else is walked
-  // elementwise.
+  // `Cesium.Cartesian3.fromDegrees(...)`) — returning the tagged plain object as-is would silently
+  // drop every prototype method. Everything else is walked elementwise.
   function __reviveRemoteValue__(value: any): unknown {
     if (Array.isArray(value)) return value.map(__reviveRemoteValue__);
     if (value !== null && typeof value === "object") {

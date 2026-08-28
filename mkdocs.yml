@@ -89,6 +89,7 @@ nav:
           - Overview: packages/tools-schemas/index.md
           - Tool Catalogue: packages/tools-schemas/tools.md
       - cesium-ai/tools: packages/tools/index.md
+      - cesium-ai/turf-tools: packages/turf-tools/index.md
       - cesium-ai/webmcp-cesium: packages/webmcp-cesium/index.md
       - cesium-ai/server: packages/server/index.md
       - cesium-ai/chat-element: packages/chat-element/index.md

@@ -41,6 +41,19 @@ export function MessageItem({
       >
         {isError ? "Error" : isUser ? "You" : "Assistant"}
       </Typography>
+      {message.toolInvocations?.map((inv) => (
+        <ToolCard
+          key={inv.toolCallId}
+          invocation={inv}
+          isPendingApproval={approval?.pendingApprovalToolCallId === inv.toolCallId}
+          onApprove={approval?.onApprove}
+          onReject={approval?.onReject}
+          structuredResult={structuredResultByToolName?.get(inv.toolName)}
+          mcpApp={mcpAppByToolName?.get(inv.toolName)}
+          mcpAppApiBase={mcpAppApiBase}
+          mcpAppSandboxUrl={mcpAppSandboxUrl}
+        />
+      ))}
       {message.content && (
         <Typography
           render={<div />}
@@ -58,19 +71,6 @@ export function MessageItem({
           )}
         </Typography>
       )}
-      {message.toolInvocations?.map((inv) => (
-        <ToolCard
-          key={inv.toolCallId}
-          invocation={inv}
-          isPendingApproval={approval?.pendingApprovalToolCallId === inv.toolCallId}
-          onApprove={approval?.onApprove}
-          onReject={approval?.onReject}
-          structuredResult={structuredResultByToolName?.get(inv.toolName)}
-          mcpApp={mcpAppByToolName?.get(inv.toolName)}
-          mcpAppApiBase={mcpAppApiBase}
-          mcpAppSandboxUrl={mcpAppSandboxUrl}
-        />
-      ))}
     </div>
   );
 }

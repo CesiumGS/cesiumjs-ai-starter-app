@@ -85,5 +85,16 @@ export async function runAgent({
       stopAfterTools && stopAfterTools.length > 0
         ? [stepCountIs(maxSteps), hasToolCall(...stopAfterTools)]
         : stepCountIs(maxSteps),
+    // `@ai-sdk/openai`'s Responses API defaults to `store: true`, which makes a reasoning model's
+    // later steps in this same multi-step loop reference an earlier reasoning item by id only
+    // (`{ type: "item_reference", id }`) instead of resending it — relying on the *server* to have
+    // that item retrievable later. Behind a proxy/gateway `AI_BASE_URL` (this app explicitly
+    // supports one) that doesn't durably implement that server-side storage, the very next step can
+    // fail with `AI_APICallError: Item with id '...' not found` as soon as a tool call errors and
+    // the model needs another step to react to it. `store: false` makes reasoning fully stateless —
+    // the full encrypted reasoning content is resent inline every step instead — which costs a bit
+    // more per-request payload but works uniformly across any OpenAI-compatible endpoint. Ignored by
+    // non-OpenAI providers (same pattern as codegen-czml's `strictJsonSchema`).
+    providerOptions: { openai: { store: false } },
   });
 }

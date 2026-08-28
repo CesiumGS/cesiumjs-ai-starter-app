@@ -173,6 +173,53 @@ describe("backend app — /api/tools", () => {
     expect(ionTool?.mcpApp).toEqual({ resourceUri: "ui://ion/importer" });
     expect(body.tools.find((t) => t.name === "flyTo")?.mcpApp).toBeUndefined();
   });
+
+  it("includes the Turf.js tools when ENABLE_TURF_TOOLS is on (the default)", async () => {
+    const { url } = await start(
+      createBackendApp({ env: fakeEnv({ ENABLE_TURF_TOOLS: true }), model: flyToModel() }),
+    );
+
+    const res = await fetch(`${url}/api/tools`);
+    const body = (await res.json()) as { tools: { name: string }[] };
+    const names = body.tools.map((t) => t.name);
+
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "turf_register_dataset",
+        "turf_get_dataset",
+        "turf_buffer",
+        "turf_points_within_polygon",
+        "turf_intersect",
+        "turf_area",
+        "turf_hex_grid",
+      ]),
+    );
+  });
+
+  it("omits the Turf.js tools when ENABLE_TURF_TOOLS is off", async () => {
+    const { url } = await start(
+      createBackendApp({ env: fakeEnv({ ENABLE_TURF_TOOLS: false }), model: flyToModel() }),
+    );
+
+    const res = await fetch(`${url}/api/tools`);
+    const body = (await res.json()) as { tools: { name: string }[] };
+
+    expect(body.tools.map((t) => t.name)).not.toContain("turf_buffer");
+  });
+
+  it("works without SESSION_SECRET set — falls back to a random per-process secret", async () => {
+    const { url } = await start(
+      createBackendApp({
+        env: fakeEnv({ ENABLE_TURF_TOOLS: true, SESSION_SECRET: undefined }),
+        model: flyToModel(),
+      }),
+    );
+
+    const res = await fetch(`${url}/api/tools`);
+    const body = (await res.json()) as { tools: { name: string }[] };
+
+    expect(body.tools.map((t) => t.name)).toContain("turf_buffer");
+  });
 });
 
 describe("backend app — CORS", () => {

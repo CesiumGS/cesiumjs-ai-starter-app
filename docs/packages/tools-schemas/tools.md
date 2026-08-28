@@ -41,3 +41,10 @@ to enable them in the starter app.
 | `imageryAdd`       | Add an imagery layer                |
 | `imageryRemove`    | Remove an imagery layer             |
 | `imageryList`      | List all active imagery layers      |
+
+## GeoJSON
+
+| Name            | What it does                                                                         |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `geoJsonAdd`    | Render a GeoJSON Feature/FeatureCollection on the globe as a new data source         |
+| `geoJsonRemove` | Remove a previously added GeoJSON data source by name, or remove all of them at once |

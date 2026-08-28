@@ -7,11 +7,11 @@
  * `buildCesiumValueTypeGuestPrelude` only reimplements a handful of the most commonly generated,
  * pure/side-effect-free value types (`Cartesian3`, `Color`, ...) directly in guest JS — real
  * CesiumJS exports hundreds of other classes and static namespaces (`Rectangle`, `Ellipsoid`,
- * `PinBuilder`, `GeoJsonPrimitive`, `Material`, `CustomShader`, ...) that were previously simply
- * `undefined` in the sandbox, silently breaking otherwise-correct generated code with a `"cannot
- * read property ... of undefined"` runtime error — the code *looked* like it ran successfully
- * (no AST-verification failure, no thrown error surfaced as a tool result `error`), but nothing
- * ever reached the live Viewer for that specific call.
+ * `PinBuilder`, `GeoJsonPrimitive`, `Material`, `CustomShader`, ...). Without this fallback those
+ * would simply be `undefined` in the sandbox, silently breaking otherwise-correct generated code
+ * with a `"cannot read property ... of undefined"` runtime error — the code *looks* like it ran
+ * successfully (no AST-verification failure, no thrown error surfaced as a tool result `error`),
+ * but nothing reaches the live Viewer for that specific call.
  *
  * This falls back to a `__remoteProxy__` (see `guest-prelude-host-bridge.ts`) bound to the Cesium
  * namespace minus blocked top-level exports, registered host-side as a single root handle

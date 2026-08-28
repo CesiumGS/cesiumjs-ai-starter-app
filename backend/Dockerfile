@@ -4,12 +4,13 @@
 # `docker build -f backend/Dockerfile .` — this is what compose.yaml uses.
 #
 # This app's workspace packages (@cesium-ai/server, @cesium-ai/tools-schemas,
-# @cesium-ai/observability, @cesium-ai/codegen-cesium, @cesium-ai/codegen-czml, @cesium-ai/mcp-tools,
-# @cesium-ai/sample-config) are resolved via npm workspaces from the repo root,
-# so the backend image can't be built from the backend/ folder alone. Only
-# manifests for workspaces the backend actually depends on are copied — npm ci
-# is fine with the rest of the `workspaces` glob in the root package.json not
-# resolving to anything on disk.
+# @cesium-ai/observability, @cesium-ai/codegen-cesium, @cesium-ai/codegen-czml,
+# @cesium-ai/mcp-tools, @cesium-ai/turf-tools, @cesium-ai/sample-config)
+# are resolved via npm workspaces from the repo root, so the backend image
+# can't be built from the backend/ folder alone. Only manifests for
+# workspaces the backend actually depends on are copied — npm ci is fine with
+# the rest of the `workspaces` glob in the root package.json not resolving to
+# anything on disk.
 
 # ---- Stage 1: build --------------------------------------------------------
 FROM node:lts-alpine AS build
@@ -25,6 +26,7 @@ COPY packages/tools-schemas/package.json packages/tools-schemas/package.json
 COPY packages/codegen-cesium/package.json packages/codegen-cesium/package.json
 COPY packages/codegen-czml/package.json packages/codegen-czml/package.json
 COPY packages/mcp-tools/package.json packages/mcp-tools/package.json
+COPY packages/turf-tools/package.json packages/turf-tools/package.json
 RUN npm ci
 
 COPY shared shared
@@ -34,6 +36,7 @@ COPY packages/tools-schemas packages/tools-schemas
 COPY packages/codegen-cesium packages/codegen-cesium
 COPY packages/codegen-czml packages/codegen-czml
 COPY packages/mcp-tools packages/mcp-tools
+COPY packages/turf-tools packages/turf-tools
 COPY backend backend
 
 RUN npm run build:packages && npm run build -w backend
@@ -71,6 +74,8 @@ COPY --from=build /app/packages/codegen-czml/schema packages/codegen-czml/schema
 COPY --from=build /app/packages/codegen-czml/skills packages/codegen-czml/skills
 COPY --from=build /app/packages/mcp-tools/package.json packages/mcp-tools/package.json
 COPY --from=build /app/packages/mcp-tools/dist packages/mcp-tools/dist
+COPY --from=build /app/packages/turf-tools/package.json packages/turf-tools/package.json
+COPY --from=build /app/packages/turf-tools/dist packages/turf-tools/dist
 
 USER node
 

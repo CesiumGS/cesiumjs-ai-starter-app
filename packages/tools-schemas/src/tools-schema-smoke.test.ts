@@ -36,6 +36,15 @@ const VALID: Record<string, unknown> = {
   imageryAdd: { type: "OpenStreetMapImageryProvider", url: "https://tile.openstreetmap.org" },
   imageryRemove: { removeAll: true },
   imageryList: {},
+  geoJsonAdd: {
+    geojson: {
+      type: "FeatureCollection",
+      features: [
+        { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [0, 0] } },
+      ],
+    },
+  },
+  geoJsonRemove: { removeAll: true },
 };
 
 const INVALID: Record<string, unknown> = {
@@ -55,6 +64,7 @@ const INVALID: Record<string, unknown> = {
   globeSetLighting: {}, // missing enableLighting
   imageryAdd: { type: "NotAProvider", url: "https://example.com" }, // invalid enum
   imageryList: { includeDetails: "yes" }, // wrong type
+  geoJsonAdd: { geojson: { type: "NotGeoJson" } }, // invalid type enum
 };
 
 describe("new Cesium tool schemas", () => {

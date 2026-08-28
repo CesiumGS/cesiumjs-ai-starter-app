@@ -8,12 +8,10 @@ import type { Viewer } from "cesium";
  * `code-sandbox.ts`) and of the backend's static verification of the
  * generated snippet.
  *
- * The call-rate limiter that used to live here moved out to this app's
- * `frontend/src/utils/sandbox-call-rate-limiter.ts` — unlike these caps, it's
- * never invoked internally by this package (`runCesiumCodeInSandbox` never
- * calls it), has no dependency on `cesium`/`quickjs-emscripten`, and only its
- * one consumer (`ChatPanel`) ever used it, so it didn't need to live in this
- * package.
+ * The call-rate limiter lives in this app's `frontend/src/utils/sandbox-call-rate-limiter.ts`,
+ * not here — unlike these caps, it's never invoked internally by this package
+ * (`runCesiumCodeInSandbox` never calls it), has no dependency on
+ * `cesium`/`quickjs-emscripten`, and its only consumer is `ChatPanel`.
  */
 
 // ---------------------------------------------------------------------------

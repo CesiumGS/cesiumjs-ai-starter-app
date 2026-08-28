@@ -59,7 +59,7 @@ describe("matchSkillsForIntent", () => {
     expect(matches.every((m) => m.score === 0)).toBe(true);
   });
 
-  it("doesn't crash on intent words that collide with Object.prototype property names (regression: 'constructor' resolved COMPOUND_TERM_ALIASES['constructor'] to the inherited Object constructor function instead of undefined, and calling .includes on it threw)", () => {
+  it("doesn't crash on intent words that collide with Object.prototype property names (e.g. 'constructor' must resolve COMPOUND_TERM_ALIASES['constructor'] to undefined, not the inherited Object constructor function, since calling .includes on it would throw)", () => {
     expect(() =>
       matchSkillsForIntent(
         "use the Viewer constructor's toString and hasOwnProperty options",

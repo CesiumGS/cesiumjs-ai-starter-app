@@ -5,6 +5,11 @@ import { createCesiumTools } from "@cesium-ai/tools-schemas";
 import { CODEGEN_CESIUM_TOOL_NAMES } from "@cesium-ai/codegen-cesium";
 import { CODEGEN_CZML_TOOL_NAMES } from "@cesium-ai/codegen-czml";
 import {
+  createTurfDatasetStore,
+  createTurfTools,
+  type TurfDatasetStore,
+} from "@cesium-ai/turf-tools";
+import {
   resolveMcpTools,
   type McpToolsHandle,
   type McpTool,
@@ -15,6 +20,7 @@ import type { CodegenMetrics, Logger, ServerMetrics } from "@cesium-ai/observabi
 import cors from "cors";
 import express, { type Express, type Request } from "express";
 import type { SessionOptions } from "express-session";
+import { randomBytes } from "node:crypto";
 import type { Env } from "./utils/env.js";
 import { createHealthRouter } from "./routers/health-router.js";
 import { createExecuteCesiumCodeTool } from "./tools/execute-cesium-code-tool.js";
@@ -55,8 +61,9 @@ export interface BackendAppOptions {
    */
   sessionMcp?: SessionMcpManager;
   /**
-   * `express-session` store for session middleware. Only meaningful alongside
-   * `sessionMcp`. Defaults to the in-memory `MemoryStore` — pass a real store
+   * `express-session` store for session middleware. Meaningful alongside
+   * `sessionMcp` and/or `env.ENABLE_TURF_TOOLS` (both need session middleware
+   * mounted). Defaults to the in-memory `MemoryStore` — pass a real store
    * (e.g. `connect-redis`) so sessions survive a restart / are shared across
    * replicas in production. See `./utils/session.js` for why this alone
    * doesn't make session-scoped MCP connections multi-instance-safe.
@@ -118,19 +125,33 @@ export function createBackendApp({
   app.use(cors({ origin: env.ALLOWED_ORIGIN, credentials: true }));
   app.use(express.json({ limit: "256kb" }));
 
-  if (sessionMcp) {
-    if (!env.SESSION_SECRET) {
+  // Session-scoped MCP connections and the Turf dataset store both need a
+  // stable per-browser session id, so session middleware is applied whenever
+  // either is enabled — not just for `sessionMcp` as before.
+  const needsSessionMiddleware = Boolean(sessionMcp) || env.ENABLE_TURF_TOOLS;
+  if (needsSessionMiddleware) {
+    if (sessionMcp && !env.SESSION_SECRET) {
       throw new Error(
         "SESSION_SECRET must be set when session-scoped MCP connections are enabled.",
       );
     }
+    // Turf's dataset-store cookie only correlates a session's own in-memory
+    // datasets (never anything sensitive like an OAuth token), so — unlike
+    // `sessionMcp` above — it doesn't require an operator-set SESSION_SECRET:
+    // fall back to a random per-process secret so ENABLE_TURF_TOOLS's
+    // default-on stays a zero-config, no-`.env`-edit-required default. A
+    // restart simply invalidates old session cookies (their datasets are
+    // already gone too, since the store itself is in-memory).
+    const sessionSecret = env.SESSION_SECRET ?? randomBytes(32).toString("hex");
     // Marks the session cookie `Secure` (HTTPS-only) whenever `PUBLIC_URL` is
     // itself HTTPS — avoids sending the session cookie in plaintext over the
     // network in any deployment reachable at an https:// URL, with no extra
     // env var needed. Stays `false` for local http://localhost dev.
     const secure = env.PUBLIC_URL.startsWith("https://");
-    app.use(createSessionMiddleware({ secret: env.SESSION_SECRET, secure, store: sessionStore }));
+    app.use(createSessionMiddleware({ secret: sessionSecret, secure, store: sessionStore }));
     app.use(rateLimiter({ rpm: env.RATE_LIMIT_RPM }));
+  }
+  if (sessionMcp) {
     // No `frontendUrl` needed: `/api/mcp/callback` renders its own plain
     // result page directly (see @cesium-ai/server/mcp's mcp-session-router.ts)
     // rather than redirecting back to "the" frontend — this app may be
@@ -138,6 +159,10 @@ export function createBackendApp({
     // always correct to bounce back to.
     app.use(createMcpSessionRouter(sessionMcp));
   }
+
+  const turfDatasetStore: TurfDatasetStore | undefined = env.ENABLE_TURF_TOOLS
+    ? createTurfDatasetStore({ ttlMs: env.TURF_DATASET_TTL_MS })
+    : undefined;
 
   app.use(createHealthRouter({ env, modelConfigured: model !== undefined, mcp }));
 
@@ -187,9 +212,14 @@ export function createBackendApp({
   // Resolved per-request rather than once: a request's own session may have
   // user-initiated MCP connections (see `sessionMcp`) not known statically
   // at server-construction time. `createChatRouter`'s `tools` option accepts
-  // a `(req) => ToolSet | Promise<ToolSet>` for exactly this reason.
+  // a `(req) => ToolSet | Promise<ToolSet>` for exactly this reason. Turf
+  // tools are built per-request for the same reason: `createTurfTools` binds
+  // one session id per call (see `@cesium-ai/turf-tools`), so a shared
+  // instance built once at startup would leak one session's id into every
+  // other request.
   const buildTools = async (req: Request): Promise<Record<string, McpTool>> => ({
     ...staticTools,
+    ...(turfDatasetStore ? createTurfTools(turfDatasetStore, req.sessionID) : {}),
     ...(await resolveMcpTools({ sessionMcp }, req.sessionID)),
   });
 

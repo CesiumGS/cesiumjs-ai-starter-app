@@ -12,8 +12,8 @@ export const cameraOrbitActionShape = z.enum(cameraOrbitActionValues);
  * client-side executor. Carries no model-facing description text (see
  * `cameraOrbit.ts` and `flyTo.schema.ts` for the convention this follows).
  *
- * Merges what used to be two separate tools (`cameraStartOrbit`/`cameraStopOrbit`)
- * into one discriminated `action` field — they always operate on the same
+ * A single discriminated `action` field instead of two separate tools
+ * (`cameraStartOrbit`/`cameraStopOrbit`) — they always operate on the same
  * per-`Viewer` orbit state (see `@cesium-ai/tools`'s executor), so a single
  * start/stop pair is a natural discriminated union rather than two tool names.
  */

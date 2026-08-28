@@ -11,12 +11,12 @@ import {
 import { runCesiumCodeInSandbox } from "./cesium-code-sandbox.js";
 
 /**
- * Regression coverage for the transparent value-type binding design (see
- * `buildCesiumValueTypeGuestPrelude` in `cesium-bindings.ts`): generated code referencing common
- * CesiumJS value types/enums that were never explicitly bound as host-call leaves — named `Color`
- * constants, `VerticalOrigin`, `new Cesium.Cartesian2(...)`, `Cesium.Cartesian3.fromDegreesArray`,
- * `Color#withAlpha` — must resolve entirely in-sandbox (no "unbound symbol" crash) and still
- * arrive at the real `Viewer` as real CesiumJS instances once revived at the host boundary.
+ * Coverage for the transparent value-type binding design (see `buildCesiumValueTypeGuestPrelude`
+ * in `cesium-bindings.ts`): generated code referencing common CesiumJS value types/enums that are
+ * never explicitly bound as host-call leaves — named `Color` constants, `VerticalOrigin`,
+ * `new Cesium.Cartesian2(...)`, `Cesium.Cartesian3.fromDegreesArray`, `Color#withAlpha` — must
+ * resolve entirely in-sandbox (no "unbound symbol" crash) and still arrive at the real `Viewer` as
+ * real CesiumJS instances once revived at the host boundary.
  */
 
 function fakeViewer() {

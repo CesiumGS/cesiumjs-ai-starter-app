@@ -52,6 +52,11 @@ import {
   type ImageryRemoveConfig,
 } from "./tools/imageryRemove/imageryRemove.js";
 import { createImageryList, type ImageryListConfig } from "./tools/imageryList/imageryList.js";
+import { createGeoJsonAdd, type GeoJsonAddConfig } from "./tools/geoJsonAdd/geoJsonAdd.js";
+import {
+  createGeoJsonRemove,
+  type GeoJsonRemoveConfig,
+} from "./tools/geoJsonRemove/geoJsonRemove.js";
 
 export { createFlyTo, type FlyToConfig };
 export { flyTo } from "./tools/flyTo/flyTo.js";
@@ -278,6 +283,30 @@ export {
   defaultImageryListInputSchema,
   type ImageryListFieldDescriptions,
 } from "./tools/imageryList/imageryList.js";
+export {
+  createGeoJsonAdd,
+  geoJsonAdd,
+  type GeoJsonAddConfig,
+} from "./tools/geoJsonAdd/geoJsonAdd.js";
+export {
+  DEFAULT_GEO_JSON_ADD_DESCRIPTION,
+  DEFAULT_GEO_JSON_ADD_FIELD_DESCRIPTIONS,
+  buildGeoJsonAddInputSchema,
+  defaultGeoJsonAddInputSchema,
+  type GeoJsonAddFieldDescriptions,
+} from "./tools/geoJsonAdd/geoJsonAdd.js";
+export {
+  createGeoJsonRemove,
+  geoJsonRemove,
+  type GeoJsonRemoveConfig,
+} from "./tools/geoJsonRemove/geoJsonRemove.js";
+export {
+  DEFAULT_GEO_JSON_REMOVE_DESCRIPTION,
+  DEFAULT_GEO_JSON_REMOVE_FIELD_DESCRIPTIONS,
+  buildGeoJsonRemoveInputSchema,
+  defaultGeoJsonRemoveInputSchema,
+  type GeoJsonRemoveFieldDescriptions,
+} from "./tools/geoJsonRemove/geoJsonRemove.js";
 export { buildDescribedSchema, describeShape } from "./lib/describe-shape.js";
 export { mergeDescriptions } from "./lib/merge-descriptions.js";
 
@@ -333,6 +362,10 @@ export interface CesiumToolsConfig {
   imageryRemove?: ImageryRemoveConfig | false;
   /** Override `imageryList`'s description / input schema, or `false` to exclude it. */
   imageryList?: ImageryListConfig | false;
+  /** Override `geoJsonAdd`'s description / input schema, or `false` to exclude it. */
+  geoJsonAdd?: GeoJsonAddConfig | false;
+  /** Override `geoJsonRemove`'s description / input schema, or `false` to exclude it. */
+  geoJsonRemove?: GeoJsonRemoveConfig | false;
 }
 
 /**
@@ -440,6 +473,12 @@ export function createCesiumTools(config: CesiumToolsConfig = {}): ToolSet {
   }
   if (config.imageryList !== false && allowed(CESIUM_TOOL_NAMES.imageryList)) {
     tools[CESIUM_TOOL_NAMES.imageryList] = createImageryList(config.imageryList);
+  }
+  if (config.geoJsonAdd !== false && allowed(CESIUM_TOOL_NAMES.geoJsonAdd)) {
+    tools[CESIUM_TOOL_NAMES.geoJsonAdd] = createGeoJsonAdd(config.geoJsonAdd);
+  }
+  if (config.geoJsonRemove !== false && allowed(CESIUM_TOOL_NAMES.geoJsonRemove)) {
+    tools[CESIUM_TOOL_NAMES.geoJsonRemove] = createGeoJsonRemove(config.geoJsonRemove);
   }
 
   return tools;

@@ -50,8 +50,8 @@ describe("buildCesiumWebMcpTools", () => {
   });
 
   // cameraOrbit/entityAdd are root-level z.discriminatedUnion(...) schemas, which z.toJSONSchema()
-  // serializes as a bare `{ oneOf: [...] }` with no root `type: "object"` — regression coverage for
-  // that class of bug (see @cesium-ai/tools-schemas' toolInputJsonSchema).
+  // serializes as a bare `{ oneOf: [...] }` with no root `type: "object"` — some function-calling
+  // validators reject that shape (see @cesium-ai/tools-schemas' toolInputJsonSchema).
   test("root discriminated-union tools (cameraOrbit, entityAdd) still get a root type: object", () => {
     const [cameraOrbit, entityAdd] = buildCesiumWebMcpTools({} as Viewer, {
       enabled: [CESIUM_TOOL_NAMES.cameraOrbit, CESIUM_TOOL_NAMES.entityAdd],

@@ -329,10 +329,8 @@ async function approveAndReadExecuteCesiumCodeResult(
  * only lands after `ChatPanel.tsx`'s `handleServerToolResult` executes the code against the live
  * Viewer and, on failure, fires a follow-up request that renders an `execution-error-panel`.
  * Reading too early always finds `executionError` `undefined`, silently treating a runtime crash
- * as success — this previously let 3 of 14 domains ("interaction", "models-particles",
- * "time-properties") pass despite a genuine `Sandbox run failed` console error (see the
- * "execute-cesium-code sandbox test race" repo note): a partial mutation before the failing line
- * was enough to satisfy `assertSomethingChanged`, masking the failure.
+ * as success: a partial mutation before the failing line is enough to satisfy
+ * `assertSomethingChanged`, masking the failure.
  */
 async function readSettledExecuteCesiumCodeResult(
   page: Page,
@@ -399,7 +397,7 @@ test.describe("executeCesiumCode — real backend, one intent per cesiumjs-skill
       // `executionError` is a distinct field from `error`: the code passed AST verification and
       // "succeeded" from the tool's perspective, but threw at runtime against the live Viewer
       // (see `handleServerToolResult`'s `continueConversation` feedback loop). Silently ignoring
-      // this previously let real runtime failures pass this test undetected.
+      // this would let real runtime failures pass this test undetected.
       expect(
         result.executionError,
         `runtime execution failed: ${result.executionError}`,

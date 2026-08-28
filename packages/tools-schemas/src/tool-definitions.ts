@@ -73,6 +73,14 @@ import {
   DEFAULT_IMAGERY_LIST_DESCRIPTION,
   defaultImageryListInputSchema,
 } from "./tools/imageryList/imageryList.js";
+import {
+  DEFAULT_GEO_JSON_ADD_DESCRIPTION,
+  defaultGeoJsonAddInputSchema,
+} from "./tools/geoJsonAdd/geoJsonAdd.js";
+import {
+  DEFAULT_GEO_JSON_REMOVE_DESCRIPTION,
+  defaultGeoJsonRemoveInputSchema,
+} from "./tools/geoJsonRemove/geoJsonRemove.js";
 
 /** A tool's default model-facing description plus its structural Zod input schema. */
 export interface CesiumToolDefinition {
@@ -163,5 +171,13 @@ export const CESIUM_TOOL_DEFINITIONS: Record<CesiumToolName, CesiumToolDefinitio
   [CESIUM_TOOL_NAMES.imageryList]: {
     description: DEFAULT_IMAGERY_LIST_DESCRIPTION,
     inputSchema: defaultImageryListInputSchema,
+  },
+  [CESIUM_TOOL_NAMES.geoJsonAdd]: {
+    description: DEFAULT_GEO_JSON_ADD_DESCRIPTION,
+    inputSchema: defaultGeoJsonAddInputSchema,
+  },
+  [CESIUM_TOOL_NAMES.geoJsonRemove]: {
+    description: DEFAULT_GEO_JSON_REMOVE_DESCRIPTION,
+    inputSchema: defaultGeoJsonRemoveInputSchema,
   },
 };

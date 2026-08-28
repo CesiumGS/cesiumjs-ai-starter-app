@@ -53,7 +53,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt.toLowerCase()).toContain("only");
   });
 
-  it("instructs the model to access CesiumJS symbols via `Cesium.` rather than as bare names (regression: generated code runs in a scope with only `viewer`/`Cesium` bound, not the bare class names shown in the reference material's `import` examples)", () => {
+  it("instructs the model to access CesiumJS symbols via `Cesium.` rather than as bare names, since generated code runs in a scope with only `viewer`/`Cesium` bound, not the bare class names shown in the reference material's `import` examples", () => {
     const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
 
     expect(prompt).toContain("Cesium.Cartesian3.fromDegrees");
@@ -61,7 +61,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt.toLowerCase()).toContain("import");
   });
 
-  it("warns that CesiumJS collections (PrimitiveCollection, ImageryLayerCollection, etc.) are not plain iterables (regression: a real model wrote `for...of viewer.scene.primitives`, which throws `TypeError: ... is not iterable` at runtime)", () => {
+  it("warns that CesiumJS collections (PrimitiveCollection, ImageryLayerCollection, etc.) are not plain iterables, since `for...of` over one (e.g. `viewer.scene.primitives`) throws `TypeError: ... is not iterable` at runtime", () => {
     const prompt = buildCodegenPrompt({ intent: "fly to Paris", skills: [cameraSkill] });
 
     expect(prompt).toContain("for...of");
@@ -78,7 +78,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("callbacks cannot outlive");
   });
 
-  it('steers indexed array access (e.g. "the last entity") toward .at(...) instead of bracket indexing (regression: a real model reliably wrote `entities[entities.length - 1]`, which static verification always rejects as computed member access)', () => {
+  it('steers indexed array access (e.g. "the last entity") toward .at(...) instead of bracket indexing, since static verification always rejects bracket indexing (e.g. `entities[entities.length - 1]`) as computed member access', () => {
     const prompt = buildCodegenPrompt({
       intent: "make entity position time-dynamic",
       skills: [cameraSkill],
@@ -88,7 +88,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("array.length - 1");
   });
 
-  it("warns against .addEventListener(...) on a CesiumJS Event (readyEvent/errorEvent/etc.), since the callback can't outlive the disposed VM (regression: a real model wrote model.readyEvent.addEventListener(() => {...}), rejected at runtime as a guest callback crossing the sandbox boundary)", () => {
+  it("warns against .addEventListener(...) on a CesiumJS Event (readyEvent/errorEvent/etc.), since the callback can't outlive the disposed VM and any such callback crossing the sandbox boundary is rejected at runtime", () => {
     const prompt = buildCodegenPrompt({
       intent: "load a glTF model and react once it's ready",
       skills: [cameraSkill],
@@ -98,7 +98,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("readyEvent");
   });
 
-  it("steers custom Fabric materials toward `new Cesium.Material({ fabric: {...} })` instead of the internal Material._materialCache (regression: a real model wrote Cesium.Material._materialCache.addMaterial(...), rejected at runtime as blocked internal access)", () => {
+  it("steers custom Fabric materials toward `new Cesium.Material({ fabric: {...} })` instead of the internal Material._materialCache, since direct access to _materialCache is blocked internal access rejected at runtime", () => {
     const prompt = buildCodegenPrompt({
       intent: "define a custom Fabric material",
       skills: [cameraSkill],
@@ -108,7 +108,7 @@ describe("buildCodegenPrompt", () => {
     expect(prompt).toContain("new Cesium.Material(");
   });
 
-  it("warns against .removeAll() (or other _-prefixed access) to clear scene collections before adding new content, unless the intent explicitly asks to clear (regression: a real model called viewer.scene.primitives.removeAll() to 'start clean' with no such ask in the intent)", () => {
+  it("warns against .removeAll() (or other _-prefixed access) to clear scene collections before adding new content, unless the intent explicitly asks to clear", () => {
     const prompt = buildCodegenPrompt({
       intent: "add a rectangle primitive",
       skills: [cameraSkill],

@@ -189,15 +189,40 @@ export class ChatClient {
       }
     }
 
+    // A tool call the server already fully resolved within THIS stream (its
+    // `tool-output-available`/`tool-output-error` chunk arrived right after
+    // `tool-input-available`, before the stream finished) is still recorded in
+    // `pendingToolCalls` by `handleStreamLine`, but its `state` has already been
+    // flipped to `"result"` by the time we get here — resolving it below is a
+    // no-op. Whether THAT still warrants a follow-up request depends on whether
+    // the model already produced its reply to it in this same stream (e.g. a
+    // non-`stopAfterTools` tool like `turf_area` that the model calls and then
+    // immediately answers about in one turn): if so, a follow-up would just
+    // re-send the same transcript — now including the model's own just-given
+    // answer — and get back a second, redundant reply. A tool call still in
+    // `"call"` state (needs real client-side execution) always needs a
+    // follow-up regardless, since the model hasn't seen any result for it yet.
+    const hadUnresolvedClientToolCalls = pendingToolCalls.some((inv) => inv.state === "call");
+    const hadUnresolvedApprovals = pendingApprovals.some(
+      (inv) => inv.state === "approval-requested",
+    );
+    const hasTextReply = ((assistantMsg as Message | null)?.content.length ?? 0) > 0;
+    const hadServerResolvedToolCallsAwaitingReply =
+      pendingToolCalls.length > 0 && !hadUnresolvedClientToolCalls && !hasTextReply;
+
     await this.resolveClientToolCalls(pendingToolCalls);
     await this.resolveApprovals(pendingApprovals);
     const continueForServerResults = await this.resolveServerToolOutcomes(pendingServerResults);
 
-    // If there were tool calls or approval decisions to send back, or a host
-    // reaction to a server-resolved result asked to continue, make another
-    // request so the model can react (the resolve* calls above guarantee
-    // every entry here is now resolved).
-    if (pendingToolCalls.length > 0 || pendingApprovals.length > 0 || continueForServerResults) {
+    // If there were tool calls or approval decisions that actually needed
+    // resolving, or a host reaction to a server-resolved result asked to
+    // continue, make another request so the model can react.
+    if (
+      hadUnresolvedClientToolCalls ||
+      hadUnresolvedApprovals ||
+      hadServerResolvedToolCallsAwaitingReply ||
+      continueForServerResults
+    ) {
       this.toolCallRound++;
       if (this.toolCallRound > this.maxToolCallRounds) {
         this.emitError(

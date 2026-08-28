@@ -131,6 +131,19 @@ const EnvSchema = z.object({
   // 401 — see `createMcpTools`'s `authRequiredServers`). Required whenever
   // session-scoped MCP connections are enabled.
   SESSION_SECRET: z.preprocess(blankToUndefined, z.string().optional()),
+
+  // Registers the Turf.js spatial-analysis tools (turf_register_dataset, turf_buffer,
+  // turf_points_within_polygon, turf_intersect, turf_area, turf_hex_grid). Default on: these are
+  // pure server-side data tools with no model/Viewer dependency, unlike executeCesiumCode.
+  ENABLE_TURF_TOOLS: boolEnv(true),
+
+  // Idle time-to-live (ms) for a session's stored Turf datasets before eviction. See
+  // `@cesium-ai/turf-tools`'s `TurfDatasetStore`.
+  TURF_DATASET_TTL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(30 * 60 * 1000),
 });
 
 export type Env = z.infer<typeof EnvSchema> & { mcpServers: McpServerConfig[] };
