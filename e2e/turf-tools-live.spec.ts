@@ -190,12 +190,6 @@ test.describe("Turf.js tools — end-to-end against the live backend", () => {
 });
 
 /**
- * Regression coverage for a real bug: `geoJsonAdd` (a client-side `@cesium-ai/tools-schemas` tool,
- * not a Turf tool) crashed with an opaque "Cannot read properties of undefined (reading 'length')"
- * when the model passed it a structurally-loose GeoJSON object missing `features`/`geometry` —
- * exactly the shape a model can end up constructing when relaying a Turf tool's dataset back out
- * (see `packages/tools-schemas/src/tools/geoJsonAdd/geoJsonAdd.schema.ts`'s fix and this repo's
- * `resolve-geojson.ts` for the identical, earlier-fixed bug class in Turf tools themselves).
  *
  * These tests exercise the full real-world chain this app is meant to support end-to-end against
  * the live backend AND the live CesiumJS `Viewer` (unlike the tests above, which only assert on

@@ -434,9 +434,9 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
   test("cesiumjs-time-properties: JulianDate.fromDate accepts a guest-constructed native Date", async () => {
     const viewer = fakeViewer();
 
-    // Regression test: a guest-native `new Date(...)` has no own enumerable properties, so the
-    // generic plain-object marshaling fallback used to flatten it to `{}` on its way to the host
-    // — `JulianDate.fromDate` then threw "date must be a valid JavaScript Date" against that
+    // A guest-native `new Date(...)` has no own enumerable properties, so the generic plain-object
+    // marshaling fallback would flatten it to `{}` on its way to the host, and
+    // `JulianDate.fromDate` would then throw "date must be a valid JavaScript Date" against that
     // flattened `{}`. See the `DATE_MARK` doc comment in `bindings/sandbox-handles.ts`.
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
@@ -468,13 +468,14 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
   test("cesiumjs-time-properties: passes a Cesium value-type class (Cartesian3) to Cesium.SampledProperty", async () => {
     const viewer = fakeViewer();
 
-    // Regression test: `new Cesium.SampledProperty(Cesium.Cartesian3)` is the idiomatic pattern
-    // for a position-valued sampled property (`type` must be a real `Packable` class so the host
-    // can call its static `pack`/`unpack`). The guest-side `Cesium.Cartesian3` is a real,
-    // guest-local class from the value-type bundle, not a remote-proxy handle — previously
-    // indistinguishable from an arbitrary disallowed callback, so this threw "Guest callbacks
-    // cannot cross the Cesium sandbox boundary" even though nothing here is actually invoked as a
-    // callback. See the `NATIVE_CONSTRUCTOR_MARK` doc comment in `bindings/sandbox-handles.ts`.
+    // `new Cesium.SampledProperty(Cesium.Cartesian3)` is the idiomatic pattern for a
+    // position-valued sampled property (`type` must be a real `Packable` class so the host can
+    // call its static `pack`/`unpack`). The guest-side `Cesium.Cartesian3` is a real, guest-local
+    // class from the value-type bundle, not a remote-proxy handle — without the
+    // `NATIVE_CONSTRUCTOR_MARK` tag it would be indistinguishable from an arbitrary disallowed
+    // callback and rejected as "Guest callbacks cannot cross the Cesium sandbox boundary" even
+    // though nothing here is actually invoked as a callback. See the `NATIVE_CONSTRUCTOR_MARK` doc
+    // comment in `bindings/sandbox-handles.ts`.
     const outcome = await runCesiumCodeInSandbox({
       viewer: viewer as never,
       code: `
@@ -834,12 +835,11 @@ describe("runCesiumCodeInSandbox — imitated codegen cases by domain", () => {
 
         const entity = await viewer.entities.add({ position: property });
 
-        // Regression check (2026-07-20 live bug): a model reasonably guards a dynamic-position
-        // read with "is this actually time-dynamic?" via instanceof against the remote-proxied
-        // static-namespace class. This used to throw 'Cesium sandbox access to "prototype" is
-        // not allowed.' because real instanceof internally reads Ctor.prototype, which the host
-        // bridge blocks for everything. See the dedicated __cesiumSandboxHostInstanceOfSync__
-        // bridge in host-bridge.ts, which never exposes a prototype object to guest code.
+        // A model reasonably guards a dynamic-position read with "is this actually
+        // time-dynamic?" via instanceof against the remote-proxied static-namespace class. Real
+        // instanceof internally reads Ctor.prototype, which the host bridge blocks for everything,
+        // so this needs the dedicated __cesiumSandboxHostInstanceOfSync__ bridge in host-bridge.ts,
+        // which never exposes a prototype object to guest code.
         if (!(entity.position instanceof Cesium.SampledPositionProperty)) {
           throw new Error("expected entity.position to be a SampledPositionProperty");
         }

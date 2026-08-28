@@ -138,22 +138,19 @@ function registerHostApply(
         const result = (callable as (...args: unknown[]) => unknown)(...args);
         if (isPromiseLike(result)) {
           pendingWork.count++;
-          // Bridge the host Promise into a genuine QuickJS promise via `ctx.newPromise()` instead
-          // of quickjs-emscripten's Asyncify mechanism. An earlier design retained the host promise
-          // and had the guest re-enter through a dedicated Asyncify-backed bridge to consume it —
-          // but Asyncify only reliably suspends/resumes a single in-flight call driven by
-          // `evaluateWrappedCode`'s own `executePendingJobs()` pump; reusing it here reproducibly
-          // hung the guest script and, since the underlying WASM module/heap is shared across every
-          // `newAsyncContext()` in the process, could crash unrelated later test runs with a native
-          // `memory access out of bounds`/`p->ref_count == 0` abort. `newPromise()` +
-          // `executePendingJobs()` is the same mechanism `evaluateWrappedCode` already uses to
-          // settle the outer script promise, needs no Asyncify support, and — unlike the old
-          // mechanism — supports any number of concurrent/sequential dynamic-Promise calls per
-          // script rather than just one. This is now the *only* bridge for Promise-returning calls
-          // (see `cesium-async-factories.ts`'s removal): the small set of genuinely async,
-          // network/Ion-backed factories that used to be routed through the dedicated Asyncify
-          // bridge (`createWorldImageryAsync`, `Cesium3DTileset.fromUrl`, ...) now flow through
-          // here exactly like every other Promise-returning API.
+          // Bridges the host Promise into a genuine QuickJS promise via `ctx.newPromise()` instead
+          // of quickjs-emscripten's Asyncify mechanism. Asyncify only reliably suspends/resumes a
+          // single in-flight call driven by `evaluateWrappedCode`'s own `executePendingJobs()` pump —
+          // reusing it here would reproducibly hang the guest script and, since the underlying
+          // WASM module/heap is shared across every `newAsyncContext()` in the process, could crash
+          // unrelated later test runs with a native `memory access out of bounds`/
+          // `p->ref_count == 0` abort. `newPromise()` + `executePendingJobs()` is the same
+          // mechanism `evaluateWrappedCode` already uses to settle the outer script promise, needs
+          // no Asyncify support, and supports any number of concurrent/sequential dynamic-Promise
+          // calls per script rather than just one. This is the only bridge for Promise-returning
+          // calls: every genuinely async, network/Ion-backed factory (`createWorldImageryAsync`,
+          // `Cesium3DTileset.fromUrl`, ...) flows through here exactly like every other
+          // Promise-returning API.
           const deferred = ctx.newPromise();
           Promise.resolve(result).then(
             (value) => {

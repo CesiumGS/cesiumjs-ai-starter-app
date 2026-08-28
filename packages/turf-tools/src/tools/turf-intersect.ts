@@ -1,7 +1,7 @@
 import { tool, type Tool } from "ai";
 import * as turf from "@turf/turf";
 import type { Feature, FeatureCollection, MultiPolygon, Polygon } from "geojson";
-import type { TurfDatasetStore } from "../dataset-store.js";
+import type { StoredGeoJson, TurfDatasetStore } from "../dataset-store.js";
 import { InvalidGeoJsonError, resolveGeoJson, UnknownDatasetError } from "../resolve-geojson.js";
 import { findDisallowedGeometryTypes } from "../geometry-checks.js";
 import { MAX_INTERSECT_FEATURE_PAIRS } from "../guardrails.js";
@@ -9,7 +9,7 @@ import { turfIntersectInputSchema } from "./turf-intersect.schema.js";
 
 export { turfIntersectInputSchema } from "./turf-intersect.schema.js";
 
-function asPolygonFeatures(value: unknown): Feature<Polygon | MultiPolygon>[] {
+function asPolygonFeatures(value: StoredGeoJson): Feature<Polygon | MultiPolygon>[] {
   const collection = value as
     FeatureCollection<Polygon | MultiPolygon> | Feature<Polygon | MultiPolygon>;
   return collection.type === "FeatureCollection" ? collection.features : [collection];
@@ -35,36 +35,36 @@ export function createTurfIntersectTool(store: TurfDatasetStore, sessionId: stri
     inputSchema: turfIntersectInputSchema,
     execute: async ({ features1, features2 }) => {
       try {
-        const resolved1 = asPolygonFeatures(resolveGeoJson(features1, store, sessionId));
-        const resolved2 = asPolygonFeatures(resolveGeoJson(features2, store, sessionId));
+        const polygons1 = asPolygonFeatures(resolveGeoJson(features1, store, sessionId));
+        const polygons2 = asPolygonFeatures(resolveGeoJson(features2, store, sessionId));
 
-        const badTypes1 = findDisallowedGeometryTypes(resolved1, ["Polygon", "MultiPolygon"]);
-        if (badTypes1.length > 0) {
+        const badTypesIn1 = findDisallowedGeometryTypes(polygons1, ["Polygon", "MultiPolygon"]);
+        if (badTypesIn1.length > 0) {
           return {
-            error: `features1 must contain only Polygon/MultiPolygon features; found: ${badTypes1.join(", ")}.`,
+            error: `features1 must contain only Polygon/MultiPolygon features; found: ${badTypesIn1.join(", ")}.`,
           };
         }
-        const badTypes2 = findDisallowedGeometryTypes(resolved2, ["Polygon", "MultiPolygon"]);
-        if (badTypes2.length > 0) {
+        const badTypesIn2 = findDisallowedGeometryTypes(polygons2, ["Polygon", "MultiPolygon"]);
+        if (badTypesIn2.length > 0) {
           return {
-            error: `features2 must contain only Polygon/MultiPolygon features; found: ${badTypes2.join(", ")}.`,
+            error: `features2 must contain only Polygon/MultiPolygon features; found: ${badTypesIn2.join(", ")}.`,
           };
         }
 
-        const pairCount = resolved1.length * resolved2.length;
+        const pairCount = polygons1.length * polygons2.length;
         if (pairCount > MAX_INTERSECT_FEATURE_PAIRS) {
           return {
             error:
-              `turf_intersect input is too large: ${resolved1.length} x ${resolved2.length} = ` +
+              `turf_intersect input is too large: ${polygons1.length} x ${polygons2.length} = ` +
               `${pairCount} feature pairs exceeds the ${MAX_INTERSECT_FEATURE_PAIRS} pair limit. ` +
               "Narrow either input (e.g. filter or tile it) before retrying.",
           };
         }
 
         const intersections: Feature<Polygon | MultiPolygon>[] = [];
-        for (const a of resolved1) {
-          for (const b of resolved2) {
-            const result = turf.intersect(turf.featureCollection([a, b]));
+        for (const polygon1 of polygons1) {
+          for (const polygon2 of polygons2) {
+            const result = turf.intersect(turf.featureCollection([polygon1, polygon2]));
             if (result) intersections.push(result);
           }
         }

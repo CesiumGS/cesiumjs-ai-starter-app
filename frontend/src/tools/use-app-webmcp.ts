@@ -13,9 +13,8 @@ export function useAppWebMcp() {
   // is destroyed before its (async) WebMCP registration finishes, so `onViewerDestroy` aborts this
   // controller immediately. `registerAppWebMcpTools` checks the signal before every individual
   // tool registration, so a superseded mount stops mid-batch instead of racing the second mount's
-  // registration for the same tool names (previously both mounts could interleave registerTool
-  // calls, so a tool name could non-deterministically end up bound to the already-destroyed
-  // first-mount viewer).
+  // registration for the same tool names, which would otherwise let a tool name
+  // non-deterministically end up bound to the already-destroyed first-mount viewer.
   const cancelPendingRegistrationRef = useRef<AbortController | null>(null);
 
   function onViewerReady(viewer: Viewer) {

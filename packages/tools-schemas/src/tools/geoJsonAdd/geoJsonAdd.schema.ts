@@ -11,13 +11,12 @@ import { z } from "zod";
  * shape serializes to JSON schema with only `type` listed under `properties`
  * (everything else — including `features`/`geometry`/`geometries` — collapses
  * into an opaque `additionalProperties: {}`), which models frequently ignore.
- * That previously let a model pass e.g. `{"type":"FeatureCollection"}` with no
- * `features` array at all, which `Cesium.GeoJsonDataSource.load` then crashes
- * on with an opaque `Cannot read properties of undefined (reading 'length')`
- * instead of a clear tool `{ error }`. Naming `features`/`geometry`/
- * `geometries` as real (still-catchall) properties fixes both the model-facing
- * schema and Zod's own validation, same fix already applied to
- * `@cesium-ai/turf-tools`' `resolve-geojson.ts`.
+ * Without naming `features`/`geometry`/`geometries` as real (still-catchall) properties, a model
+ * could pass e.g. `{"type":"FeatureCollection"}` with no `features` array at all, and
+ * `Cesium.GeoJsonDataSource.load` would then crash with an opaque `Cannot read properties of
+ * undefined (reading 'length')` instead of a clear tool `{ error }`. Naming them as real properties
+ * fixes both the model-facing schema and Zod's own validation — same approach used by
+ * `@cesium-ai/turf-tools`'s `resolve-geojson.ts`.
  */
 const featureShape = z
   .object({

@@ -22,15 +22,41 @@ import type { StoredGeoJson, TurfDatasetStore } from "./dataset-store.js";
  * `additionalProperties: {}`), which models frequently ignore, causing them
  * to send `{"type":"Feature"}` with no `geometry` at all.
  */
+const positionShape = z
+  .array(z.number())
+  .min(2)
+  .max(3)
+  .describe("A [longitude, latitude] pair (optionally with a 3rd altitude element).");
+
+/**
+ * A real GeoJSON geometry, discriminated on `type` with per-type `coordinates`
+ * shapes — stricter than a bare `{ type: string }` so the model sees exactly
+ * which `type` values are valid and what nesting `coordinates` needs for each,
+ * instead of guessing. `GeometryCollection` is intentionally omitted: none of
+ * this package's tools operate on one today.
+ */
+const geometryShape = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("Point"), coordinates: positionShape }),
+  z.object({ type: z.literal("MultiPoint"), coordinates: z.array(positionShape).min(1) }),
+  z.object({ type: z.literal("LineString"), coordinates: z.array(positionShape).min(2) }),
+  z.object({
+    type: z.literal("MultiLineString"),
+    coordinates: z.array(z.array(positionShape).min(2)).min(1),
+  }),
+  z.object({
+    type: z.literal("Polygon"),
+    coordinates: z.array(z.array(positionShape).min(4)).min(1),
+  }),
+  z.object({
+    type: z.literal("MultiPolygon"),
+    coordinates: z.array(z.array(z.array(positionShape).min(4)).min(1)).min(1),
+  }),
+]);
+
 const inlineFeatureShape = z
   .object({
     type: z.literal("Feature"),
-    geometry: z
-      .object({ type: z.string() })
-      .catchall(z.unknown())
-      .describe(
-        "REQUIRED: the feature's GeoJSON geometry, e.g. { type: 'Point', coordinates: [...] }.",
-      ),
+    geometry: geometryShape.describe("REQUIRED: the feature's GeoJSON geometry."),
     properties: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .catchall(z.unknown())
@@ -40,7 +66,7 @@ const inlineFeatureCollectionShape = z
   .object({
     type: z.literal("FeatureCollection"),
     features: z
-      .array(z.unknown())
+      .array(inlineFeatureShape)
       .min(1)
       .describe("REQUIRED: a non-empty array of GeoJSON Feature objects."),
   })
@@ -65,12 +91,14 @@ export class UnknownDatasetError extends Error {
 
 /**
  * Thrown by {@link resolveGeoJson} when an inline Feature/FeatureCollection is
- * structurally valid per {@link geoJsonOrDatasetRefShape} (schema only checks
- * `type`) but missing the data Turf actually needs, e.g. a FeatureCollection
- * with no `features` array, or a Feature with no `geometry` — which would
- * otherwise crash the underlying Turf call with an opaque error (e.g.
- * `TypeError: Cannot read properties of undefined (reading 'type')` from deep
- * inside `@turf/buffer`) instead of a clear tool `{ error }`.
+ * missing the data Turf actually needs, e.g. a FeatureCollection with no
+ * `features` array, or a Feature with no `geometry` — which would otherwise
+ * crash the underlying Turf call with an opaque error (e.g. `TypeError:
+ * Cannot read properties of undefined (reading 'type')` from deep inside
+ * `@turf/buffer`) instead of a clear tool `{ error }`. Tool-call input is
+ * already rejected by {@link geoJsonOrDatasetRefShape} before this runs; this
+ * is a defense-in-depth check for callers that invoke `resolveGeoJson`
+ * directly with unvalidated data.
  */
 export class InvalidGeoJsonError extends Error {
   constructor(message: string) {
@@ -94,32 +122,26 @@ export function resolveGeoJson(
   store: TurfDatasetStore,
   sessionId: string,
 ): StoredGeoJson {
-  const datasetId = (input as { dataset_id?: unknown }).dataset_id;
-  if (typeof datasetId === "string") {
-    const resolved = store.get(sessionId, datasetId);
-    if (!resolved) throw new UnknownDatasetError(datasetId);
+  // Only the dataset_id variant lacks a `type` field — the other two members'
+  // catchall(unknown) would otherwise make a `"dataset_id" in input` check
+  // widen `dataset_id` itself to `unknown` across the union.
+  if (!("type" in input)) {
+    const resolved = store.get(sessionId, input.dataset_id);
+    if (!resolved) throw new UnknownDatasetError(input.dataset_id);
     return resolved;
   }
 
-  const inline = input as {
-    type: "Feature" | "FeatureCollection";
-    features?: unknown;
-    geometry?: unknown;
-  };
-  if (inline.type === "FeatureCollection" && !Array.isArray(inline.features)) {
+  if (input.type === "FeatureCollection" && !Array.isArray(input.features)) {
     throw new InvalidGeoJsonError(
       'Invalid FeatureCollection: missing or non-array "features". Provide at least one feature, ' +
         "or pass a dataset_id from a prior turf_register_dataset/tool call.",
     );
   }
-  if (
-    inline.type === "Feature" &&
-    (typeof inline.geometry !== "object" || inline.geometry === null)
-  ) {
+  if (input.type === "Feature" && (typeof input.geometry !== "object" || input.geometry === null)) {
     throw new InvalidGeoJsonError(
       'Invalid Feature: missing "geometry". Provide a geometry object (e.g. { "type": "Point", ' +
         '"coordinates": [...] }), or pass a dataset_id from a prior turf_register_dataset/tool call.',
     );
   }
-  return input as unknown as StoredGeoJson;
+  return input as StoredGeoJson;
 }

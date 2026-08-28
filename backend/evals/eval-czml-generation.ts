@@ -93,8 +93,8 @@ function getAtPath(obj: unknown, path: string): unknown {
 /**
  * True if `path` exists on at least one packet in `czml`. Deliberately includes the "document"
  * packet — properties like "clock" legitimately live there (see `czml-reference.ts`), not on
- * entity packets, so excluding it previously caused false "missing" results for clock-related
- * eval cases regardless of whether the model actually generated a correct clock.
+ * entity packets, so excluding it would cause false "missing" results for clock-related eval
+ * cases regardless of whether the model actually generated a correct clock.
  */
 function anyPacketHasPath(czml: Record<string, unknown>[], path: string): boolean {
   return czml.some((packet) => getAtPath(packet, path) !== undefined);

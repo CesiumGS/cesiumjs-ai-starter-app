@@ -49,16 +49,6 @@ native per-key TTL matching this store's idle-eviction semantics) — plain Blob
 poor fit given how frequently a chained sequence of Turf tool calls reads/writes the same dataset
 within one turn.
 
-**Temp vs. long-lived data — different requirements, different stores**: this store is only for
-ephemeral, in-session working data (registered/intermediate results a chained sequence of tool
-calls reads and writes within one conversation). It is not a place to persist a dataset a user
-wants to keep beyond the session (export, save-for-later, share a link) — that's a separate,
-low-frequency, durability-matters need better served by Blob storage, added as an explicit
-save/export action rather than folded into this store. Don't reach for local/temp files on disk
-for either case: many container platforms give no persistent-disk guarantee at all (a restart or
-new replica can lose them outright), so files solve neither the multi-instance problem above nor
-long-term persistence any better than the alternatives already named.
-
 **Process memory considerations**: there is currently no cap on an individual dataset's size or on
 the store's total memory footprint — unlike `turf_intersect`/`turf_hex_grid`'s explicit guardrails
 below, `turf_register_dataset` accepts any size of GeoJSON and holds it in process memory until the
